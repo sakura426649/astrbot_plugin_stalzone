@@ -174,7 +174,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.8"
+PLUGIN_VERSION = "1.0.9"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -1863,14 +1863,9 @@ class StalzonePlugin(Star):
             pillow = str(getattr(PIL, "__version__", "已安装"))
         except Exception:
             pillow = "未安装"
-        offset = datetime.now().astimezone().utcoffset()
-        if offset is None:
-            timezone_label = "UTC+8"
-        else:
-            total_minutes = int(offset.total_seconds() // 60)
-            sign = "+" if total_minutes >= 0 else "-"
-            hours, minutes = divmod(abs(total_minutes), 60)
-            timezone_label = f"UTC{sign}{hours:02d}:{minutes:02d}"
+        # All user-facing timestamps are rendered in UTC+8, regardless of
+        # where the bot process happens to run.
+        timezone_label = "UTC+8"
         categories = len(
             {str(item.get("cat") or "") for item in self.item_index.items}
         )

@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.9 - 2026-10-23
+
+### Fixed
+
+- Diagnostic health chips now use equal-width cells, so long font names or OS details cannot push the row past the card edge.
+- Diagnostic footer text reserves space for the signature, preventing overlap on narrow labels.
+- Profile achievement chips now contribute their wrapped row count to the card height, avoiding collisions with the footer for long achievement IDs.
+- Diagnostics always report UTC+8 instead of the host process timezone.
+
 ## 1.0.8 - 2026-10-23
 
 ### Added

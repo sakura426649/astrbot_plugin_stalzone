@@ -1672,6 +1672,16 @@ def render_profile_card(
     stats_height = per_col * 32
     achievements = [str(x) for x in (view.get("achievements") or [])]
     hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
+    achievement_rows = 1
+    if achievements:
+        ax = 0
+        achievement_rows = 1
+        for item in achievements:
+            item_w = min(int(label_font.getlength(item)), 220) + 22
+            if ax + item_w > right_w:
+                achievement_rows += 1
+                ax = 0
+            ax += item_w + 8
 
     y = content_y
     if bio_height:
@@ -1679,7 +1689,7 @@ def render_profile_card(
     y += 42 + 118 + 28  # combat heading + panel + gap
     y += 42 + stats_height + (24 if stat_note else 0) + 28
     if achievements:
-        y += 42 + 34 + 24
+        y += 42 + achievement_rows * 32 + 2 + 24
     right_end = y
     height = max(1120, right_end + 110)
 
@@ -2005,19 +2015,20 @@ def render_diag_card(
     draw.line((PAD, 112, width - PAD, 112), fill=(90, 110, 130, 80), width=1)
 
     # Health strip
-    hx, hy = PAD, 128
-    for label, state, detail in view.get("health") or []:
-        color = {"ok": "#69F0B0", "warn": "#FFD166", "bad": "#FF7A7A"}.get(state, "#A9B8C8")
-        text = f"{label} {detail}"
-        text = _fit_text(draw, text, small_font, 170)
-        cw = text_width(text, small_font) + 30
-        draw.rounded_rectangle(
-            (hx, hy, hx + cw, hy + 28), radius=14,
-            fill=(15, 24, 33, 220), outline=_rgba_value(color, 90), width=1,
-        )
-        draw.ellipse((hx + 10, hy + 10, hx + 16, hy + 16), fill=color)
-        draw.text((hx + 23, hy + 5), text, font=small_font, fill=color)
-        hx += cw + 8
+    health_items = list(view.get("health") or [])
+    if health_items:
+        gap = 8
+        cell_w = (width - 2 * PAD - gap * (len(health_items) - 1)) // len(health_items)
+        for index, (label, state, detail) in enumerate(health_items):
+            hx = PAD + index * (cell_w + gap)
+            color = {"ok": "#69F0B0", "warn": "#FFD166", "bad": "#FF7A7A"}.get(state, "#A9B8C8")
+            text = _fit_text(draw, f"{label} {detail}", small_font, cell_w - 32)
+            draw.rounded_rectangle(
+                (hx, 128, hx + cell_w, 156), radius=14,
+                fill=(15, 24, 33, 220), outline=_rgba_value(color, 90), width=1,
+            )
+            draw.ellipse((hx + 10, 138, hx + 16, 144), fill=color)
+            draw.text((hx + 23, 133), text, font=small_font, fill=color)
 
     # Top metrics
     metrics = [m for m in (view.get("metrics") or []) if isinstance(m, dict)][:4]
@@ -2091,7 +2102,7 @@ def render_diag_card(
     footer_y = height - 82
     draw.line((PAD, footer_y, width - PAD, footer_y), fill=(80, 105, 125, 65), width=1)
     note = str(view.get("footer_note") or "诊断不包含凭证或玩家数据")
-    note_lines = _wrap(note, small_font, width - 2 * PAD - 210)[:2]
+    note_lines = _wrap(note, small_font, width - 2 * PAD - 430)[:2]
     for line in note_lines:
         draw.text((PAD, footer_y + 12), line, font=small_font, fill=MUTED)
         footer_y += 18
