@@ -107,7 +107,6 @@ STATUS_LABELS = {
     "offline": "离线",
     "in_game": "游戏中",
 }
-ONLINE_WINDOW_SECONDS = 180
 
 ITEM_STAT_CN = {
     "Vitality": "生命",
@@ -1339,26 +1338,6 @@ def calculate_hq_pvp_score(stats: Any) -> dict[str, Any] | None:
     }
 
 
-def _profile_online(
-    payload: dict[str, Any],
-    status_key: str,
-    now: datetime,
-) -> tuple[bool | None, bool]:
-    """Return (online, inferred). The API has no online flag in its schema."""
-    explicit = payload.get("online")
-    if isinstance(explicit, bool):
-        return explicit, False
-    if status_key in {"online", "in_game", "in-game", "playing"}:
-        return True, False
-    if status_key == "offline":
-        return False, False
-    last_login = _parse_dt(payload.get("lastLogin"))
-    if last_login is None:
-        return None, False
-    delta = (now.astimezone(timezone.utc) - last_login).total_seconds()
-    return delta <= ONLINE_WINDOW_SECONDS, True
-
-
 def build_profile_view(
     payload: dict[str, Any] | None,
     region: str,
@@ -1393,12 +1372,7 @@ def build_profile_view(
     alliance_raw = str(payload.get("alliance") or "")
     alliance = ALLIANCE_LABELS.get(alliance_raw.lower(), alliance_raw or "未知")
     last_login = _fmt_dt(payload.get("lastLogin"), with_year=True)
-    online, online_inferred = _profile_online(payload, status_key, now)
-    state = (
-        "在线" if online is True else "离线" if online is False else "未知"
-    )
-    if status_presence == "游戏中" and online is True:
-        state = "在线"
+    state = status_presence or ("公开资料" if bio else "未知")
 
     basics = [
         f"阵营：{alliance}",
@@ -1482,8 +1456,6 @@ def build_profile_view(
         "alliance": alliance,
         "alliance_raw": alliance_raw,
         "state": state,
-        "online": online,
-        "online_inferred": online_inferred,
         "bio": bio,
         "bio_lines": bio_lines,
         "last_login": last_login,
@@ -1529,8 +1501,6 @@ def format_profile(
         f"状态：{view['state']}",
         f"最后登录：{view['last_login']}",
     ]
-    if view.get("online_inferred"):
-        basic_lines.append("状态说明：官方资料未返回在线字段，按最后登录 ≤3 分钟推算")
     sections: list[tuple[str, list[str]]] = [
         ("基本信息", basic_lines),
     ]

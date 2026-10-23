@@ -1609,11 +1609,7 @@ def render_profile_card(
     *,
     font_path: str | None = None,
 ) -> Path | None:
-    """Render the selected tactical-dossier profile layout.
-
-    The public profile API has no online flag, so ``build_profile_view``
-    derives presence from ``lastLogin`` with a three-minute window.
-    """
+    """Render the selected tactical-dossier profile layout."""
     if Image is None or ImageDraw is None or ImageFont is None:
         return None
     path = find_cjk_font(font_path)
@@ -1738,45 +1734,15 @@ def render_profile_card(
         font=name_font, fill=TEXT, anchor="ma",
     )
 
-    state = str(view.get("state") or "未知")
-    online = view.get("online")
-    if online is True:
-        state_color = "#69F0B0"
-        status_fill = (17, 40, 31, 235)
-        status_border = (75, 190, 135, 165)
-    elif online is False:
-        state_color = "#9AA9B8"
-        status_fill = (26, 31, 36, 235)
-        status_border = (105, 115, 125, 140)
-    else:
-        state_color = "#A9B8C8"
-        status_fill = (26, 31, 36, 235)
-        status_border = (105, 115, 125, 120)
     region_text = f"区服 {str(view.get('region') or '未知').upper()}"
-    state_text = f"状态：{state}"
     region_w = int(draw.textlength(region_text, font=chip_font)) + 26
-    state_w = int(draw.textlength(state_text, font=chip_font)) + 42
-    total_chip_w = region_w + state_w + 8
-    chip_x = left_x + (left_w - total_chip_w) // 2
+    chip_x = left_x + (left_w - region_w) // 2
     draw.rounded_rectangle(
         (chip_x, rail_top + 290, chip_x + region_w, rail_top + 322),
         radius=16, fill=(18, 39, 57, 235),
         outline=(90, 160, 210, 160), width=1,
     )
     draw.text((chip_x + 13, rail_top + 297), region_text, font=chip_font, fill="#9FD4FF")
-    status_x = chip_x + region_w + 8
-    draw.rounded_rectangle(
-        (status_x, rail_top + 290, status_x + state_w, rail_top + 322),
-        radius=16, fill=status_fill, outline=status_border, width=1,
-    )
-    draw.ellipse(
-        (status_x + 12, rail_top + 302, status_x + 20, rail_top + 310),
-        fill=state_color,
-    )
-    draw.text(
-        (status_x + 26, rail_top + 297), state_text,
-        font=chip_font, fill=state_color,
-    )
     draw.line(
         (left_x + 24, rail_top + 338, left_x + left_w - 24, rail_top + 338),
         fill=(110, 135, 160, 70), width=1,
@@ -1805,11 +1771,6 @@ def render_profile_card(
         (left_x + 28, source_y + 46),
         f"查询时间 {view.get('now', '')} UTC+8", font=small_font, fill=MUTED,
     )
-    if view.get("online_inferred"):
-        draw.text(
-            (left_x + 28, source_y + 70),
-            "在线状态按最后登录 ≤3 分钟推算", font=label_font, fill="#7E93A8",
-        )
 
     # Right-hand content column.
     ry = content_y

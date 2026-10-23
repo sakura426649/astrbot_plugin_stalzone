@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.23 - 2026-10-23
+
+### Changed
+
+- Removed the player online/offline inference entirely; the official API does not expose a reliable presence field, so the card no longer guesses from `lastLogin`.
+- The region badge is now a single centered pill under the player name.
+
 ## 1.0.22 - 2026-10-23
 
 ### Fixed
