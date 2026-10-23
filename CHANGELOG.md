@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.16 - 2026-10-23
+
+### Fixed
+
+- Item and balance not-found cards now show `全服` instead of the configured region, matching their global catalogs; the N2 header uses a CJK-capable font so `全服` does not render as boxes.
+
 ## 1.0.15 - 2026-10-23
 
 ### Changed

@@ -740,6 +740,7 @@ def render_notice_card(
     mono_path = find_mono_font(path)
     try:
         eyebrow_font = ImageFont.truetype(str(mono_path or path), 13)
+        header_region_font = ImageFont.truetype(str(path), 13)
         headline_font = ImageFont.truetype(str(display_path), 40)
         meta_font = ImageFont.truetype(str(path), 15)
         section_font = ImageFont.truetype(str(path), 14)
@@ -809,7 +810,7 @@ def render_notice_card(
     draw.text(
         (width - PAD, 32),
         f"{region} · RESULT" if region else "RESULT",
-        font=eyebrow_font, fill=MUTED, anchor="ra",
+        font=header_region_font, fill=MUTED, anchor="ra",
     )
     draw.text((PAD, 94), headline, font=headline_font, fill=TEXT)
     qy = query_y

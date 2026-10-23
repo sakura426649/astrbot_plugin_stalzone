@@ -178,7 +178,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.15"
+PLUGIN_VERSION = "1.0.16"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -1686,7 +1686,7 @@ class StalzonePlugin(Star):
                 candidate_view=build_item_candidate_view(query, candidates),
                 sub="candidates",
             )
-        return self._not_found("item", query)
+        return self._not_found("item", query, region="全服")
 
     async def _handle_pass(self, argument: str) -> str | PluginReply:
         try:
@@ -1730,6 +1730,7 @@ class StalzonePlugin(Star):
             return self._not_found(
                 "balance",
                 query,
+                region="全服",
                 note=(
                     "物品不存在，无法查询平衡调整。"
                     "请先确认物品名/ID，再使用 /sz 调整。"

@@ -719,6 +719,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("未查到关于「qqqzzzxxx999」的物品信息", result.text)
         self.assertEqual(result.notice_view["kind_label"], "物品")
         self.assertEqual(result.notice_view["query"], "qqqzzzxxx999")
+        self.assertEqual(result.notice_view["region"], "全服")
 
     def test_notice_query_casing_preserves_input(self):
         plugin = self.make_plugin()
