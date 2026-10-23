@@ -754,6 +754,37 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(hq["assists"], 6008)
         self.assertEqual(hq["score"], 4125)
 
+    def test_profile_presence_inference(self):
+        base = {
+            "username": "Test-1",
+            "status": "my public bio",
+            "alliance": "duty",
+        }
+        online = build_profile_view(
+            {**base, "lastLogin": "2026-10-22T05:58:00Z"}, "eu", now=self.NOW
+        )
+        self.assertEqual(online["state"], "在线")
+        self.assertTrue(online["online"])
+        self.assertTrue(online["online_inferred"])
+
+        offline = build_profile_view(
+            {**base, "lastLogin": "2026-10-22T05:56:00Z"}, "eu", now=self.NOW
+        )
+        self.assertEqual(offline["state"], "离线")
+        self.assertFalse(offline["online"])
+
+        explicit = build_profile_view(
+            {
+                **base,
+                "status": "online",
+                "lastLogin": "2020-01-01T00:00:00Z",
+            },
+            "eu",
+            now=self.NOW,
+        )
+        self.assertEqual(explicit["state"], "在线")
+        self.assertFalse(explicit["online_inferred"])
+
     def test_profile_hq_section(self):
         payload = {
             "username": "Sakura_Akira",

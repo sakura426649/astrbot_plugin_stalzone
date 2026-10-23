@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.4 - 2026-10-23
+
+### Added
+
+- Selected the tactical-dossier player card: faction emblem and identity rail on the left, bio, PvP summary, official stats and achievements on the right.
+- The player name now has a dedicated region and presence row directly underneath. Presence shows 在线/离线; the official profile schema has no online flag, so the plugin uses an optional `online` field when present, explicit `status`, or infers from `lastLogin` with a 3-minute window.
+- The card notes when presence was inferred from the last login, and text mode includes the same explanation.
+
+### Changed
+
+- Cleaned up the dossier rules and alignment: the left accent stops with the identity block, stats no longer use misaligned row rules, and the bio section has its own heading.
+- The last-login value now keeps its UTC+8 label instead of being truncated.
+
+### Tests
+
+- Added presence-inference tests at the 3-minute boundary; 147 tests pass.
+
 ## 1.0.3 - 2026-10-23
 
 ### Fixed

@@ -1610,266 +1610,295 @@ def render_profile_card(
     *,
     font_path: str | None = None,
 ) -> Path | None:
-    """Render a player profile with PDA intro colours and a compact stat grid."""
+    """Render the selected tactical-dossier profile layout.
+
+    The public profile API has no online flag, so ``build_profile_view``
+    derives presence from ``lastLogin`` with a three-minute window.
+    """
     if Image is None or ImageDraw is None or ImageFont is None:
         return None
     path = find_cjk_font(font_path)
     if path is None:
         return None
+    display_path = _find_display_font(font_path) or path
     mono_path = find_mono_font(path)
     cjk_mono_path = find_cjk_mono_font(path)
     try:
-        title_font = ImageFont.truetype(str(path), 34)
-        subtitle_font = ImageFont.truetype(str(path), 20)
-        section_font = ImageFont.truetype(str(path), 24)
+        title_font = ImageFont.truetype(str(display_path), 37)
+        section_font = ImageFont.truetype(str(path), 21)
         body_font = ImageFont.truetype(str(path), 20)
-        small_font = ImageFont.truetype(str(path), 16)
-        value_font = ImageFont.truetype(str(path), 18)
-        score_font = ImageFont.truetype(str(path), 30)
-        label_font = ImageFont.truetype(str(path), 17)
-        hero_font = ImageFont.truetype(str(path), 32)
-        hero_small_font = ImageFont.truetype(str(path), 15)
-        region_font = ImageFont.truetype(str(path), 18)
+        small_font = ImageFont.truetype(str(path), 15)
+        label_font = ImageFont.truetype(str(path), 13)
+        chip_font = ImageFont.truetype(str(path), 14)
+        metric_font = ImageFont.truetype(str(path), 17)
+        score_font = ImageFont.truetype(str(display_path), 54)
+        hero_score_font = ImageFont.truetype(str(display_path), 48)
+        mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
         return None
 
-    width = WIDTH
+    width = 1200
+    left_x, left_w = PAD, 330
+    right_x = 408
+    right_w = width - right_x - PAD
+    header_y = 36
+    divider_y = 68
+    content_y = 104
+
     bio = _profile_bio_layout(
-        view, width, body_font, mono_path, cjk_mono_path
+        view, right_w + 2 * PAD, body_font, mono_path, cjk_mono_path
     )
-    stat_rows: list[str] = [str(row) for row in (view.get("stat_rows") or [])]
-    stat_rows = stat_rows[:12]
-    stat_height = ((len(stat_rows) + 1) // 2) * 28 if stat_rows else 24
-    hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
-    lunar_rows: list[str] = [str(row) for row in (view.get("lunar_rows") or [])][:4]
+    bio_lines = bio.get("lines") or []
+    bio_height = int(bio.get("height") or 0)
+    stat_rows = [str(row) for row in (view.get("stat_rows") or [])][:15]
+    stat_note = ""
+    if stat_rows and stat_rows[-1].startswith("另有"):
+        stat_note = stat_rows.pop()
+    per_col = max(1, (len(stat_rows) + 1) // 2)
+    stats_height = per_col * 32
     achievements = [str(x) for x in (view.get("achievements") or [])]
+    hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
 
-    identity_height = 84
-    identity_gap = 20
-    y = 174 + identity_height + identity_gap
-    if bio["height"]:
-        y += 42 + bio["height"] + 24
-    y += 30 + 3 * 31 + 43  # 档案 heading + rows + gap before PvP
-    if hq:
-        y += 40 + 108 + 14
-    y += 30 + stat_height + 12
-    if lunar_rows:
-        y += 30 + len(lunar_rows) * 26 + 8
+    y = content_y
+    if bio_height:
+        y += 42 + bio_height + 28
+    y += 42 + 118 + 28  # combat heading + panel + gap
+    y += 42 + stats_height + (24 if stat_note else 0) + 28
     if achievements:
-        y += 26
-    footer_y = y
-    footer_lines = _wrap(
-        str(view.get("footer") or "官方公开资料"), small_font, width - 2 * PAD
-    )[:3]
-    height = max(
-        480,
-        footer_y + len(footer_lines) * 20 + 8 + SIGNATURE_HEIGHT + 18,
-    )
+        y += 42 + 34 + 24
+    right_end = y
+    height = max(1120, right_end + 110)
 
-    image = _card_canvas(width, height, alpha=214)
+    image = _card_canvas(width, height, alpha=232)
     if image is None:
         return None
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=ACCENT)
-    draw.text((PAD + 26, PAD), "STALZONE · 玩家档案", font=title_font, fill=TEXT)
+
     draw.text(
-        (PAD, PAD + 48),
-        f"{view.get('name', '未知')}｜{view.get('region', '')}",
-        font=subtitle_font,
-        fill="#DCE8F5",
+        (PAD, header_y), "STALZONE / PLAYER DOSSIER",
+        font=mono_font, fill="#7FC4FF",
     )
     draw.text(
-        (PAD, PAD + 74),
-        f"查询时间：{view.get('now', '')} UTC+8",
-        font=subtitle_font,
-        fill=MUTED,
+        (width - PAD, header_y), f"{view.get('region', '')} · PUBLIC RECORD",
+        font=mono_font, fill=MUTED, anchor="ra",
     )
-    draw.line((PAD, 153, width - PAD, 153), fill=BORDER, width=1)
+    draw.line((PAD, divider_y, width - PAD, divider_y), fill=(90, 110, 130, 90), width=1)
+
+    # Left identity rail. The short accent ends with the identity block; it
+    # deliberately does not run through the empty lower part of the rail.
+    rail_top = 92
+    rail_bottom = height - 44
+    draw.rounded_rectangle(
+        (left_x, rail_top, left_x + left_w, rail_bottom),
+        radius=18, fill=(8, 14, 23, 215),
+        outline=(100, 130, 160, 85), width=1,
+    )
+    draw.rounded_rectangle(
+        (left_x + 1, rail_top + 18, left_x + 5, rail_top + 358),
+        radius=2, fill="#FFD166",
+    )
     faction_path = faction_icon_path(str(view.get("alliance_raw") or ""))
     if faction_path is not None:
         try:
             faction = Image.open(faction_path).convert("RGBA")
-            faction.thumbnail((112, 112))
-            image.paste(
-                faction,
-                (width - PAD - faction.width, PAD - 6),
-                faction,
-            )
+            faction.thumbnail((176, 176), Image.LANCZOS)
+            fx = left_x + (left_w - faction.width) // 2
+            image.alpha_composite(faction, (fx, rail_top + 30))
         except Exception:
             pass
+    faction_label = f"{view.get('alliance', '未知')} / {str(view.get('alliance_raw') or '').upper()}"
+    draw.text(
+        (left_x + left_w // 2, rail_top + 218),
+        faction_label,
+        font=chip_font, fill="#FFD166", anchor="ma",
+    )
+    draw.text(
+        (left_x + left_w // 2, rail_top + 246),
+        _fit_text(draw, str(view.get("name") or "未知"), title_font, left_w - 34),
+        font=title_font, fill=TEXT, anchor="ma",
+    )
 
-    y = 174
-    identity_top = y
+    state = str(view.get("state") or "未知")
+    online = view.get("online")
+    state_color = GREEN if online is True else (MUTED if online is False else "#A9B8C8")
+    region_text = f"区服 {str(view.get('region') or '未知').upper()}"
+    state_text = f"状态：{state}"
+    region_w = int(draw.textlength(region_text, font=chip_font)) + 26
+    state_w = int(draw.textlength(state_text, font=chip_font)) + 42
+    total_chip_w = region_w + state_w + 8
+    chip_x = left_x + (left_w - total_chip_w) // 2
     draw.rounded_rectangle(
-        (PAD, identity_top, width - PAD, identity_top + identity_height),
-        radius=14,
-        fill=(8, 15, 24, 175),
-        outline=(88, 116, 145, 95),
-        width=1,
+        (chip_x, rail_top + 300, chip_x + region_w, rail_top + 332),
+        radius=16, fill=(18, 39, 57, 235),
+        outline=(90, 160, 210, 160), width=1,
     )
+    draw.text((chip_x + 13, rail_top + 307), region_text, font=chip_font, fill="#9FD4FF")
+    status_x = chip_x + region_w + 8
     draw.rounded_rectangle(
-        (PAD, identity_top + 12, PAD + 4, identity_top + identity_height - 12),
-        radius=2,
-        fill=ACCENT,
+        (status_x, rail_top + 300, status_x + state_w, rail_top + 332),
+        radius=16, fill=(18, 28, 34, 235),
+        outline=(100, 140, 130, 110), width=1,
     )
-    hero_name = str(view.get("name") or "未知")
-    hero_region = str(view.get("region") or "未知").upper()
-    region_text = f"区服 {hero_region}"
-    region_width = int(draw.textlength(region_text, font=region_font)) + 30
-    region_x = width - PAD - 18 - region_width
-    draw.rounded_rectangle(
-        (
-            region_x,
-            identity_top + 24,
-            region_x + region_width,
-            identity_top + 60,
-        ),
-        radius=18,
-        fill=(19, 42, 62, 235),
-        outline=(94, 166, 218, 165),
-        width=1,
+    draw.ellipse(
+        (status_x + 12, rail_top + 312, status_x + 20, rail_top + 320),
+        fill=state_color,
     )
     draw.text(
-        (region_x + 15, identity_top + 31),
-        region_text,
-        font=region_font,
-        fill="#9FD4FF",
+        (status_x + 26, rail_top + 307), state_text,
+        font=chip_font, fill=state_color,
     )
-    name_width = max(80, region_x - (PAD + 24) - 18)
-    draw.text(
-        (PAD + 24, identity_top + 12),
-        _fit_text(draw, hero_name, hero_font, name_width),
-        font=hero_font,
-        fill="#F4F8FD",
+    draw.line(
+        (left_x + 24, rail_top + 356, left_x + left_w - 24, rail_top + 356),
+        fill=(110, 135, 160, 70), width=1,
     )
-    draw.text(
-        (PAD + 24, identity_top + 54),
-        "角色档案 · 官方公开资料",
-        font=hero_small_font,
-        fill=MUTED,
-    )
-    y += identity_height + identity_gap
 
-    if bio["height"]:
-        draw.text((PAD, y), "简介 / STATUS", font=section_font, fill=ACCENT)
-        y += 42
-        draw.rounded_rectangle(
-            (PAD, y, width - PAD, y + bio["height"]),
-            radius=12,
-            fill=(7, 13, 21, 150),
-            outline=(80, 102, 124, 70),
-            width=1,
+    meta_rows = [
+        ("战队", str(view.get("clan_label") or "无")),
+        ("职位", str(view.get("clan_rank") or "未知")),
+        ("战队等级", str(view.get("clan_level") if view.get("clan_level") is not None else "未公开")),
+        ("最后登录", str(view.get("last_login") or "未知")),
+    ]
+    my = rail_top + 378
+    for key, value in meta_rows:
+        draw.text((left_x + 26, my), key, font=label_font, fill=MUTED)
+        fitted = _fit_text(draw, value, small_font, left_w - 100)
+        draw.text(
+            (left_x + left_w - 26 - int(draw.textlength(fitted, font=small_font)), my),
+            fitted, font=small_font, fill=TEXT,
         )
-        line_y = y + 18
-        for line in bio["lines"]:
-            _draw_pda_line(
-                draw, PAD + 18, line_y, line, bio["font"], TEXT
-            )
-            line_y += bio["line_h"]
-        y += bio["height"] + 24
+        my += 46
 
-    draw.text((PAD, y), "档案", font=section_font, fill=ACCENT)
-    y += 30
-    half = width // 2
-    _profile_fact(draw, PAD, y, "阵营", str(view.get("alliance", "未知")), label_font, value_font, half - PAD - 20)
-    _profile_fact(draw, half, y, "状态", str(view.get("state", "未知")), label_font, value_font, width - half - PAD)
-    y += 31
-    _profile_fact(draw, PAD, y, "战队", str(view.get("clan_label", "无")), label_font, value_font, width - 2 * PAD)
-    y += 31
-    _profile_fact(draw, PAD, y, "职位", str(view.get("clan_rank", "未知")), label_font, value_font, half - PAD - 20)
-    _profile_fact(draw, half, y, "战队等级", str(view.get("clan_level", "未知")), label_font, value_font, width - half - PAD)
-    y += 31
-    _profile_fact(draw, PAD, y, "最后登录", str(view.get("last_login", "未知")), label_font, value_font, width - 2 * PAD)
-    y += 43
-
+    draw.text((left_x + 28, rail_top + 590), "OPEN WORLD PVP", font=label_font, fill="#FFD166")
     if hq:
-        draw.text((PAD, y), "开放世界 PvP", font=section_font, fill=ACCENT)
-        y += 40
-        draw.rounded_rectangle(
-            (PAD, y, width - PAD, y + 108),
-            radius=12,
-            fill=(25, 22, 14, 150),
-            outline=(231, 194, 125, 90),
-            width=1,
-        )
-        draw.text((PAD + 20, y + 16), "PvP Score", font=label_font, fill="#C8B68D")
         draw.text(
-            (PAD + 20, y + 39),
-            f"{hq['score']:,}",
-            font=score_font,
-            fill="#FFD166",
+            (left_x + 26, rail_top + 612), f"{hq.get('score', 0):,}",
+            font=score_font, fill="#FFD166",
         )
-        draw.text(
-            (width - PAD - 20, y + 16),
-            f"击杀 {hq['kills']:,}    助攻 {hq['assists']:,}",
-            font=value_font,
-            fill=TEXT,
-            anchor="ra",
-        )
-        draw.text(
-            (width - PAD - 20, y + 46),
-            f"估算死亡 {hq['deaths']:,}",
-            font=value_font,
-            fill=TEXT,
-            anchor="ra",
-        )
-        draw.text(
-            (width - PAD - 20, y + 76),
-            f"K/D（估算）：{hq['kd']:.2f}",
-            font=value_font,
-            fill="#D9C79F",
-            anchor="ra",
-        )
-        y += 108 + 14
-
-    draw.text((PAD, y), "官方统计", font=section_font, fill=ACCENT)
-    y += 30
-    if stat_rows:
-        col_w = (width - 2 * PAD) // 2
-        for index, row in enumerate(stat_rows):
-            col = index % 2
-            line = index // 2
-            x = PAD + col * col_w
-            line_y = y + line * 28
-            label, sep, value = row.partition("：")
-            if not sep:
-                label, value = row, ""
-            draw.text((x, line_y), label, font=label_font, fill=MUTED)
-            if value:
-                draw.text(
-                    (x + col_w - 20, line_y),
-                    value,
-                    font=value_font,
-                    fill=TEXT,
-                    anchor="ra",
-                )
-        y += stat_height
+        draw.text((left_x + 28, rail_top + 678), "HQ 公式估算 · 非官方竞技分", font=small_font, fill=MUTED)
+        metric_y = rail_top + 716
+        metric_values = [
+            ("击杀", f"{hq.get('kills', 0):,}"),
+            ("助攻", f"{hq.get('assists', 0):,}"),
+            ("死亡", f"{hq.get('deaths', 0):,}"),
+            ("K/D", f"{hq.get('kd', 0):.2f}"),
+        ]
+        for index, (key, value) in enumerate(metric_values):
+            mx = left_x + 28 + index * 70
+            draw.text((mx, metric_y), key, font=label_font, fill=MUTED)
+            draw.text((mx, metric_y + 18), value, font=metric_font, fill=TEXT)
     else:
-        draw.text((PAD, y), "官方 API 未返回可读统计字段", font=body_font, fill=MUTED)
-        y += 28
-    y += 12
+        draw.text((left_x + 28, rail_top + 620), "暂无 PvP 统计", font=body_font, fill=MUTED)
 
-    if lunar_rows:
-        draw.text((PAD, y), str(view.get("lunar_heading") or "战队战报（Lunar 第三方）"), font=section_font, fill=ACCENT)
-        y += 30
-        for row in lunar_rows:
-            draw.text((PAD, y), _fit_text(draw, row, body_font, width - 2 * PAD), font=body_font, fill=MUTED)
-            y += 26
-        y += 8
+    source_y = max(rail_top + 820, rail_bottom - 150)
+    draw.text((left_x + 28, source_y), "记录来源", font=label_font, fill=MUTED)
+    draw.text((left_x + 28, source_y + 22), "官方公开资料 + StalzoneHQ", font=small_font, fill=TEXT)
+    draw.text(
+        (left_x + 28, source_y + 46),
+        f"查询时间 {view.get('now', '')} UTC+8", font=small_font, fill=MUTED,
+    )
+    if view.get("online_inferred"):
+        draw.text(
+            (left_x + 28, source_y + 70),
+            "在线状态按最后登录 ≤3 分钟推算", font=label_font, fill="#7E93A8",
+        )
+
+    # Right-hand content column.
+    ry = content_y
+    if bio_height:
+        draw.rounded_rectangle(
+            (right_x, ry + 2, right_x + 4, ry + 20),
+            radius=2, fill="#FFD166",
+        )
+        draw.text(
+            (right_x + 12, ry), "简介 / STATUS",
+            font=section_font, fill=TEXT,
+        )
+        panel_y = ry + 42
+        draw.rounded_rectangle(
+            (right_x, panel_y, right_x + right_w, panel_y + bio_height),
+            radius=14, fill=(7, 13, 21, 155),
+            outline=(82, 104, 126, 75), width=1,
+        )
+        line_y = panel_y + 18
+        for line in bio_lines:
+            _draw_pda_line(draw, right_x + 18, line_y, line, bio["font"], "#E2EBF5")
+            line_y += int(bio.get("line_h") or 17)
+        ry += 42 + bio_height + 28
+
+    section_y = ry
+    draw.rounded_rectangle((right_x, section_y + 2, right_x + 4, section_y + 20), radius=2, fill="#FFD166")
+    draw.text((right_x + 12, section_y), "战斗概览 / COMBAT", font=section_font, fill=TEXT)
+    panel_y = section_y + 40
+    draw.rounded_rectangle(
+        (right_x, panel_y, right_x + right_w, panel_y + 118),
+        radius=14, fill=(31, 26, 16, 178),
+        outline=(208, 168, 92, 100), width=1,
+    )
+    if hq:
+        draw.text((right_x + 22, panel_y + 16), "PvP SCORE", font=label_font, fill="#D8BE83")
+        draw.text((right_x + 20, panel_y + 36), f"{hq.get('score', 0):,}", font=hero_score_font, fill="#FFD166")
+        draw.text((right_x + 152, panel_y + 78), "估算值", font=small_font, fill="#C6B182")
+        values = [
+            ("击杀", f"{hq.get('kills', 0):,}"),
+            ("助攻", f"{hq.get('assists', 0):,}"),
+            ("估算死亡", f"{hq.get('deaths', 0):,}"),
+            ("K/D", f"{hq.get('kd', 0):.2f}"),
+        ]
+        for index, (key, value) in enumerate(values):
+            mx = right_x + 258 + index * 116
+            draw.text((mx, panel_y + 22), key, font=label_font, fill=MUTED)
+            draw.text((mx, panel_y + 46), value, font=metric_font, fill=TEXT)
+    else:
+        draw.text((right_x + 22, panel_y + 42), "暂无 PvP 统计", font=body_font, fill=MUTED)
+    ry = panel_y + 118 + 28
+
+    section_label_y = ry
+    draw.rounded_rectangle((right_x, section_label_y + 2, right_x + 4, section_label_y + 20), radius=2, fill="#FFD166")
+    draw.text((right_x + 12, section_label_y), "官方统计 / STATISTICS", font=section_font, fill=TEXT)
+    stats_y = section_label_y + 42
+    col_w = right_w // 2
+    for index, row in enumerate(stat_rows):
+        label_text, sep, value = row.partition("：")
+        if not sep:
+            label_text, value = row, ""
+        col = index // per_col
+        row_index = index % per_col
+        xx = right_x + col * col_w
+        yy = stats_y + row_index * 32
+        draw.text((xx, yy), _fit_text(draw, label_text, label_font, col_w - 90), font=label_font, fill=MUTED)
+        draw.text((xx + col_w - 20, yy), value, font=metric_font, fill=TEXT, anchor="ra")
+    if stat_note:
+        draw.text((right_x, stats_y + per_col * 32 + 4), stat_note, font=label_font, fill=MUTED)
+    ry = stats_y + per_col * 32 + (24 if stat_note else 0) + 28
 
     if achievements:
-        draw.text(
-            (PAD, y),
-            "展示成就：" + "、".join(achievements),
-            font=small_font,
-            fill=MUTED,
-        )
-        y += 26
+        draw.rounded_rectangle((right_x, ry + 2, right_x + 4, ry + 20), radius=2, fill="#FFD166")
+        draw.text((right_x + 12, ry), "展示成就 / ACHIEVEMENTS", font=section_font, fill=TEXT)
+        ax, ay = right_x, ry + 38
+        for item in achievements:
+            item = _fit_text(draw, item, label_font, 220)
+            item_w = int(draw.textlength(item, font=label_font)) + 22
+            if ax + item_w > right_x + right_w:
+                ax, ay = right_x, ay + 32
+            draw.rounded_rectangle(
+                (ax, ay, ax + item_w, ay + 27), radius=13,
+                fill=(22, 31, 42, 210), outline=(90, 110, 130, 80), width=1,
+            )
+            draw.text((ax + 11, ay + 5), item, font=label_font, fill=MUTED)
+            ax += item_w + 8
+        ry = ay + 34 + 24
 
-    for line in footer_lines:
-        draw.text((PAD, y), line, font=small_font, fill=MUTED)
-        y += 20
-    _draw_signature(draw, width, y + 8, path, small_font, max_bottom=height)
+    footer_y = height - 100
+    draw.line((right_x, footer_y, right_x + right_w, footer_y), fill=(90, 110, 130, 65), width=1)
+    draw.text((right_x, footer_y + 15), "STALZONE · 玩家档案", font=small_font, fill=MUTED)
+    draw.text(
+        (right_x, footer_y + 37),
+        "数据：STALZONE 官方公开 API｜PvP：StalzoneHQ 公式｜时间：UTC+8",
+        font=small_font, fill=MUTED,
+    )
+    _draw_signature(
+        draw, width, footer_y + 62, path, small_font, max_bottom=height,
+    )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.4-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,7 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stacked items with unit price and lowest-price marker |
 | Emission | Time since the last emission, current status and region selection |
-| Player | Public profile, faction emblem, clan, PvP estimate and optional Lunar enrichment |
+| Player | Tactical dossier, faction emblem, clan, PvP estimate and online/offline presence; presence is inferred from the last login within 3 minutes when the API has no flag |
 | Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
 | Item | 2,615 bilingual entries, 1,338 detail records, 2,600 bundled icons, semantic stat colors |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
