@@ -15,10 +15,6 @@
 
 <br>
 
-<img src="logo.png" alt="STALZONE Logo" width="128">
-
-<br>
-
 <img src="docs/images/help.png" alt="STALZONE 查询菜单" width="92%">
 
 </div>
