@@ -68,8 +68,8 @@
 ## 快速开始
 
 1. 在 AstrBot WebUI 的插件页安装本插件：
-   - 下载本仓库 ZIP 后选择「导入压缩包」；
-   - 或直接把仓库克隆到 `data/plugins/`。
+   - 直接把仓库克隆到 `data/plugins/`；
+   - 或下载仓库 ZIP，解压后将 `astrbot_plugin_stalzone/` 目录放到 `data/plugins/`（也可自行打包成插件 ZIP 后导入）。
 2. 在 [STALZONE API 应用管理](https://eapi.stalzone.com/registration.html) 获取 `Client-Id` 与 `Client-Secret`。
 3. 进入插件配置，填写凭证，并把 `region` 设为你的群所在区服（EU 群填 `eu`）。
 4. 保存并重启/重载 AstrBot，在群里发送：
