@@ -38,7 +38,7 @@ STAT_LABELS = {
     "level": "等级",
     "character_level": "角色等级",
     "playtime": "游戏时长",
-    "kil": "击杀（kil）",
+    "kil": "击杀（kill）",
     "ast": "助攻",
     "dea": "总死亡",
     "bul-dea": "子弹死亡",
@@ -1293,8 +1293,6 @@ def _profile_stat_rows(stats: Any) -> list[str]:
 
     entries.sort(key=lambda item: (item[0], item[1]))
     rows = [f"{label}：{shown}" for _, _, label, shown in entries]
-    if len(rows) > 14:
-        rows = rows[:14] + [f"另有 {len(rows) - 14} 项统计未展示"]
     return rows or ["官方 API 未返回可读统计字段"]
 
 

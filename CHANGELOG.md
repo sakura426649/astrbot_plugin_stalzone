@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.22 - 2026-10-23
+
+### Fixed
+
+- Removed the old 14-row statistics cap so all readable official stats are shown; “另有 3 项统计未展示” no longer appears.
+- Fixed the `击杀（kil）` label to `击杀（kill）`.
+- The card height and two-column split adapt to the full stats list.
+
 ## 1.0.21 - 2026-10-23
 
 ### Fixed

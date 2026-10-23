@@ -1656,7 +1656,7 @@ def render_profile_card(
     )
     bio_lines = bio.get("lines") or []
     bio_height = int(bio.get("height") or 0)
-    stat_rows = [str(row) for row in (view.get("stat_rows") or [])][:15]
+    stat_rows = [str(row) for row in (view.get("stat_rows") or [])]
     stat_note = ""
     if stat_rows and stat_rows[-1].startswith("另有"):
         stat_note = stat_rows.pop()
