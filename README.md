@@ -7,11 +7,12 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.48.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.49.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
 [![Stars](https://img.shields.io/github/stars/sakura426649/astrbot_plugin_stalzone?style=flat-square&color=F59E0B)](https://github.com/sakura426649/astrbot_plugin_stalzone)
+[![Tests](https://github.com/sakura426649/astrbot_plugin_stalzone/actions/workflows/tests.yml/badge.svg)](https://github.com/sakura426649/astrbot_plugin_stalzone/actions/workflows/tests.yml)
 
 <br>
 
@@ -104,6 +105,7 @@
 | `/sz clans [页码]` | 战队列表 | `/sz 战队列表 2` |
 | `/sz operations [地图ID]` | 最近行动记录 | `/sz 行动 operation_bigcleanup` |
 | `/sz regions` | 官方区服列表 | `/sz 区服` |
+| `/sz diag` | 版本、区服、API 环境、数据量和缓存状态（不含凭证） | `/sz diag` |
 | `/sz help` | 图片帮助菜单 | `/sz help` |
 
 常用中文别名：`拍卖行`、`风暴`/`爆发`、`玩家`/`角色`、`物品`、`战队`、`行动`、`区服`。风暴查询还支持简写 `fb`。
@@ -211,6 +213,7 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 - **静态数据**：物品索引、物品详情、图标和 2023–2026 平衡公告随插件打包，离线可查。
 - **第三方数据**：Lunar 只用于玩家资料的 K/D/KDA 补充；SC CORE 只用于官方历史翻页失效时的旧成交补全；两者都会在输出中标注来源。
 - **性能**：物品搜索使用别名缓存和模糊匹配预筛；搜索、图片渲染和 base64 编码在线程池执行；官方 API 复用同一个 `httpx.AsyncClient` 连接池。
+- **API 缓存与并发**：普通拍卖在售/成交缓存 20 秒，风暴状态缓存 10 秒；同一时刻最多 6 个查询进入 API 处理，避免突发请求把配额打满。带日期的历史查询不缓存，保证翻页结果准确。
 - **缓存上限**：候选按群/会话保存 10 分钟，最多 200 个会话；SC CORE 物品键最多 4096 条；物品图标超过 30 天清理；临时卡片图超过 24 小时清理；帮助图只保留当前版本/区服/环境的一份。
 
 > 实时价格和排行榜会随时变化，历史查询结果可能受官方 API 可查范围限制；以游戏内实际数据为准。
@@ -249,7 +252,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **133 个测试**。
+当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **137 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试。
 
 演示服冒烟测试（需要演示应用凭证）：
 

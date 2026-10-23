@@ -50,6 +50,7 @@ from formatters import (  # noqa: E402
     format_clan,
     format_clan_candidates,
     format_clans_list,
+    format_diag,
     format_elapsed_hms,
     format_emission,
     format_help,
@@ -628,6 +629,33 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("距离上次风暴", text)
         self.assertIn("2小时30分00秒", text)
 
+    def test_format_diag(self):
+        text = format_diag(
+            {
+                "version": "9.9.9",
+                "system": "Linux",
+                "python": "3.12.0",
+                "region": "EU",
+                "api_base": "https://eapi.stalzone.com",
+                "env": "生产环境",
+                "render_mode": "auto",
+                "font": "自动查找",
+                "credentials": "已配置",
+                "items": 2615,
+                "details": 1338,
+                "balance_patches": 168,
+                "pending": 2,
+                "http": "已建立",
+                "cache_entries": 3,
+                "cache_hits": 8,
+                "cache_misses": 2,
+            }
+        )
+        self.assertIn("STALZONE · 运行诊断", text)
+        self.assertIn("插件 9.9.9", text)
+        self.assertIn("物品索引：2615 件", text)
+        self.assertIn("缓存命中率：80%", text)
+
     def test_emission_view_active_and_idle(self):
         self.assertEqual(format_elapsed_hms(3661), "1小时01分01秒")
         idle = build_emission_view(
@@ -972,6 +1000,8 @@ class ParserTests(unittest.TestCase):
             "/sz 拍卖 y1q9": ("auction", "y1q9"),
             "/sz 区服": ("regions", ""),
             "/sz 行动": ("operations", ""),
+            "/sz diag": ("diag", ""),
+            "/sz 诊断": ("diag", ""),
             "/sz 战队列表": ("clans", ""),
             "/sz 市场 y1q9": ("auction", "y1q9"),
             "/sz 交易行 y1q9": ("auction", "y1q9"),

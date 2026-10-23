@@ -697,6 +697,33 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         usage = await collect(plugin, "/sz 风暴 xx")
         self.assertIn("用法：/sz emission", usage)
 
+    async def test_emission_cache_hits(self):
+        class CountingClient(FakeClient):
+            calls = 0
+
+            async def get_emission(self):
+                CountingClient.calls += 1
+                return {
+                    "previousStart": "2026-10-22T03:00:00Z",
+                    "previousEnd": "2026-10-22T03:30:00Z",
+                }
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: CountingClient()  # type: ignore[assignment]
+        first = await collect(plugin, "/sz 风暴")
+        second = await collect(plugin, "/sz 风暴")
+        self.assertIn("距离上次风暴", first)
+        self.assertIn("距离上次风暴", second)
+        self.assertEqual(CountingClient.calls, 1)
+        self.assertEqual(plugin._cache_stats()[1], 1)
+
+    async def test_diag_command(self):
+        text = await collect(self.make_plugin(), "/sz diag")
+        self.assertIn("STALZONE · 运行诊断", text)
+        self.assertIn("插件 ", text)
+        self.assertIn("凭证：未配置", text)
+        self.assertIn("API 缓存", text)
+
     async def test_player_command(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]

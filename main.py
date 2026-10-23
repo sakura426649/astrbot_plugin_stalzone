@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import hashlib
 import os
+import platform
 import re
 import sys
 import tempfile
@@ -55,6 +57,7 @@ try:  # Package import (normal AstrBot plugin loading).
         format_clan,
         format_clan_candidates,
         format_clans_list,
+        format_diag,
         format_emission,
         format_help,
         format_item,
@@ -113,6 +116,7 @@ except ImportError:  # Direct execution / flat import fallback.
         format_clan,
         format_clan_candidates,
         format_clans_list,
+        format_diag,
         format_emission,
         format_help,
         format_item,
@@ -152,7 +156,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "0.48.1"
+PLUGIN_VERSION = "0.49.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 IMAGE_COMMANDS = {
     "auction",
@@ -208,6 +212,7 @@ USAGE = {
     "clan": "用法：/sz clan <战队名/标签/ID>",
     "clans": "用法：/sz clans [页码]",
     "operations": "用法：/sz operations [地图ID]",
+    "diag": "用法：/sz diag\n查看版本、区服、API 环境、数据量和缓存状态（不包含凭证）",
     "balance": "用法：/sz 调整 <武器/神器/装备名或ID>\n示例：/sz 调整 AK-308 或 /sz 调整 多面体",
     "pass": (
         "用法：/sz 通行证计算 <当前等级> <每日任务>[+超载] <剩余天数> [每周天数=7]\n"
@@ -231,6 +236,10 @@ class StalzonePlugin(Star):
         self._http_client: httpx.AsyncClient | None = None
         self._http_base = ""
         self._icons_pruned_at = 0.0
+        self._api_cache: dict[str, tuple[float, Any]] = {}
+        self._api_cache_hits = 0
+        self._api_cache_misses = 0
+        self._api_semaphore: asyncio.Semaphore | None = None
         data_dir = self._cache_dir()
         self.item_index = ItemIndex(
             overrides_path=data_dir / "item_name_overrides.json",
@@ -293,6 +302,41 @@ class StalzonePlugin(Star):
     def _render_mode(self) -> str:
         mode = str(self._cfg("render_mode", "auto") or "auto").strip().lower()
         return mode if mode in {"auto", "text", "image"} else "auto"
+
+    def _api_gate(self) -> asyncio.Semaphore:
+        if self._api_semaphore is None:
+            self._api_semaphore = asyncio.Semaphore(6)
+        return self._api_semaphore
+
+    def _cache_get(self, key: str) -> Any:
+        item = self._api_cache.get(key)
+        if item is None:
+            self._api_cache_misses += 1
+            return None
+        expires, value = item
+        if time.monotonic() > expires:
+            self._api_cache.pop(key, None)
+            self._api_cache_misses += 1
+            return None
+        self._api_cache_hits += 1
+        return copy.deepcopy(value)
+
+    def _cache_set(self, key: str, value: Any, ttl: float) -> None:
+        now = time.monotonic()
+        if key not in self._api_cache and len(self._api_cache) >= 128:
+            for old_key, (expires, _value) in list(self._api_cache.items()):
+                if expires <= now:
+                    self._api_cache.pop(old_key, None)
+            if len(self._api_cache) >= 128:
+                self._api_cache.pop(next(iter(self._api_cache)), None)
+        self._api_cache[key] = (now + ttl, copy.deepcopy(value))
+
+    def _cache_stats(self) -> tuple[int, int, int]:
+        return (
+            len(self._api_cache),
+            self._api_cache_hits,
+            self._api_cache_misses,
+        )
 
     def _cache_dir(self) -> Path:
         """Return the plugin data directory, falling back to temp in tests."""
@@ -763,6 +807,8 @@ class StalzonePlugin(Star):
             coro = self._handle_operations(arg)
         elif sub == "regions":
             coro = self._handle_regions()
+        elif sub == "diag":
+            coro = self._handle_diag()
         else:
             yield event.plain_result(f"未知指令：{sub}\n使用 /sz help 查看可用指令。")
             return
@@ -776,7 +822,8 @@ class StalzonePlugin(Star):
         faction = None
         render_sub = sub
         try:
-            result = await coro
+            async with self._api_gate():
+                result = await coro
             if isinstance(result, PluginReply):
                 text = result.text
                 icon_url = result.icon_url
@@ -964,24 +1011,36 @@ class StalzonePlugin(Star):
                         errors.extend(sc_errors)
                 lots_payload: dict[str, Any] = {}
             else:
-                # Fetch concurrently; one failed side should not hide the other.
-                results = await asyncio.gather(
-                    client.get_auction_lots(item_id, limit=100),
-                    client.get_auction_history(item_id, limit=100),
-                    return_exceptions=True,
-                )
-                lots, history = results
-                errors = [value for value in results if isinstance(value, Exception)]
-                if len(errors) == 2:
-                    raise errors[0]
-                if errors:
-                    logger.warning(
-                        "STALZONE auction partial failure for %s: %s",
-                        item_id,
-                        errors[0],
+                cache_key = f"auction:{client.region}:{item_id}"
+                cached = self._cache_get(cache_key)
+                if isinstance(cached, tuple) and len(cached) == 2:
+                    lots_payload, history_payload = cached
+                    errors = []
+                else:
+                    # Fetch concurrently; one failed side should not hide the other.
+                    results = await asyncio.gather(
+                        client.get_auction_lots(item_id, limit=100),
+                        client.get_auction_history(item_id, limit=100),
+                        return_exceptions=True,
                     )
-                lots_payload = lots if isinstance(lots, dict) else {}
-                history_payload = history if isinstance(history, dict) else {}
+                    lots, history = results
+                    errors = [value for value in results if isinstance(value, Exception)]
+                    if len(errors) == 2:
+                        raise errors[0]
+                    if errors:
+                        logger.warning(
+                            "STALZONE auction partial failure for %s: %s",
+                            item_id,
+                            errors[0],
+                        )
+                    lots_payload = lots if isinstance(lots, dict) else {}
+                    history_payload = history if isinstance(history, dict) else {}
+                    if not errors:
+                        self._cache_set(
+                            cache_key,
+                            (lots_payload, history_payload),
+                            20.0,
+                        )
             view = build_auction_view(
                 item_id,
                 lots_payload,
@@ -1287,7 +1346,11 @@ class StalzonePlugin(Star):
         async with client as client:
             if region:
                 client.region = region
-            payload = await client.get_emission()
+            cache_key = f"emission:{client.region}"
+            payload = self._cache_get(cache_key)
+            if payload is None:
+                payload = await client.get_emission()
+                self._cache_set(cache_key, payload, 10.0)
             view = build_emission_view(payload, client.region)
             return PluginReply(
                 format_emission(payload, client.region, view=view),
@@ -1531,6 +1594,34 @@ class StalzonePlugin(Star):
     async def _handle_regions(self) -> str:
         async with self._make_client() as client:
             return format_regions(await client.get_regions())
+
+    async def _handle_diag(self) -> str:
+        entries, hits, misses = self._cache_stats()
+        credentials = bool(
+            str(self._cfg("client_id", "") or "").strip()
+            and str(self._cfg("client_secret", "") or "").strip()
+        )
+        return format_diag(
+            {
+                "version": PLUGIN_VERSION,
+                "system": f"{platform.system()} {platform.release()}",
+                "python": platform.python_version(),
+                "region": self._region().upper(),
+                "api_base": self._api_base(),
+                "env": "演示环境" if self._is_demo() else "生产环境",
+                "render_mode": self._render_mode(),
+                "font": str(self._cfg("font_path", "") or "").strip() or "自动查找",
+                "credentials": "已配置" if credentials else "未配置",
+                "items": len(self.item_index.items),
+                "details": len(self.item_index.details),
+                "balance_patches": len(self.balance_history.historical_patches),
+                "pending": len(self._pending_choices),
+                "http": "已建立" if self._http_client is not None else "未建立",
+                "cache_entries": entries,
+                "cache_hits": hits,
+                "cache_misses": misses,
+            }
+        )
 
     async def _handle_operations(self, map_arg: str) -> str:
         map_name = map_arg.strip() or None

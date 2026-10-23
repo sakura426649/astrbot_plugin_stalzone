@@ -1949,6 +1949,47 @@ def format_regions(regions: list[dict[str, Any]] | None) -> str:
     )
 
 
+def format_diag(info: dict[str, Any]) -> str:
+    """Render a compact, copyable diagnostic card without any secret."""
+    info = info if isinstance(info, dict) else {}
+    cache_entries = int(info.get("cache_entries") or 0)
+    hits = int(info.get("cache_hits") or 0)
+    misses = int(info.get("cache_misses") or 0)
+    total = hits + misses
+    hit_rate = f"{hits * 100 / total:.0f}%" if total else "—"
+    return _card(
+        "STALZONE · 运行诊断",
+        [f"插件 {info.get('version', '?')}｜{info.get('system', '?')}"],
+        [
+            (
+                "运行环境",
+                [
+                    f"Python：{info.get('python', '?')}",
+                    f"区服：{info.get('region', '?')}｜API：{info.get('api_base', '?')}",
+                    f"环境：{info.get('env', '?')}｜渲染：{info.get('render_mode', '?')}",
+                    f"凭证：{info.get('credentials', '?')}｜字体：{info.get('font', '?')}",
+                ],
+            ),
+            (
+                "本地数据",
+                [
+                    f"物品索引：{info.get('items', 0)} 件｜详情：{info.get('details', 0)} 件",
+                    f"平衡公告：{info.get('balance_patches', 0)} 份｜待选会话：{info.get('pending', 0)}",
+                    f"HTTP 连接池：{info.get('http', '?')}",
+                ],
+            ),
+            (
+                "缓存",
+                [
+                    f"API 缓存：{cache_entries} 条｜命中 {hits}｜未命中 {misses}",
+                    f"缓存命中率：{hit_rate}",
+                ],
+            ),
+        ],
+        "诊断不包含 Client-Secret、玩家账号或聊天内容",
+    )
+
+
 def format_operations(payload: dict[str, Any] | None, map_name: str | None = None) -> str:
     payload = payload if isinstance(payload, dict) else {}
     raw = payload.get("sessions")
@@ -1992,6 +2033,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz clans [页码] — 战队列表",
         "/sz operations [地图ID] — 最近行动记录",
         "/sz regions — 官方区服列表",
+        "/sz diag — 查看运行状态与缓存（不包含凭证）",
         "/sz help — 显示本帮助",
     ]
     return _card(
