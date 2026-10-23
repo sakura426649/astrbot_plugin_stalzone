@@ -723,9 +723,9 @@ def render_notice_card(
     view: dict[str, Any] | None,
     *,
     font_path: str | None = None,
-    width: int = WIDTH,
+    width: int = 1100,
 ) -> Path | None:
-    """Render a query-specific empty-result card with wrapped, contained text."""
+    """Render the selected N2 banner-style not-found card."""
     if (
         Image is None
         or ImageDraw is None
@@ -737,16 +737,15 @@ def render_notice_card(
     if path is None:
         return None
     display_path = _find_display_font(font_path) or path
+    mono_path = find_mono_font(path)
     try:
-        title_font = ImageFont.truetype(str(display_path), 34)
-        chip_font = ImageFont.truetype(str(path), 17)
-        eyebrow_font = ImageFont.truetype(str(path), 16)
-        intro_font = ImageFont.truetype(str(path), 24)
-        query_font = ImageFont.truetype(str(display_path), 34)
-        label_font = ImageFont.truetype(str(path), 13)
-        note_font = ImageFont.truetype(str(path), 18)
-        small_font = ImageFont.truetype(str(path), 14)
-        mono_font = ImageFont.truetype(str(find_mono_font(path) or path), 12)
+        eyebrow_font = ImageFont.truetype(str(mono_path or path), 13)
+        headline_font = ImageFont.truetype(str(display_path), 40)
+        meta_font = ImageFont.truetype(str(path), 15)
+        section_font = ImageFont.truetype(str(path), 14)
+        note_font = ImageFont.truetype(str(path), 20)
+        hint_font = ImageFont.truetype(str(path), 13)
+        footer_font = ImageFont.truetype(str(path), 13)
     except Exception:
         return None
 
@@ -757,85 +756,93 @@ def render_notice_card(
     note = str(view.get("note") or "").strip() or "请检查查询内容后重试。"
     accent = str(view.get("accent") or ACCENT)
 
-    inner_width = width - 2 * PAD - 36
-    query_lines = _wrap(query, query_font, inner_width)
+    headline_labels = {
+        "玩家": "没有找到这个玩家",
+        "物品": "没有找到这个物品",
+        "拍卖": "没有找到相关拍卖",
+        "战队": "没有找到这个战队",
+        "平衡调整": "没有找到相关调整",
+    }
+    headline = headline_labels.get(kind, "没有找到相关信息")
+    hints = {
+        "玩家": "可尝试切换区服、检查角色名拼写，或直接提供 UUID。",
+        "物品": "可尝试更短的关键词、检查物品 ID，或先查看候选。",
+        "拍卖": "可尝试切换区服、检查物品名/ID，或先查看候选。",
+        "战队": "可尝试切换区服、检查战队名/标签，或直接提供 UUID。",
+        "平衡调整": "可尝试检查物品名/ID，或先确认物品是否存在。",
+    }
+    hint = hints.get(kind, "可尝试检查查询内容后重试。")
+
+    query_max_w = min(640, width - 2 * PAD - 150)
+    query_size = 56
+    query_font = ImageFont.truetype(str(display_path), query_size)
+    query_lines = _wrap(query, query_font, query_max_w)
+    while len(query_lines) > 2 and query_size > 38:
+        query_size -= 2
+        query_font = ImageFont.truetype(str(display_path), query_size)
+        query_lines = _wrap(query, query_font, query_max_w)
     if len(query_lines) > 3:
         query_lines = query_lines[:3]
-    note_lines = _wrap(note, note_font, width - 2 * PAD - 34)[:3]
+    query_line_h = max(58, query_size + 16)
 
-    query_top = 228
-    query_h = 50 + len(query_lines) * 42
-    meta_y = query_top + query_h + 20
-    note_top = meta_y + 34
-    note_h = 44 + max(1, len(note_lines)) * 25
-    height = note_top + note_h + 18 + SIGNATURE_HEIGHT + 18
-    image = _card_canvas(width, height, alpha=228)
-    if image is None:
+    query_y = 150
+    query_bottom = query_y + len(query_lines) * query_line_h
+    meta_y = query_bottom + 20
+    divider_y = meta_y + 42
+    note_title_y = divider_y + 26
+    note_lines = _wrap(note, note_font, width - 2 * PAD)[:3]
+    note_y = note_title_y + 30
+    hint_lines = _wrap(hint, hint_font, width - 2 * PAD)[:2]
+    hint_y = note_y + len(note_lines) * 29 + 16
+    content_bottom = hint_y + len(hint_lines) * 18 + 30
+    footer_y = max(430, content_bottom + 24)
+    height = footer_y + 82
+
+    canvas = _card_canvas(width, height, alpha=238)
+    if canvas is None:
         return None
-    draw = ImageDraw.Draw(image)
+    draw = ImageDraw.Draw(canvas)
 
-    draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=accent)
+    # Large, deliberately low-contrast watermark.
+    draw.text((width - 404, 84), "404", font=ImageFont.truetype(str(display_path), 190), fill="#16222E")
+    draw.text((PAD, 32), "STALZONE / QUERY RESULT", font=eyebrow_font, fill=accent)
     draw.text(
-        (PAD + 26, PAD),
-        str(view.get("title") or "STALZONE · 查询结果"),
-        font=title_font,
-        fill=TEXT,
+        (width - PAD, 32),
+        f"{region} · RESULT" if region else "RESULT",
+        font=eyebrow_font, fill=MUTED, anchor="ra",
     )
-    chip_text = f"未找到 {kind}"
-    chip_width = int(draw.textlength(chip_text, font=chip_font)) + 30
-    chip_x = width - PAD - chip_width
-    draw.rounded_rectangle(
-        (chip_x, 34, chip_x + chip_width, 70), radius=18,
-        fill=(38, 30, 22, 220), outline=_rgba_value(accent, 150), width=1,
-    )
-    draw.text((chip_x + 15, 43), chip_text, font=chip_font, fill=accent)
-    draw.line((PAD, 140, width - PAD, 140), fill=BORDER, width=1)
-
-    draw.text((PAD + 20, 162), "NO MATCH · 查询无结果", font=eyebrow_font, fill=accent)
-    draw.text(
-        (PAD + 20, 190), f"未查到相关{kind}信息",
-        font=intro_font, fill=TEXT,
-    )
-
-    # Query card: full wrapping instead of a single truncated highlight line.
-    draw.rounded_rectangle(
-        (PAD, query_top, width - PAD, query_top + query_h),
-        radius=12, fill=(9, 16, 24, 195),
-        outline=_rgba_value(accent, 90), width=1,
-    )
-    draw.rounded_rectangle(
-        (PAD + 1, query_top + 18, PAD + 5, query_top + query_h - 18),
-        radius=2, fill=accent,
-    )
-    draw.text((PAD + 20, query_top + 12), "查询内容", font=label_font, fill=MUTED)
-    qy = query_top + 40
+    draw.text((PAD, 94), headline, font=headline_font, fill=TEXT)
+    qy = query_y
     for line in query_lines:
-        draw.text((PAD + 20, qy), line, font=query_font, fill=accent)
-        qy += 42
+        draw.text((PAD, qy), line, font=query_font, fill=accent)
+        qy += query_line_h
 
-    meta_parts = [f"类型：{kind}"]
+    meta_parts = [kind]
     if region:
-        meta_parts.append(f"区服：{region}")
+        meta_parts.append(region)
     if now:
-        meta_parts.append(f"查询时间：{now} UTC+8")
+        meta_parts.append(f"{now} UTC+8")
+    draw.text((PAD + 2, meta_y), " · ".join(meta_parts), font=meta_font, fill=MUTED)
+    draw.line((PAD, divider_y, width - PAD, divider_y), fill=(90, 110, 130, 70), width=1)
+
+    draw.text((PAD, note_title_y), "建议 / RECOMMENDATION", font=section_font, fill=accent)
+    ny = note_y
+    for line in note_lines:
+        draw.text((PAD, ny), line, font=note_font, fill=TEXT)
+        ny += 29
+    hy = hint_y
+    for line in hint_lines:
+        draw.text((PAD, hy), line, font=hint_font, fill=MUTED)
+        hy += 18
     draw.text(
-        (PAD + 20, meta_y),
-        _fit_text(draw, "｜".join(meta_parts), small_font, width - 2 * PAD - 40),
-        font=small_font, fill=MUTED,
+        (PAD, hy + 6), "插件状态：/sz diag 或 /sz 状态",
+        font=hint_font, fill="#71889A",
     )
 
-    draw.rounded_rectangle(
-        (PAD, note_top, width - PAD, note_top + note_h),
-        radius=12, fill=(8, 14, 22, 175),
-        outline=(92, 82, 62, 120), width=1,
-    )
-    draw.text((PAD + 17, note_top + 13), "建议", font=chip_font, fill=accent)
-    note_y = note_top + 43
-    for line in note_lines:
-        draw.text((PAD + 17, note_y), line, font=note_font, fill=TEXT)
-        note_y += 25
+    draw.line((PAD, footer_y, width - PAD, footer_y), fill=(90, 110, 130, 65), width=1)
+    draw.text((PAD, footer_y + 12), "STALZONE · 查询结果", font=footer_font, fill=MUTED)
     _draw_signature(
-        draw, width, note_top + note_h + 18, path, small_font, max_bottom=height
+        draw, width, height - 50, path, footer_font, max_bottom=height,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
@@ -843,7 +850,7 @@ def render_notice_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_notice_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        image.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", optimize=True)
     except OSError:
         return None
     return output

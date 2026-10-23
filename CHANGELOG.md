@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.15 - 2026-10-23
+
+### Changed
+
+- Replaced the not-found card with the selected N2 banner layout: a large query headline, dark 404 watermark, compact metadata, suggestion block and signature.
+- Query names now shrink and wrap within a safe width; long names/notes expand the card height instead of crossing the frame or the watermark.
+- Kept the card fully dark and consistent with the player/diagnostic cards.
+
+### Tests
+
+- Existing not-found rendering regressions pass; 151 tests total.
+
 ## 1.0.14 - 2026-10-23
 
 ### Fixed
