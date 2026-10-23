@@ -2292,7 +2292,7 @@ def render_pass_card(
     block_h = 22 + len(note_lines) * 20
     note_y = note_top + max(12, (note_bottom - note_top - block_h) // 2)
     note_center = (note_left + note_right) // 2
-    draw.text((note_center, note_y), "等级口径 / NOTE", font=hero_label, fill=cyan, anchor="ma")
+    draw.text((note_center, note_y), "预测说明 / NOTE", font=hero_label, fill=cyan, anchor="ma")
     note_y += 24
     for line in note_lines:
         draw.text((note_center, note_y), line, font=note_font, fill="#AFC3D1", anchor="ma")

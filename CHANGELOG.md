@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.13 - 2026-10-23
+
+### Changed
+
+- Renamed the season-pass note heading from “等级口径” to the clearer “预测说明”.
+
 ## 1.0.12 - 2026-10-23
 
 ### Changed
