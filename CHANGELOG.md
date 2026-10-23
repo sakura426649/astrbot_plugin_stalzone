@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.12 - 2026-10-23
+
+### Changed
+
+- The level-gain label (`+168 级` / `+158 级` / `+… 级`) now sits at the lower-right of its forecast level, in smaller, lighter type instead of a chip at the far edge of the card.
+- The prediction-methodology note now sits in a centered panel in the empty right side of the hero, with larger body text; the “预测结果” heading is larger and no longer crowds the overload label.
+- The current and forecast levels share one baseline; labels sit directly above their own `Lv` values, and both overload rows use the same 34/40 type scale.
+
 ## 1.0.11 - 2026-10-23
 
 ### Fixed

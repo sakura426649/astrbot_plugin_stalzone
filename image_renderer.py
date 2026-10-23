@@ -2146,6 +2146,8 @@ def render_pass_card(
         label_font = ImageFont.truetype(str(path), 13)
         small_font = ImageFont.truetype(str(path), 12)
         hero_label = ImageFont.truetype(str(path), 15)
+        hero_heading = ImageFont.truetype(str(path), 18)
+        note_font = ImageFont.truetype(str(path), 14)
         hero_from = ImageFont.truetype(str(path), 36)
         hero_to = ImageFont.truetype(str(display_path), 48)
         hero_secondary = ImageFont.truetype(str(display_path), 30)
@@ -2171,7 +2173,7 @@ def render_pass_card(
     left_x, left_w = PAD, 540
     right_x, right_w = 610, W - 610 - PAD
     hero_y = 122
-    hero_h = 270 if has_overload else 170
+    hero_h = 240 if has_overload else 160
     sections_y = hero_y + hero_h + 78
     groups = [
         ("每日任务", "DAILY", list(view.get("daily_rows") or [])),
@@ -2224,7 +2226,7 @@ def render_pass_card(
         (PAD + 1, hero_y + 22, PAD + 5, hero_y + hero_h - 22),
         radius=2, fill=green,
     )
-    draw.text((PAD + 24, hero_y + 16), "预测结果 / FORECAST", font=label_font, fill=green)
+    draw.text((PAD + 24, hero_y + 14), "预测结果 / FORECAST", font=hero_heading, fill=green)
     def draw_levels(
         base_y: int,
         current_size: int,
@@ -2251,46 +2253,50 @@ def render_pass_card(
 
     if has_overload:
         end_x = draw_levels(
-            hero_y + 90, 34, 40, final_with, green, "使用超载", label_color=green
-        )
-        chip_w = width_of(f"+{gain_with} 级", chip_font) + 28
-        draw.rounded_rectangle(
-            (W - PAD - 28 - chip_w, hero_y + 52, W - PAD - 28, hero_y + 86),
-            radius=17, fill=(16, 42, 32, 235), outline=(80, 210, 150, 150), width=1,
+            hero_y + 120, 34, 40, final_with, green, "使用超载", label_color=green
         )
         draw.text(
-            (W - PAD - 28 - chip_w + 14, hero_y + 60),
-            f"+{gain_with} 级", font=chip_font, fill=green,
+            (end_x + 8, hero_y + 122), f"+{gain_with} 级",
+            font=small_font, fill="#A7DCC4", anchor="ls",
         )
         end_x = draw_levels(
-            hero_y + 180, 34, 40, final_without, cyan, "不使用超载", label_color=MUTED
+            hero_y + 195, 34, 40, final_without, cyan, "不使用超载", label_color=MUTED
         )
         draw.text(
-            (end_x + 12, hero_y + 180), f"+{gain_without} 级",
-            font=label_font, fill=cyan, anchor="ls",
+            (end_x + 8, hero_y + 197), f"+{gain_without} 级",
+            font=small_font, fill="#A6D3EE", anchor="ls",
         )
-        note_y = hero_y + 225
     else:
-        base_y = hero_y + 100
+        base_y = hero_y + 110
         end_x = draw_levels(
             base_y, 34, 40, final, gain_color, "当前", "预测等级", gain_color
         )
-        chip_text = f"+{gain} 级" if gain > 0 else "等级不变"
-        chip_w = width_of(chip_text, chip_font) + 28
-        draw.rounded_rectangle(
-            (W - PAD - 30 - chip_w, base_y - 40, W - PAD - 30, base_y - 6),
-            radius=17, fill=(16, 42, 32, 235) if gain > 0 else (26, 32, 38, 235),
-            outline=(80, 210, 150, 150) if gain > 0 else (110, 120, 130, 120), width=1,
-        )
+        delta_text = f"+{gain} 级" if gain > 0 else "等级不变"
         draw.text(
-            (W - PAD - 30 - chip_w + 14, base_y - 32),
-            chip_text, font=chip_font, fill=gain_color,
+            (end_x + 8, base_y + 2), delta_text,
+            font=small_font, fill="#A7DCC4" if gain > 0 else "#9AA8B4", anchor="ls",
         )
-        note_y = hero_y + 126
+
+    # Methodology note: a centered panel in the free right side of the hero.
     note = str(view.get("note") or "")
-    for line in _wrap(note, small_font, W - 2 * PAD - 60)[:2]:
-        draw.text((PAD + 24, note_y), line, font=small_font, fill="#91A8B8")
-        note_y += 18
+    note_left = 688
+    note_right = W - PAD - 22
+    note_top = hero_y + 34
+    note_bottom = hero_y + hero_h - 24
+    draw.rounded_rectangle(
+        (note_left, note_top, note_right, note_bottom), radius=12,
+        fill=(9, 20, 25, 185), outline=(70, 120, 115, 75), width=1,
+    )
+    note_inner_w = note_right - note_left - 32
+    note_lines = _wrap(note, note_font, note_inner_w)[:3]
+    block_h = 22 + len(note_lines) * 20
+    note_y = note_top + max(12, (note_bottom - note_top - block_h) // 2)
+    note_center = (note_left + note_right) // 2
+    draw.text((note_center, note_y), "等级口径 / NOTE", font=hero_label, fill=cyan, anchor="ma")
+    note_y += 24
+    for line in note_lines:
+        draw.text((note_center, note_y), line, font=note_font, fill="#AFC3D1", anchor="ma")
+        note_y += 20
 
     chip_y = hero_y + hero_h + 20
     cx = PAD
