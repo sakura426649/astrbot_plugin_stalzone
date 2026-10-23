@@ -41,6 +41,6 @@ jobs:
             SHA256SUMS
           generate_release_notes: true
           body: |
-            STALZONE 数据查询 1.0.0：首个稳定版。
+            STALZONE 数据查询安装包。
 
-            完整变更见 CHANGELOG.md。安装包内包含插件源码、物品索引、离线图标、预览图和许可证。
+            完整变更见仓库中的 CHANGELOG.md；安装包内包含插件源码、物品索引、离线图标、预览图和许可证。
