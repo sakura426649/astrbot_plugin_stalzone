@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.5 - 2026-10-23
+
+### Fixed
+
+- Moved the faction emblem down inside the identity rail and replaced the full-height left gold stripe with a gold rule along the top edge of the rail.
+- Increased the gap between the player name and the region/presence chips.
+- Presence chips now switch between a green treatment for online and a gray treatment for offline; unknown remains neutral.
+- Long player names automatically shrink down to 22px and only then ellipsize, preventing overflow outside the identity rail.
+
+### Tests
+
+- Added a long-name render regression and presence color/layout coverage; 148 tests pass.
+
 ## 1.0.4 - 2026-10-23
 
 ### Added

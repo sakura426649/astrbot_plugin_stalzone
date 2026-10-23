@@ -785,6 +785,22 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(explicit["state"], "在线")
         self.assertFalse(explicit["online_inferred"])
 
+    def test_profile_long_name_renders_without_overflow(self):
+        payload = {
+            "username": "Extremely_Long_Player_Name_That_Must_Not_Overflow",
+            "status": "online",
+            "alliance": "duty",
+            "lastLogin": "2026-10-22T05:59:00Z",
+            "stats": [],
+        }
+        view = build_profile_view(payload, "eu", now=self.NOW)
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        path = render_profile_card(view)
+        self.assertIsNotNone(path)
+        self.assertTrue(path.exists())
+        path.unlink(missing_ok=True)
+
     def test_profile_hq_section(self):
         payload = {
             "username": "Sakura_Akira",

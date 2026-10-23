@@ -1684,8 +1684,8 @@ def render_profile_card(
     )
     draw.line((PAD, divider_y, width - PAD, divider_y), fill=(90, 110, 130, 90), width=1)
 
-    # Left identity rail. The short accent ends with the identity block; it
-    # deliberately does not run through the empty lower part of the rail.
+    # Left identity rail. A gold rule sits along the top edge; there is no
+    # full-height vertical accent running through the empty lower section.
     rail_top = 92
     rail_bottom = height - 44
     draw.rounded_rectangle(
@@ -1694,7 +1694,7 @@ def render_profile_card(
         outline=(100, 130, 160, 85), width=1,
     )
     draw.rounded_rectangle(
-        (left_x + 1, rail_top + 18, left_x + 5, rail_top + 358),
+        (left_x + 18, rail_top + 1, left_x + left_w - 18, rail_top + 5),
         radius=2, fill="#FFD166",
     )
     faction_path = faction_icon_path(str(view.get("alliance_raw") or ""))
@@ -1703,24 +1703,41 @@ def render_profile_card(
             faction = Image.open(faction_path).convert("RGBA")
             faction.thumbnail((176, 176), Image.LANCZOS)
             fx = left_x + (left_w - faction.width) // 2
-            image.alpha_composite(faction, (fx, rail_top + 30))
+            image.alpha_composite(faction, (fx, rail_top + 58))
         except Exception:
             pass
     faction_label = f"{view.get('alliance', '未知')} / {str(view.get('alliance_raw') or '').upper()}"
     draw.text(
-        (left_x + left_w // 2, rail_top + 218),
+        (left_x + left_w // 2, rail_top + 248),
         faction_label,
         font=chip_font, fill="#FFD166", anchor="ma",
     )
+    raw_name = str(view.get("name") or "未知")
+    name_size = 37
+    name_font = title_font
+    while name_size > 22 and name_font.getlength(raw_name) > left_w - 34:
+        name_size -= 1
+        name_font = ImageFont.truetype(str(display_path), name_size)
     draw.text(
-        (left_x + left_w // 2, rail_top + 246),
-        _fit_text(draw, str(view.get("name") or "未知"), title_font, left_w - 34),
-        font=title_font, fill=TEXT, anchor="ma",
+        (left_x + left_w // 2, rail_top + 276),
+        _fit_text(draw, raw_name, name_font, left_w - 34),
+        font=name_font, fill=TEXT, anchor="ma",
     )
 
     state = str(view.get("state") or "未知")
     online = view.get("online")
-    state_color = GREEN if online is True else (MUTED if online is False else "#A9B8C8")
+    if online is True:
+        state_color = "#69F0B0"
+        status_fill = (17, 40, 31, 235)
+        status_border = (75, 190, 135, 165)
+    elif online is False:
+        state_color = "#9AA9B8"
+        status_fill = (26, 31, 36, 235)
+        status_border = (105, 115, 125, 140)
+    else:
+        state_color = "#A9B8C8"
+        status_fill = (26, 31, 36, 235)
+        status_border = (105, 115, 125, 120)
     region_text = f"区服 {str(view.get('region') or '未知').upper()}"
     state_text = f"状态：{state}"
     region_w = int(draw.textlength(region_text, font=chip_font)) + 26
@@ -1728,27 +1745,26 @@ def render_profile_card(
     total_chip_w = region_w + state_w + 8
     chip_x = left_x + (left_w - total_chip_w) // 2
     draw.rounded_rectangle(
-        (chip_x, rail_top + 300, chip_x + region_w, rail_top + 332),
+        (chip_x, rail_top + 348, chip_x + region_w, rail_top + 380),
         radius=16, fill=(18, 39, 57, 235),
         outline=(90, 160, 210, 160), width=1,
     )
-    draw.text((chip_x + 13, rail_top + 307), region_text, font=chip_font, fill="#9FD4FF")
+    draw.text((chip_x + 13, rail_top + 355), region_text, font=chip_font, fill="#9FD4FF")
     status_x = chip_x + region_w + 8
     draw.rounded_rectangle(
-        (status_x, rail_top + 300, status_x + state_w, rail_top + 332),
-        radius=16, fill=(18, 28, 34, 235),
-        outline=(100, 140, 130, 110), width=1,
+        (status_x, rail_top + 348, status_x + state_w, rail_top + 380),
+        radius=16, fill=status_fill, outline=status_border, width=1,
     )
     draw.ellipse(
-        (status_x + 12, rail_top + 312, status_x + 20, rail_top + 320),
+        (status_x + 12, rail_top + 360, status_x + 20, rail_top + 368),
         fill=state_color,
     )
     draw.text(
-        (status_x + 26, rail_top + 307), state_text,
+        (status_x + 26, rail_top + 355), state_text,
         font=chip_font, fill=state_color,
     )
     draw.line(
-        (left_x + 24, rail_top + 356, left_x + left_w - 24, rail_top + 356),
+        (left_x + 24, rail_top + 394, left_x + left_w - 24, rail_top + 394),
         fill=(110, 135, 160, 70), width=1,
     )
 
@@ -1758,7 +1774,7 @@ def render_profile_card(
         ("战队等级", str(view.get("clan_level") if view.get("clan_level") is not None else "未公开")),
         ("最后登录", str(view.get("last_login") or "未知")),
     ]
-    my = rail_top + 378
+    my = rail_top + 416
     for key, value in meta_rows:
         draw.text((left_x + 26, my), key, font=label_font, fill=MUTED)
         fitted = _fit_text(draw, value, small_font, left_w - 100)
@@ -1768,14 +1784,14 @@ def render_profile_card(
         )
         my += 46
 
-    draw.text((left_x + 28, rail_top + 590), "OPEN WORLD PVP", font=label_font, fill="#FFD166")
+    draw.text((left_x + 28, rail_top + 620), "OPEN WORLD PVP", font=label_font, fill="#FFD166")
     if hq:
         draw.text(
-            (left_x + 26, rail_top + 612), f"{hq.get('score', 0):,}",
+            (left_x + 26, rail_top + 642), f"{hq.get('score', 0):,}",
             font=score_font, fill="#FFD166",
         )
-        draw.text((left_x + 28, rail_top + 678), "HQ 公式估算 · 非官方竞技分", font=small_font, fill=MUTED)
-        metric_y = rail_top + 716
+        draw.text((left_x + 28, rail_top + 708), "HQ 公式估算 · 非官方竞技分", font=small_font, fill=MUTED)
+        metric_y = rail_top + 746
         metric_values = [
             ("击杀", f"{hq.get('kills', 0):,}"),
             ("助攻", f"{hq.get('assists', 0):,}"),
@@ -1787,7 +1803,7 @@ def render_profile_card(
             draw.text((mx, metric_y), key, font=label_font, fill=MUTED)
             draw.text((mx, metric_y + 18), value, font=metric_font, fill=TEXT)
     else:
-        draw.text((left_x + 28, rail_top + 620), "暂无 PvP 统计", font=body_font, fill=MUTED)
+        draw.text((left_x + 28, rail_top + 650), "暂无 PvP 统计", font=body_font, fill=MUTED)
 
     source_y = max(rail_top + 820, rail_bottom - 150)
     draw.text((left_x + 28, source_y), "记录来源", font=label_font, fill=MUTED)
