@@ -156,8 +156,29 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.0.1"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
+def _looks_like_image(data: bytes) -> bool:
+    head = data[:16]
+    if head.startswith(bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])):
+        return True
+    if head.startswith(bytes([0xFF, 0xD8, 0xFF])):
+        return True
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if head.startswith(b"BM"):
+        return True
+    return len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+
+
+def _is_image_file(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return _looks_like_image(handle.read(16))
+    except OSError:
+        return False
+
+
 IMAGE_COMMANDS = {
     "auction",
     "player",
@@ -463,19 +484,28 @@ class StalzonePlugin(Star):
         await asyncio.to_thread(self._prune_icon_cache)
         item_id = url.rsplit("/", 1)[-1].rsplit(".", 1)[0]
         local = Path(__file__).with_name("item_icons") / f"{item_id}.png"
-        if local.is_file():
+        if local.is_file() and _is_image_file(local):
             return local
         cache_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone" / "icons"
         cached = cache_dir / f"{item_id}.png"
         if cached.is_file():
-            return cached
+            if _is_image_file(cached):
+                return cached
+            try:
+                cached.unlink(missing_ok=True)
+            except OSError:
+                pass
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), follow_redirects=True) as client:
                 response = await client.get(
                     url,
                     headers={"User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/0.5)"},
                 )
-                if response.status_code != 200 or not response.content:
+                if (
+                    response.status_code != 200
+                    or not response.content
+                    or not _looks_like_image(response.content)
+                ):
                     return None
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 await asyncio.to_thread(cached.write_bytes, response.content)
@@ -497,11 +527,15 @@ class StalzonePlugin(Star):
             item_id = url.rsplit("/", 1)[-1].rsplit(".", 1)[0]
             local = Path(__file__).with_name("item_icons") / f"{item_id}.png"
             cached = cache_dir / f"{item_id}.png"
-            if local.is_file():
+            if local.is_file() and _is_image_file(local):
                 entry["icon_path"] = str(local)
-            elif cached.is_file():
+            elif cached.is_file() and _is_image_file(cached):
                 entry["icon_path"] = str(cached)
             else:
+                try:
+                    cached.unlink(missing_ok=True)
+                except OSError:
+                    pass
                 pending.append((entry, url, item_id))
 
         if not pending:
@@ -518,7 +552,11 @@ class StalzonePlugin(Star):
                     async with semaphore:
                         try:
                             response = await client.get(url)
-                            if response.status_code != 200 or not response.content:
+                            if (
+                                response.status_code != 200
+                                or not response.content
+                                or not _looks_like_image(response.content)
+                            ):
                                 return
                             cache_dir.mkdir(parents=True, exist_ok=True)
                             path = cache_dir / f"{item_id}.png"

@@ -59,7 +59,12 @@ astrbot.api = api
 astrbot.api.event = event_mod
 astrbot.api.star = star_mod
 
-from main import PluginReply, SZ_BARE_RE, StalzonePlugin  # noqa: E402
+from main import (  # noqa: E402
+    PluginReply,
+    SZ_BARE_RE,
+    StalzonePlugin,
+    _looks_like_image,
+)
 
 
 class FakeEvent:
@@ -726,6 +731,17 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         second = await collect(plugin, "/sz 区服")
         self.assertIn("EU", first)
         self.assertIn("查询太频繁", second)
+
+    async def test_762_candidates_have_bundled_icons(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_item("7.62", event=FakeEvent("/sz 物品 7.62"))
+        self.assertIsInstance(result, PluginReply)
+        await plugin._attach_candidate_icons(result.candidate_view)
+        entries = result.candidate_view["entries"]
+        self.assertTrue(entries)
+        self.assertTrue(all(entry.get("icon_path") for entry in entries))
+        self.assertTrue(_looks_like_image(bytes([0x89, 80, 78, 71, 13, 10, 26, 10])))
+        self.assertFalse(_looks_like_image(b"<html>not an image</html>"))
 
     async def test_diag_command(self):
         text = await collect(self.make_plugin(), "/sz diag")

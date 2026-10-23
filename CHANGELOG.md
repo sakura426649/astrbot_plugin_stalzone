@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.1 - 2026-10-23
+
+### Fixed
+
+- `7.62` ammunition/attachment candidates could show only question marks when their icons were not bundled and the CDN was slow or unavailable.
+- Cached icon files are now validated by image signature; corrupt/HTML cache entries are discarded and refetched instead of rendering as `?`.
+- Added 441 offline ammunition and attachment icons (1,031 bundled icons total), so common ammo/attachment candidate queries render without network access.
+
+### Tests
+
+- Added a regression test for `7.62` candidate icons and image-signature validation; 140 tests pass.
+
 ## 1.0.0 - 2026-10-23
 
 First stable release. Public commands, configuration keys and data source labels are frozen for the 1.x series.

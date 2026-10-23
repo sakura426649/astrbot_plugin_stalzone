@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -64,7 +64,7 @@
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **玩家档案** | 官方公开资料、阵营徽记、战队/职位、PvP 估算分和完整统计；可追加 Lunar 第三方战队战报 |
 | **战队** | 按名称、标签或 UUID 查询；4 个英文字母的标签精确匹配，不区分大小写；支持战队列表 |
-| **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情与 590 个离线图标；属性按语义红绿着色 |
+| **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情与 1031 个离线图标；属性按语义红绿着色 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 168 份 2023–2026 官方补丁公告，按物品列出全部改动，支持武器、神器与配件 |
 | **通行证计算** | 本地计算每日/每周经验、超载与剩余天数，输出可达等级预测，不请求游戏 API |
@@ -234,7 +234,7 @@ astrbot_plugin_stalzone/
 ├── item_index.py            # 中/英/俄物品名 → item_id
 ├── item_index.json          # 2,615 件物品双语索引
 ├── item_details.json        # 1,338 件物品属性/描述
-├── item_icons/              # 590 个离线图标
+├── item_icons/              # 1031 个离线图标
 ├── balance_history.py       # 官方平衡公告索引
 ├── season_pass.py           # 通行证计算
 ├── pda_format.py            # PDA §颜色/渐变解析
@@ -256,7 +256,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **139 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 76%，门槛 75%）。
+当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **140 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 76%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

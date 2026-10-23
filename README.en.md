@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -31,7 +31,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Emission | Time since the last emission, current status and region selection |
 | Player | Public profile, faction emblem, clan, PvP estimate and optional Lunar enrichment |
 | Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
-| Item | 2,615 bilingual entries, 1,338 detail records, 590 bundled icons, semantic stat colors |
+| Item | 2,615 bilingual entries, 1,338 detail records, 1031 bundled icons, semantic stat colors |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction, no game API request |
