@@ -1786,7 +1786,7 @@ def render_profile_card(
         ("战队", str(view.get("clan_label") or "无")),
         ("职位", str(view.get("clan_rank") or "未知")),
         ("战队等级", str(view.get("clan_level") if view.get("clan_level") is not None else "未公开")),
-        ("最后登录", str(view.get("last_login") or "未知")),
+        ("最后登录", str(view.get("last_login") or "未知").replace(" UTC+8", "")),
     ]
     my = rail_top + 360
     for key, value in meta_rows:

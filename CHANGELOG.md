@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.21 - 2026-10-23
+
+### Fixed
+
+- Removed the redundant `UTC+8` suffix from the player-card “最后登录” value, preventing the enlarged label and timestamp from colliding.
+
 ## 1.0.20 - 2026-10-23
 
 ### Fixed
