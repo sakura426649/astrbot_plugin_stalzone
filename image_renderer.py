@@ -725,7 +725,7 @@ def render_notice_card(
     font_path: str | None = None,
     width: int = WIDTH,
 ) -> Path | None:
-    """Render a clear, query-specific empty-result card."""
+    """Render a query-specific empty-result card with wrapped, contained text."""
     if (
         Image is None
         or ImageDraw is None
@@ -741,10 +741,12 @@ def render_notice_card(
         title_font = ImageFont.truetype(str(display_path), 34)
         chip_font = ImageFont.truetype(str(path), 17)
         eyebrow_font = ImageFont.truetype(str(path), 16)
-        prefix_font = ImageFont.truetype(str(path), 26)
-        query_font = ImageFont.truetype(str(display_path), 40)
-        note_font = ImageFont.truetype(str(path), 19)
-        small_font = ImageFont.truetype(str(path), 15)
+        intro_font = ImageFont.truetype(str(path), 24)
+        query_font = ImageFont.truetype(str(display_path), 34)
+        label_font = ImageFont.truetype(str(path), 13)
+        note_font = ImageFont.truetype(str(path), 18)
+        small_font = ImageFont.truetype(str(path), 14)
+        mono_font = ImageFont.truetype(str(find_mono_font(path) or path), 12)
     except Exception:
         return None
 
@@ -752,21 +754,27 @@ def render_notice_card(
     query = str(view.get("query") or "").strip() or "未知"
     region = str(view.get("region") or "").strip().upper()
     now = str(view.get("now") or "").strip()
-    note = str(view.get("note") or "").strip()
+    note = str(view.get("note") or "").strip() or "请检查查询内容后重试。"
     accent = str(view.get("accent") or ACCENT)
 
-    note_lines = _wrap(note, note_font, width - 2 * PAD - 34)[:3] if note else []
-    panel_top = 326
-    panel_height = 44 + max(1, len(note_lines)) * 25
-    height = panel_top + panel_height + 18 + SIGNATURE_HEIGHT + 18
+    inner_width = width - 2 * PAD - 36
+    query_lines = _wrap(query, query_font, inner_width)
+    if len(query_lines) > 3:
+        query_lines = query_lines[:3]
+    note_lines = _wrap(note, note_font, width - 2 * PAD - 34)[:3]
+
+    query_top = 228
+    query_h = 50 + len(query_lines) * 42
+    meta_y = query_top + query_h + 20
+    note_top = meta_y + 34
+    note_h = 44 + max(1, len(note_lines)) * 25
+    height = note_top + note_h + 18 + SIGNATURE_HEIGHT + 18
     image = _card_canvas(width, height, alpha=228)
     if image is None:
         return None
     draw = ImageDraw.Draw(image)
 
-    draw.rounded_rectangle(
-        (PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=accent
-    )
+    draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=accent)
     draw.text(
         (PAD + 26, PAD),
         str(view.get("title") or "STALZONE · 查询结果"),
@@ -777,42 +785,33 @@ def render_notice_card(
     chip_width = int(draw.textlength(chip_text, font=chip_font)) + 30
     chip_x = width - PAD - chip_width
     draw.rounded_rectangle(
-        (chip_x, 34, chip_x + chip_width, 70),
-        radius=18,
-        fill=(48, 30, 18, 220),
-        outline=_rgba_value(accent, 150),
-        width=1,
+        (chip_x, 34, chip_x + chip_width, 70), radius=18,
+        fill=(38, 30, 22, 220), outline=_rgba_value(accent, 150), width=1,
     )
+    draw.text((chip_x + 15, 43), chip_text, font=chip_font, fill=accent)
+    draw.line((PAD, 140, width - PAD, 140), fill=BORDER, width=1)
+
+    draw.text((PAD + 20, 162), "NO MATCH · 查询无结果", font=eyebrow_font, fill=accent)
     draw.text(
-        (chip_x + 15, 43),
-        chip_text,
-        font=chip_font,
-        fill=accent,
+        (PAD + 20, 190), f"未查到相关{kind}信息",
+        font=intro_font, fill=TEXT,
     )
-    draw.line((PAD, 150, width - PAD, 150), fill=BORDER, width=1)
 
-    draw.text((PAD + 20, 174), "NO MATCH · 查询无结果", font=eyebrow_font, fill=accent)
+    # Query card: full wrapping instead of a single truncated highlight line.
     draw.rounded_rectangle(
-        (PAD, 214, PAD + 4, 266), radius=2, fill=accent
+        (PAD, query_top, width - PAD, query_top + query_h),
+        radius=12, fill=(9, 16, 24, 195),
+        outline=_rgba_value(accent, 90), width=1,
     )
-
-    prefix = "未查到关于 "
-    suffix = f" 的{kind}信息"
-    prefix_width = draw.textlength(prefix, font=prefix_font)
-    suffix_width = draw.textlength(suffix, font=prefix_font)
-    query_text = _fit_text(
-        draw,
-        query,
-        query_font,
-        int(width - 2 * PAD - 24 - prefix_width - suffix_width - 8),
+    draw.rounded_rectangle(
+        (PAD + 1, query_top + 18, PAD + 5, query_top + query_h - 18),
+        radius=2, fill=accent,
     )
-    baseline = 258
-    x = PAD + 20
-    draw.text((x, baseline), prefix, font=prefix_font, fill=TEXT, anchor="ls")
-    x += prefix_width
-    draw.text((x, baseline), query_text, font=query_font, fill=accent, anchor="ls")
-    x += draw.textlength(query_text, font=query_font)
-    draw.text((x, baseline), suffix, font=prefix_font, fill=TEXT, anchor="ls")
+    draw.text((PAD + 20, query_top + 12), "查询内容", font=label_font, fill=MUTED)
+    qy = query_top + 40
+    for line in query_lines:
+        draw.text((PAD + 20, qy), line, font=query_font, fill=accent)
+        qy += 42
 
     meta_parts = [f"类型：{kind}"]
     if region:
@@ -820,45 +819,23 @@ def render_notice_card(
     if now:
         meta_parts.append(f"查询时间：{now} UTC+8")
     draw.text(
-        (PAD + 20, 284),
-        "｜".join(meta_parts),
-        font=small_font,
-        fill=MUTED,
+        (PAD + 20, meta_y),
+        _fit_text(draw, "｜".join(meta_parts), small_font, width - 2 * PAD - 40),
+        font=small_font, fill=MUTED,
     )
 
     draw.rounded_rectangle(
-        (PAD, panel_top, width - PAD, panel_top + panel_height),
-        radius=12,
-        fill=(8, 14, 22, 175),
-        outline=(92, 72, 48, 130),
-        width=1,
+        (PAD, note_top, width - PAD, note_top + note_h),
+        radius=12, fill=(8, 14, 22, 175),
+        outline=(92, 82, 62, 120), width=1,
     )
-    draw.text(
-        (PAD + 17, panel_top + 13),
-        "建议",
-        font=chip_font,
-        fill=accent,
-    )
-    note_y = panel_top + 43
-    if note_lines:
-        for line in note_lines:
-            draw.text((PAD + 17, note_y), line, font=note_font, fill=TEXT)
-            note_y += 25
-    else:
-        draw.text(
-            (PAD + 17, note_y),
-            "请检查查询内容后重试。",
-            font=note_font,
-            fill=TEXT,
-        )
-
+    draw.text((PAD + 17, note_top + 13), "建议", font=chip_font, fill=accent)
+    note_y = note_top + 43
+    for line in note_lines:
+        draw.text((PAD + 17, note_y), line, font=note_font, fill=TEXT)
+        note_y += 25
     _draw_signature(
-        draw,
-        width,
-        panel_top + panel_height + 18,
-        path,
-        small_font,
-        max_bottom=height,
+        draw, width, note_top + note_h + 18, path, small_font, max_bottom=height
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
@@ -1282,7 +1259,7 @@ def render_help_card(
             "玩家资料",
             "PLAYER",
             "/sz 玩家 <角色名/UUID> [区服]",
-            ["查看角色资料、战队与区服", "可指定 EU/RU/NA/SEA，默认配置区服"],
+            ["查看角色资料、战队与区服", "可指定 EU/RU/NA/SEA/NEA，默认配置区服"],
             "#4EA8FF",
         ),
         (

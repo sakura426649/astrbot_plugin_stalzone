@@ -178,8 +178,18 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.13"
+PLUGIN_VERSION = "1.0.14"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
+
+
+def _split_region_suffix(value: str) -> tuple[str, str | None]:
+    """Consume one trailing region token without breaking names with spaces."""
+    text = str(value or "").strip()
+    parts = text.rsplit(maxsplit=1)
+    if len(parts) == 2 and parts[1].lower() in VALID_REGIONS:
+        return parts[0].strip(), parts[1].lower()
+    return text, None
+
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
     if head.startswith(bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])):
@@ -243,6 +253,7 @@ class PendingChoice:
     quality: int | None = None
     before: Any = None
     count: int | None = None
+    region: str | None = None
 
 USAGE = {
     "auction": (
@@ -257,7 +268,7 @@ USAGE = {
     ),
     "item": "用法：/sz item <中文名/英文名/ID>\n示例：/sz item 寒冰 或 /sz item Spectral Crystal",
     "player": "用法：/sz player <角色名 或 UUID>\n中文：/sz 玩家 <角色名 或 UUID>",
-    "clan": "用法：/sz clan <战队名/标签/ID>",
+    "clan": "用法：/sz clan <战队名/标签/ID> [EU/RU/NA/SEA/NEA]",
     "clans": "用法：/sz clans [页码]",
     "operations": "用法：/sz operations [地图ID]",
     "diag": "用法：/sz diag 或 /sz 状态\n查看运行环境、API、数据资产、缓存、存储与渲染状态（不包含凭证）",
@@ -795,6 +806,7 @@ class StalzonePlugin(Star):
         quality: int | None = None,
         before: Any = None,
         count: int | None = None,
+        region: str | None = None,
     ) -> None:
         if event is None or len(candidates) <= 1:
             return
@@ -819,6 +831,7 @@ class StalzonePlugin(Star):
             quality=quality,
             before=before,
             count=count,
+            region=region,
         )
 
     @staticmethod
@@ -848,7 +861,7 @@ class StalzonePlugin(Star):
         self._pending_choices.pop(scope, None)
         if pending.kind == "clan":
             return PluginReply(
-                format_clan(candidate, self._region()),
+                format_clan(candidate, pending.region or self._region()),
                 faction=str(candidate.get("alliance") or ""),
                 sub="clan",
             )
@@ -1554,12 +1567,7 @@ class StalzonePlugin(Star):
             )
 
     async def _handle_profile(self, name_or_uuid: str) -> str:
-        value = name_or_uuid.strip()
-        parts = value.rsplit(maxsplit=1)
-        region = None
-        if len(parts) == 2 and parts[1].upper() in {"EU", "RU", "NA", "SEA"}:
-            value = parts[0].strip()
-            region = parts[1].lower()
+        value, region = _split_region_suffix(name_or_uuid)
         if not value:
             return USAGE["player"]
         client_factory = self._make_client
@@ -1741,10 +1749,16 @@ class StalzonePlugin(Star):
         return PluginReply(text, icon_url=item.get("icon"))
 
     async def _handle_clan(
-        self, query: str, *, event: Any = None
+        self, query: str, *, event: Any = None, region: str | None = None
     ) -> str | PluginReply:
-        value = query.strip()
-        async with self._make_client() as client:
+        if region is None:
+            value, region = _split_region_suffix(query)
+        else:
+            value = str(query or "").strip()
+        client = self._make_client(region=region) if region else self._make_client()
+        async with client as client:
+            if region:
+                client.region = region
             if UUID_RE.match(value):
                 try:
                     clan = await client.get_clan(value)
@@ -1818,7 +1832,9 @@ class StalzonePlugin(Star):
                     sub="clan",
                 )
             candidates = matches[:20]
-            self._remember_choice(event, "clan", query, candidates)
+            self._remember_choice(
+                event, "clan", query, candidates, region=client.region
+            )
             text = format_clan_candidates(query, candidates)
             if len(candidates) <= 1:
                 return text

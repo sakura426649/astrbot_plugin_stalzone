@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.14 - 2026-10-23
+
+### Fixed
+
+- `玩家 <名字> NEA` and `战队 <名字> NEA` now consume the trailing region token; `NEA` was missing from the player whitelist, and the shared parser now treats region tokens case-insensitively. Names containing internal spaces are preserved; only one trailing region token is consumed.
+- Help text, image help and README now list `NEA` for player/clan region selection and clarify the trailing-token rule.
+- Rebuilt the not-found card with a wrapped query block and dynamic height, so long names, notes and metadata stay inside the frame. The card also links users to `/sz diag` or `/sz 状态`.
+
+### Tests
+
+- Added NEA player/clan region regressions; 151 tests pass.
+
 ## 1.0.13 - 2026-10-23
 
 ### Changed

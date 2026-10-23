@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.13-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.14-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -117,7 +117,7 @@
 **日期与区服**
 
 - 日期支持 `6.11`、`6/11`（当前年份）和 `25.6.11`、`25/6/11`；按 UTC+8 自然日计算。
-- 区服参数支持 `EU`、`RU`、`NA`、`SEA`（风暴额外支持 `NEA`），不区分大小写；省略时使用插件配置的默认区服。
+- 区服参数支持 `EU`、`RU`、`NA`、`SEA`、`NEA`，不区分大小写；省略时使用插件配置的默认区服。玩家、战队和风暴命令会把末尾完整的区服缩写识别为区服参数，名字中间的空格会保留。
 - 所有展示时间统一为 **UTC+8（北京时间）**。
 - 物品名/ID 匹配忽略大小写，`ak-308`、`AK-308` 都能解析到同一物品。
 

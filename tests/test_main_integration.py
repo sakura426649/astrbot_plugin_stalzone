@@ -692,6 +692,25 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("阵营：纪律", text)
         self.assertEqual(RegionClient.last_region, "eu")
 
+        text = await collect(plugin, "/sz 玩家 ccc Nea")
+        self.assertIn("ccc｜NEA", text)
+        self.assertEqual(RegionClient.last_region, "nea")
+
+    async def test_clan_region_override(self):
+        class ClanRegionClient(FakeClient):
+            last_region = ""
+
+            def __init__(self, region):
+                self.region = region
+                ClanRegionClient.last_region = region
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda region=None: ClanRegionClient(region or "eu")  # type: ignore[assignment]
+        text = await collect(plugin, "/sz 战队 TAG nea")
+        self.assertIn("Clan #1 [TAG]", text)
+        self.assertIn("NEA", text)
+        self.assertEqual(ClanRegionClient.last_region, "nea")
+
     async def test_missing_item_returns_notice_card(self):
         plugin = self.make_plugin()
         result = await plugin._handle_item("qqqzzzxxx999")
@@ -718,12 +737,12 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = self.make_plugin()
         plugin._make_client = lambda region=None: MissingProfileClient()  # type: ignore[assignment]
-        result = await plugin._handle_profile("Nobody RU")
+        result = await plugin._handle_profile("Nobody Nea")
         self.assertIsInstance(result, PluginReply)
         self.assertEqual(result.sub, "notice")
         self.assertIn("未查到关于「Nobody」的玩家信息", result.text)
-        self.assertEqual(result.notice_view["region"], "RU")
-        self.assertIn("RU 区服", result.notice_view["note"])
+        self.assertEqual(result.notice_view["region"], "NEA")
+        self.assertIn("NEA 区服", result.notice_view["note"])
 
     def test_icon_library_covers_catalog(self):
         icons = list((PLUGIN_ROOT / "item_icons").glob("*.png"))
