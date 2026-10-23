@@ -1684,8 +1684,7 @@ def render_profile_card(
     )
     draw.line((PAD, divider_y, width - PAD, divider_y), fill=(90, 110, 130, 90), width=1)
 
-    # Left identity rail. A gold rule sits along the top edge; there is no
-    # full-height vertical accent running through the empty lower section.
+    # Left identity rail. Keep it dark: no full-height accent stripe.
     rail_top = 92
     rail_bottom = height - 44
     draw.rounded_rectangle(
@@ -1693,22 +1692,21 @@ def render_profile_card(
         radius=18, fill=(8, 14, 23, 215),
         outline=(100, 130, 160, 85), width=1,
     )
-    draw.rounded_rectangle(
-        (left_x + 18, rail_top + 1, left_x + left_w - 18, rail_top + 5),
-        radius=2, fill="#FFD166",
-    )
     faction_path = faction_icon_path(str(view.get("alliance_raw") or ""))
     if faction_path is not None:
         try:
             faction = Image.open(faction_path).convert("RGBA")
+            bbox = faction.getchannel("A").getbbox()
+            if bbox:
+                faction = faction.crop(bbox)
             faction.thumbnail((176, 176), Image.LANCZOS)
             fx = left_x + (left_w - faction.width) // 2
-            image.alpha_composite(faction, (fx, rail_top + 58))
+            image.alpha_composite(faction, (fx, rail_top + 70))
         except Exception:
             pass
     faction_label = f"{view.get('alliance', '未知')} / {str(view.get('alliance_raw') or '').upper()}"
     draw.text(
-        (left_x + left_w // 2, rail_top + 248),
+        (left_x + left_w // 2, rail_top + 190),
         faction_label,
         font=chip_font, fill="#FFD166", anchor="ma",
     )
@@ -1719,7 +1717,7 @@ def render_profile_card(
         name_size -= 1
         name_font = ImageFont.truetype(str(display_path), name_size)
     draw.text(
-        (left_x + left_w // 2, rail_top + 276),
+        (left_x + left_w // 2, rail_top + 218),
         _fit_text(draw, raw_name, name_font, left_w - 34),
         font=name_font, fill=TEXT, anchor="ma",
     )
@@ -1745,26 +1743,26 @@ def render_profile_card(
     total_chip_w = region_w + state_w + 8
     chip_x = left_x + (left_w - total_chip_w) // 2
     draw.rounded_rectangle(
-        (chip_x, rail_top + 348, chip_x + region_w, rail_top + 380),
+        (chip_x, rail_top + 290, chip_x + region_w, rail_top + 322),
         radius=16, fill=(18, 39, 57, 235),
         outline=(90, 160, 210, 160), width=1,
     )
-    draw.text((chip_x + 13, rail_top + 355), region_text, font=chip_font, fill="#9FD4FF")
+    draw.text((chip_x + 13, rail_top + 297), region_text, font=chip_font, fill="#9FD4FF")
     status_x = chip_x + region_w + 8
     draw.rounded_rectangle(
-        (status_x, rail_top + 348, status_x + state_w, rail_top + 380),
+        (status_x, rail_top + 290, status_x + state_w, rail_top + 322),
         radius=16, fill=status_fill, outline=status_border, width=1,
     )
     draw.ellipse(
-        (status_x + 12, rail_top + 360, status_x + 20, rail_top + 368),
+        (status_x + 12, rail_top + 302, status_x + 20, rail_top + 310),
         fill=state_color,
     )
     draw.text(
-        (status_x + 26, rail_top + 355), state_text,
+        (status_x + 26, rail_top + 297), state_text,
         font=chip_font, fill=state_color,
     )
     draw.line(
-        (left_x + 24, rail_top + 394, left_x + left_w - 24, rail_top + 394),
+        (left_x + 24, rail_top + 338, left_x + left_w - 24, rail_top + 338),
         fill=(110, 135, 160, 70), width=1,
     )
 
@@ -1774,7 +1772,7 @@ def render_profile_card(
         ("战队等级", str(view.get("clan_level") if view.get("clan_level") is not None else "未公开")),
         ("最后登录", str(view.get("last_login") or "未知")),
     ]
-    my = rail_top + 416
+    my = rail_top + 360
     for key, value in meta_rows:
         draw.text((left_x + 26, my), key, font=label_font, fill=MUTED)
         fitted = _fit_text(draw, value, small_font, left_w - 100)
@@ -1784,28 +1782,7 @@ def render_profile_card(
         )
         my += 46
 
-    draw.text((left_x + 28, rail_top + 620), "OPEN WORLD PVP", font=label_font, fill="#FFD166")
-    if hq:
-        draw.text(
-            (left_x + 26, rail_top + 642), f"{hq.get('score', 0):,}",
-            font=score_font, fill="#FFD166",
-        )
-        draw.text((left_x + 28, rail_top + 708), "HQ 公式估算 · 非官方竞技分", font=small_font, fill=MUTED)
-        metric_y = rail_top + 746
-        metric_values = [
-            ("击杀", f"{hq.get('kills', 0):,}"),
-            ("助攻", f"{hq.get('assists', 0):,}"),
-            ("死亡", f"{hq.get('deaths', 0):,}"),
-            ("K/D", f"{hq.get('kd', 0):.2f}"),
-        ]
-        for index, (key, value) in enumerate(metric_values):
-            mx = left_x + 28 + index * 70
-            draw.text((mx, metric_y), key, font=label_font, fill=MUTED)
-            draw.text((mx, metric_y + 18), value, font=metric_font, fill=TEXT)
-    else:
-        draw.text((left_x + 28, rail_top + 650), "暂无 PvP 统计", font=body_font, fill=MUTED)
-
-    source_y = max(rail_top + 820, rail_bottom - 150)
+    source_y = max(rail_top + 680, rail_bottom - 220)
     draw.text((left_x + 28, source_y), "记录来源", font=label_font, fill=MUTED)
     draw.text((left_x + 28, source_y + 22), "官方公开资料 + StalzoneHQ", font=small_font, fill=TEXT)
     draw.text(
@@ -1847,8 +1824,8 @@ def render_profile_card(
     panel_y = section_y + 40
     draw.rounded_rectangle(
         (right_x, panel_y, right_x + right_w, panel_y + 118),
-        radius=14, fill=(31, 26, 16, 178),
-        outline=(208, 168, 92, 100), width=1,
+        radius=14, fill=(12, 19, 28, 195),
+        outline=(78, 98, 118, 70), width=1,
     )
     if hq:
         draw.text((right_x + 22, panel_y + 16), "PvP SCORE", font=label_font, fill="#D8BE83")

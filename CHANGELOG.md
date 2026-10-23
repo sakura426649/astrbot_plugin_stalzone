@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.6 - 2026-10-23
+
+### Changed
+
+- Removed the gold rule from the identity rail entirely.
+- Tightened the faction emblem, faction label, player name and presence chips into one upper cluster after measuring the real emblem's transparent bounds.
+- Removed the duplicate PvP score block from the left rail; only the right combat summary remains.
+- Replaced the right PvP block's gold fill and border with a dark neutral panel, keeping the score text as the only highlight.
+
 ## 1.0.5 - 2026-10-23
 
 ### Fixed
