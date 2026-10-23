@@ -1616,6 +1616,7 @@ class ImageRendererTests(unittest.TestCase):
         self.assertTrue(path.exists())
         path.unlink(missing_ok=True)
 
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
     def test_render_card_to_png(self):
         lots = {
             "total": 1,
