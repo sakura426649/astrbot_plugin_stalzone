@@ -1633,11 +1633,11 @@ def render_profile_card(
         score_font = ImageFont.truetype(str(display_path), 54)
         hero_score_font = ImageFont.truetype(str(display_path), 48)
         pvp_label_font = ImageFont.truetype(str(display_path), 18)
-        meta_label_font = ImageFont.truetype(str(path), 15)
+        meta_label_font = ImageFont.truetype(str(path), 16)
         meta_value_font = ImageFont.truetype(str(path), 17)
-        combat_label_font = ImageFont.truetype(str(path), 15)
+        combat_label_font = ImageFont.truetype(str(path), 18)
         combat_value_font = ImageFont.truetype(str(path), 20)
-        stat_label_font = ImageFont.truetype(str(path), 15)
+        stat_label_font = ImageFont.truetype(str(path), 18)
         stat_value_font = ImageFont.truetype(str(path), 19)
         mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
@@ -1790,7 +1790,7 @@ def render_profile_card(
     ]
     my = rail_top + 360
     for key, value in meta_rows:
-        draw.text((left_x + 26, my), key, font=meta_label_font, fill=MUTED)
+        draw.text((left_x + 26, my), key, font=meta_label_font, fill="#B4C6D6")
         fitted = _fit_text(draw, value, meta_value_font, left_w - 100)
         draw.text(
             (left_x + left_w - 26 - int(draw.textlength(fitted, font=meta_value_font)), my),
@@ -1850,7 +1850,7 @@ def render_profile_card(
         ]
         for index, (key, value) in enumerate(values):
             mx = right_x + 258 + index * 116
-            draw.text((mx, panel_y + 22), key, font=combat_label_font, fill=MUTED)
+            draw.text((mx, panel_y + 22), key, font=combat_label_font, fill="#B4C6D6")
             draw.text((mx, panel_y + 48), value, font=combat_value_font, fill=TEXT)
     else:
         draw.text((right_x + 22, panel_y + 42), "暂无 PvP 统计", font=body_font, fill=MUTED)
@@ -1870,7 +1870,7 @@ def render_profile_card(
         row_index = index % per_col
         xx = right_x + col * col_w
         yy = stats_y + row_index * 36
-        draw.text((xx, yy), _fit_text(draw, label_text, stat_label_font, col_w - 90), font=stat_label_font, fill=MUTED)
+        draw.text((xx, yy), _fit_text(draw, label_text, stat_label_font, col_w - 90), font=stat_label_font, fill="#B4C6D6")
         draw.text((xx + col_w - 20, yy), value, font=stat_value_font, fill=TEXT, anchor="ra")
     if stat_note:
         draw.text((right_x, stats_y + per_col * 36 + 4), stat_note, font=label_font, fill=MUTED)

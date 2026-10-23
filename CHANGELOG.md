@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.20 - 2026-10-23
+
+### Fixed
+
+- Enlarged and brightened the gray labels for player metadata, combat metrics and official statistics, not just the white values. Adjusted the metadata column width so “最后登录” no longer overlaps its value.
+
 ## 1.0.19 - 2026-10-23
 
 ### Changed
