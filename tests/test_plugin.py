@@ -181,9 +181,35 @@ class APIClientTests(unittest.IsolatedAsyncioTestCase):
             ),
             base_url="https://api.test",
         ) as http:
-            api = StalzoneAPIClient("cid", "secret", region="eu", client=http)
+            api = StalzoneAPIClient(
+                "cid", "secret", region="eu", client=http, max_retries=0
+            )
             with self.assertRaises(RateLimitError):
                 await api.get_emission()
+
+    async def test_retry_429_then_success(self):
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return json_response({"title": "Too Many Requests"}, 429)
+            return json_response({"previousStart": "2026-10-22T03:00:00Z"})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="https://api.test"
+        ) as http:
+            api = StalzoneAPIClient(
+                "cid",
+                "secret",
+                region="eu",
+                client=http,
+                retry_base_delay=0.0,
+            )
+            payload = await api.get_emission()
+        self.assertEqual(calls, 2)
+        self.assertIn("previousStart", payload)
 
     async def test_timeout_maps_to_network_error(self):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -192,7 +218,9 @@ class APIClientTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(handler), base_url="https://api.test"
         ) as http:
-            api = StalzoneAPIClient("cid", "secret", region="eu", client=http)
+            api = StalzoneAPIClient(
+                "cid", "secret", region="eu", client=http, max_retries=0
+            )
             with self.assertRaises(NetworkError):
                 await api.get_emission()
 

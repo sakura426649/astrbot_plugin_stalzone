@@ -188,6 +188,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 "render_mode": "text",
                 "lunar_enrich": False,
                 "sc_core_fallback": False,
+                "command_cooldown": 0,
             },
         )
 
@@ -716,6 +717,15 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("距离上次风暴", second)
         self.assertEqual(CountingClient.calls, 1)
         self.assertEqual(plugin._cache_stats()[1], 1)
+
+    async def test_group_cooldown(self):
+        plugin = self.make_plugin()
+        plugin.config["command_cooldown"] = 2.0
+        plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
+        first = await collect(plugin, "/sz 区服")
+        second = await collect(plugin, "/sz 区服")
+        self.assertIn("EU", first)
+        self.assertIn("查询太频繁", second)
 
     async def test_diag_command(self):
         text = await collect(self.make_plugin(), "/sz diag")

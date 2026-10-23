@@ -156,7 +156,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "0.49.0"
+PLUGIN_VERSION = "1.0.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 IMAGE_COMMANDS = {
     "auction",
@@ -240,6 +240,7 @@ class StalzonePlugin(Star):
         self._api_cache_hits = 0
         self._api_cache_misses = 0
         self._api_semaphore: asyncio.Semaphore | None = None
+        self._last_command_at: dict[str, float] = {}
         data_dir = self._cache_dir()
         self.item_index = ItemIndex(
             overrides_path=data_dir / "item_name_overrides.json",
@@ -746,6 +747,37 @@ class StalzonePlugin(Star):
         sub, arg = parse_command(event.message_str)
         if sub and sub != "candidate":
             self._pending_choices.pop(self._choice_scope(event), None)
+        if sub in {
+            "auction",
+            "emission",
+            "player",
+            "item",
+            "clan",
+            "clans",
+            "operations",
+            "regions",
+            "balance",
+            "pass",
+        }:
+            try:
+                cooldown = max(0.0, float(self._cfg("command_cooldown", 1.0) or 0))
+            except (TypeError, ValueError):
+                cooldown = 1.0
+            now = time.monotonic()
+            scope = self._choice_scope(event)
+            last = self._last_command_at.get(scope, 0.0)
+            if cooldown > 0 and last and now - last < cooldown:
+                wait = cooldown - (now - last)
+                yield event.plain_result(f"查询太频繁，请 {wait:.1f} 秒后再试。")
+                return
+            self._last_command_at[scope] = now
+            if len(self._last_command_at) > 500:
+                cutoff = now - 300
+                for old_scope, stamped in list(self._last_command_at.items()):
+                    if stamped < cutoff:
+                        self._last_command_at.pop(old_scope, None)
+                if len(self._last_command_at) > 500:
+                    self._last_command_at.pop(next(iter(self._last_command_at)), None)
         if not sub or sub == "help":
             try:
                 image = await self._help_image()

@@ -14,6 +14,8 @@ Design notes
 
 from __future__ import annotations
 
+import asyncio
+import random
 import re
 from typing import Any
 from urllib.parse import quote
@@ -23,8 +25,11 @@ import httpx
 PRODUCTION_BASE_URL = "https://eapi.stalzone.com"
 DEMO_BASE_URL = "https://dapi.stalzone.com"
 DEFAULT_TIMEOUT_SECONDS = 10.0
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BASE_DELAY = 0.5
+RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/0.1.0"
+USER_AGENT = "astrbot-plugin-stalzone/1.0.0"
 
 _ITEM_ID_RE = re.compile(r"^[^\x00-\x1f/\\]{1,128}$")
 
@@ -111,6 +116,8 @@ class StalzoneAPIClient:
         *,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         client: httpx.AsyncClient | None = None,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
     ) -> None:
         self.client_id = str(client_id or "").strip()
         self.client_secret = str(client_secret or "").strip()
@@ -120,6 +127,8 @@ class StalzoneAPIClient:
         self.region = normalize_region(region)
         self.base_url = normalize_base_url(base_url)
         self.timeout = timeout
+        self.max_retries = max(0, min(int(max_retries), 5))
+        self.retry_base_delay = max(0.0, float(retry_base_delay))
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             base_url=self.base_url,
@@ -152,17 +161,53 @@ class StalzoneAPIClient:
             return " | ".join(parts)[:300] or "HTTP error"
         return str(payload)[:300]
 
+    async def _retry_delay(
+        self, attempt: int, response: httpx.Response | None
+    ) -> None:
+        delay = self.retry_base_delay * (2**attempt)
+        if response is not None:
+            retry_after = response.headers.get("Retry-After", "").strip()
+            try:
+                delay = max(delay, min(float(retry_after), 2.0))
+            except ValueError:
+                pass
+        if self.retry_base_delay > 0:
+            delay += random.uniform(0, self.retry_base_delay * 0.25)
+        if delay > 0:
+            await asyncio.sleep(delay)
+
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        try:
-            response = await self._client.get(
-                path,
-                params=params,
-                headers=self._headers(),
-            )
-        except httpx.TimeoutException as exc:
-            raise NetworkError(f"Request timed out: {path}") from exc
-        except httpx.RequestError as exc:
-            raise NetworkError(f"Request failed: {path}: {exc!r}") from exc
+        attempts = self.max_retries + 1
+        response: httpx.Response | None = None
+
+        for attempt in range(attempts):
+            try:
+                response = await self._client.get(
+                    path,
+                    params=params,
+                    headers=self._headers(),
+                )
+            except httpx.TimeoutException as exc:
+                if attempt + 1 < attempts:
+                    await self._retry_delay(attempt, None)
+                    continue
+                raise NetworkError(f"Request timed out: {path}") from exc
+            except httpx.RequestError as exc:
+                if attempt + 1 < attempts:
+                    await self._retry_delay(attempt, None)
+                    continue
+                raise NetworkError(f"Request failed: {path}: {exc!r}") from exc
+
+            if (
+                response.status_code in RETRY_STATUS_CODES
+                and attempt + 1 < attempts
+            ):
+                await self._retry_delay(attempt, response)
+                continue
+            break
+
+        if response is None:
+            raise NetworkError(f"Request failed: {path}")
 
         if response.status_code == 200:
             try:

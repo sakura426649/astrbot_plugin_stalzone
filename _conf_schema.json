@@ -81,5 +81,11 @@
     "type": "bool",
     "default": true,
     "hint": "官方成交历史接口若重复返回同一页，改用 sccore.ru 的公开历史接口按时间游标补全旧记录；输出会标注“SC CORE 第三方存档”。关闭后只使用官方 API。"
+  },
+  "command_cooldown": {
+    "description": "同一群查询冷却（秒）",
+    "type": "float",
+    "default": 1.0,
+    "hint": "同一群/会话两次查询的最小间隔，防止刷屏触发官方 API 限流；0 为关闭。"
   }
 }
