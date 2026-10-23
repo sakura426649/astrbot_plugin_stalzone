@@ -355,9 +355,9 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     async def test_season_pass_calculator(self):
         text = await collect(self.make_plugin(), "/sz 通行证 15 15+2 20")
         self.assertIn("STALZONE · 通行证计算", text)
-        self.assertIn("每日经验（含超载）：6,000", text)
+        self.assertIn("每日合计：6,000", text)
         self.assertIn("每周任务数：105", text)
-        self.assertIn("整个赛季总经验（含超载）：168,000", text)
+        self.assertIn("赛季总经验（含超载）：168,000", text)
         self.assertIn("15 → 183", text)
 
         alias = await collect(
@@ -368,12 +368,30 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         four_params = await collect(
             self.make_plugin(), "/sz 通行证 15 15 3 20"
         )
-        self.assertIn("每日 15 任务 +3 超载", four_params)
+        self.assertIn("超载 3（有效 3）", four_params)
         self.assertIn("使用超载：15 → 188", four_params)
 
         no_overload = await collect(self.make_plugin(), "/sz 通行证 15 15 20")
-        self.assertIn("不用超载：", no_overload)
-        self.assertNotIn("使用超载：", no_overload)
+        self.assertIn("预测等级：15 → 173 级", no_overload)
+        self.assertNotIn("使用超载", no_overload)
+        self.assertNotIn("不使用超载", no_overload)
+        self.assertNotIn("不用超载", no_overload)
+
+    async def test_season_pass_image_view(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_pass("15 15+2 20")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "pass")
+        self.assertTrue(result.pass_view["has_overload"])
+        self.assertEqual(result.pass_view["final_with"], 183)
+        from image_renderer import find_cjk_font, render_pass_card
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        path = render_pass_card(result.pass_view)
+        self.assertIsNotNone(path)
+        self.assertTrue(path.exists())
+        path.unlink(missing_ok=True)
 
     async def test_season_pass_usage(self):
         text = await collect(self.make_plugin(), "/sz 通行证")

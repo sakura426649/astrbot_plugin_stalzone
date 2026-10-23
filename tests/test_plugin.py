@@ -1034,8 +1034,10 @@ class SeasonPassTests(unittest.TestCase):
 
     def test_no_overload_hides_overload_prediction(self):
         text = format_season_pass(calculate(*parse_arguments("15 15 20")))
-        self.assertIn("不用超载：", text)
-        self.assertNotIn("使用超载：", text)
+        self.assertIn("预测等级：15 → 173 级", text)
+        self.assertNotIn("不使用超载", text)
+        self.assertNotIn("使用超载", text)
+        self.assertNotIn("不用超载", text)
 
     def test_four_parameter_overload_form(self):
         self.assertEqual(

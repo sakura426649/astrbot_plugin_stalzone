@@ -58,6 +58,7 @@ try:  # Package import (normal AstrBot plugin loading).
         build_empty_auction_view,
         build_item_candidate_view,
         build_profile_view,
+        build_season_pass_view,
         format_auction_text,
         format_balance_history,
         format_clan,
@@ -88,6 +89,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_emission_card,
         render_help_card,
         render_notice_card,
+        render_pass_card,
         render_profile_card,
         render_text_card,
     )
@@ -126,6 +128,7 @@ except ImportError:  # Direct execution / flat import fallback.
         build_empty_auction_view,
         build_item_candidate_view,
         build_profile_view,
+        build_season_pass_view,
         format_auction_text,
         format_balance_history,
         format_clan,
@@ -156,6 +159,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_emission_card,
         render_help_card,
         render_notice_card,
+        render_pass_card,
         render_profile_card,
         render_text_card,
     )
@@ -174,7 +178,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.9"
+PLUGIN_VERSION = "1.0.10"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -225,6 +229,7 @@ class PluginReply:
     profile_view: dict[str, Any] | None = None
     notice_view: dict[str, Any] | None = None
     diag_view: dict[str, Any] | None = None
+    pass_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -522,7 +527,7 @@ class StalzonePlugin(Star):
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), follow_redirects=True) as client:
                 response = await client.get(
                     url,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/0.5)"},
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/1.0.10)"},
                 )
                 if (
                     response.status_code != 200
@@ -569,7 +574,7 @@ class StalzonePlugin(Star):
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(5.0),
                 follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/0.5)"},
+                headers={"User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/1.0.10)"},
             ) as client:
                 async def fetch(entry: dict[str, Any], url: str, item_id: str) -> None:
                     async with semaphore:
@@ -611,6 +616,7 @@ class StalzonePlugin(Star):
         faction: str | None = None,
         notice_view: dict[str, Any] | None = None,
         diag_view: dict[str, Any] | None = None,
+        pass_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -655,6 +661,12 @@ class StalzonePlugin(Star):
                 path = await asyncio.to_thread(
                     render_diag_card,
                     diag_view,
+                    font_path=font_path,
+                )
+            elif sub == "pass" and pass_view:
+                path = await asyncio.to_thread(
+                    render_pass_card,
+                    pass_view,
                     font_path=font_path,
                 )
             else:
@@ -988,6 +1000,7 @@ class StalzonePlugin(Star):
         profile_view = None
         notice_view = None
         diag_view = None
+        pass_view = None
         faction = None
         render_sub = sub
         try:
@@ -1003,6 +1016,7 @@ class StalzonePlugin(Star):
                 profile_view = result.profile_view
                 notice_view = result.notice_view
                 diag_view = result.diag_view
+                pass_view = result.pass_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -1031,6 +1045,7 @@ class StalzonePlugin(Star):
             faction,
             notice_view,
             diag_view,
+            pass_view,
         )
         if image is not None:
             try:
@@ -1679,7 +1694,12 @@ class StalzonePlugin(Star):
             )
         except SeasonPassError as exc:
             return str(exc)
-        return PluginReply(format_season_pass(result))
+        view = build_season_pass_view(result)
+        return PluginReply(
+            format_season_pass(result, view=view),
+            pass_view=view,
+            sub="pass",
+        )
 
     async def _handle_balance(
         self, query: str, *, event: Any = None

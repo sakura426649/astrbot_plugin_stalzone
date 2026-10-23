@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.10 - 2026-10-23
+
+### Changed
+
+- Season-pass results now open with the forecast as a dedicated hero card: current level → predicted level, with the level gain in green and a colored delta chip.
+- When no overload is used, no “不使用超载” wording appears anywhere. When overload is used, both overloading and non-overloading forecasts are shown.
+- The explanatory note now sits directly under the forecast: the prediction comes only from daily/weekly task XP and excludes seasonal/periodic events, main quests and side quests.
+- Supporting daily, weekly and season totals were moved below the result in a two-column layout.
+
+### Tests
+
+- Added a season-pass image regression; 150 tests pass.
+
 ## 1.0.9 - 2026-10-23
 
 ### Fixed

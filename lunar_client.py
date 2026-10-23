@@ -23,7 +23,7 @@ class LunarProfileClient:
             f"?region={quote(str(region).lower(), safe='')}&name={quote(name, safe='')}"
         )
         headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/0.3)",
+            "User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/1.0.10)",
             "Referer": f"{LUNAR_BASE_URL}/players/{quote(str(region).lower(), safe='')}/{quote(name, safe='')}",
             "Accept": "application/json",
         }

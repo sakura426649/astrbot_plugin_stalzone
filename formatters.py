@@ -1762,94 +1762,134 @@ def format_item_candidates(query: str, items: list[dict[str, Any]]) -> str:
     )
 
 
-def format_season_pass(result: Any) -> str:
-    weekly_reward_levels = result.weekly_reward_xp // 1000
+def build_season_pass_view(result: Any) -> dict[str, Any]:
+    """Build the forecast-first season-pass model used by text and images."""
+    level = int(getattr(result, "level", 0))
+    has_overload = int(getattr(result, "effective_overloads", 0)) > 0
+    final_without = int(getattr(result, "final_level_without_overload", level))
+    final_with = int(getattr(result, "final_level_with_overload", final_without))
+    final_level = final_with if has_overload else final_without
+    gain = final_level - level
+    gain_without = final_without - level
+    gain_with = final_with - level
+    reward_levels = int(getattr(result, "weekly_reward_xp", 0)) // 1000
     reward_label = (
-        f"{result.weekly_reward_xp:,}（{weekly_reward_levels}级）"
-        if result.weekly_reward_xp
+        f"{int(result.weekly_reward_xp):,}（{reward_levels} 级）"
+        if getattr(result, "weekly_reward_xp", 0)
         else "0"
     )
-    lines = [
-        (
-            f"{result.level} 级｜每日 {result.daily_tasks} 任务"
-            + (
-                f" +{result.overloads} 超载"
-                if result.overloads
-                else ""
+    daily_rows = [
+        ("每日任务经验", f"{int(result.daily_base_xp):,}"),
+    ]
+    if has_overload:
+        daily_rows.append(
+            (
+                "每日超载经验",
+                f"{int(result.daily_overload_xp):,}"
+                f"（{int(result.effective_overloads)} 次 × 250）",
             )
-            + f"（有效 {result.effective_overloads}）"
-        ),
-        (
-            f"剩余 {result.remaining_days} 天｜每周计划 {result.weekly_days} 天"
-            f"（实际完成 {result.active_days} 天）"
-        ),
+        )
+    daily_rows.append(("每日合计", f"{int(result.daily_total_xp):,}"))
+    weekly_rows = [
+        ("每周任务数", f"{int(result.weekly_tasks):,}"),
+        ("每周任务经验", f"{int(result.daily_base_xp) * int(result.weekly_days):,}"),
+        ("每周奖励经验", reward_label),
+        ("每周合计", f"{int(result.weekly_total_xp):,}"),
     ]
-    sections = [
-        (
-            "每日",
-            [
-                f"每日任务经验：{result.daily_base_xp:,}",
-                (
-                    f"超载经验：{result.daily_overload_xp:,}"
-                    f"（{result.effective_overloads}次 ×250）"
-                ),
-                f"每日经验（含超载）：{result.daily_total_xp:,}",
-            ],
-        ),
-        (
-            "每周",
-            [
-                f"每周任务数：{result.weekly_tasks}",
-                f"每周任务经验：{result.daily_base_xp * result.weekly_days:,}",
-                f"每周经验奖励：{reward_label}",
-                f"每周经验：{result.weekly_xp:,}",
-                f"每周经验（含超载）：{result.weekly_total_xp:,}",
-            ],
-        ),
-        (
-            "赛季",
-            [
-                f"距离赛季结束的完整周数：{result.full_weeks}",
-                (
-                    f"距离赛季结束的游戏日：{result.remaining_days}"
-                    f"（{result.full_weeks}周+{result.remainder_days}天）"
-                ),
-                f"将会消耗的超载次数：{result.overloads_used}",
-                f"整个赛季总经验（不含超载）：{result.season_base_xp:,}",
-                f"整个赛季总经验（含超载）：{result.season_total_xp:,}",
-            ],
-        ),
-        (
-            "等级预测（1000经验/级）",
-            [
-                (
-                    f"不用超载：{result.level} → "
-                    f"{result.final_level_without_overload}"
-                    f"（+{result.season_base_xp // 1000}级）"
-                ),
-                *(
-                    [
-                        (
-                            f"使用超载：{result.level} → "
-                            f"{result.final_level_with_overload}"
-                            f"（+{result.season_total_xp // 1000}级）"
-                        )
-                    ]
-                    if result.effective_overloads > 0
-                    else []
-                ),
-            ],
-        ),
+    season_rows = [
+        ("完整周数", f"{int(result.full_weeks)} 周 + {int(result.remainder_days)} 天"),
+        ("实际完成天数", f"{int(result.active_days)} 天"),
     ]
+    if has_overload:
+        season_rows.append(("将消耗超载", f"{int(result.overloads_used)} 次"))
+    season_rows.extend(
+        [
+            ("赛季总经验（不含超载）", f"{int(result.season_base_xp):,}"),
+        ]
+    )
+    if has_overload:
+        season_rows.append(("赛季总经验（含超载）", f"{int(result.season_total_xp):,}"))
+    input_chips = [
+        ("当前等级", f"Lv {level}"),
+        ("每日任务", f"{int(result.daily_tasks)} 个"),
+        ("剩余天数", f"{int(result.remaining_days)} 天"),
+        ("每周计划", f"{int(result.weekly_days)} 天"),
+    ]
+    if has_overload:
+        input_chips.insert(
+            2,
+            (
+                "超载",
+                f"{int(result.overloads)}（有效 {int(result.effective_overloads)}）",
+            ),
+        )
+    footer = "每日 12:00 / 每周三 12:00 UTC+8 重置｜等级按 1000 经验/级估算"
+    if has_overload:
+        footer += "｜每日前 15 个任务可吃超载"
+    note = (
+        "预测等级完全来自每日/每周任务经验；未考虑季节性/周期活动、主线与支线任务等额外等级来源。"
+    )
+    if not has_overload:
+        primary_label = ""
+    else:
+        primary_label = "使用超载"
+    return {
+        "level": level,
+        "final_level": final_level,
+        "final_without": final_without,
+        "final_with": final_with,
+        "gain": gain,
+        "gain_without": gain_without,
+        "gain_with": gain_with,
+        "has_overload": has_overload,
+        "effective_overloads": int(result.effective_overloads),
+        "overloads": int(result.overloads),
+        "daily_rows": daily_rows,
+        "weekly_rows": weekly_rows,
+        "season_rows": season_rows,
+        "input_chips": input_chips,
+        "note": note,
+        "footer": footer,
+        "primary_label": primary_label,
+        "reward_label": reward_label,
+    }
+
+
+def format_season_pass(result: Any, *, view: dict[str, Any] | None = None) -> str:
+    view = view if isinstance(view, dict) and view else build_season_pass_view(result)
+    level = int(view.get("level") or 0)
+    has_overload = bool(view.get("has_overload"))
+    if has_overload:
+        primary = (
+            f"使用超载：{level} → {int(view['final_with'])} 级"
+            f"（+{int(view['gain_with'])} 级）"
+        )
+    else:
+        primary = (
+            f"预测等级：{level} → {int(view['final_level'])} 级"
+            f"（+{int(view['gain'])} 级）"
+        )
+    lines = [primary]
+    if has_overload:
+        lines.append(
+            f"不使用超载：{level} → {int(view['final_without'])} 级"
+            f"（+{int(view['gain_without'])} 级）"
+        )
+    lines.append(str(view.get("note") or ""))
+    groups = [
+        ("每日", [f"{key}：{value}" for key, value in view.get("daily_rows") or []]),
+        ("每周", [f"{key}：{value}" for key, value in view.get("weekly_rows") or []]),
+        ("赛季", [f"{key}：{value}" for key, value in view.get("season_rows") or []]),
+    ]
+    inputs = "｜".join(f"{key} {value}" for key, value in view.get("input_chips") or [])
     return _truncate(
         _card(
             "STALZONE · 通行证计算",
             lines,
-            sections,
-            "每日 12:00 / 每周三 12:00 UTC+8 重置｜每日前15任务可吃超载｜周奖励15/45/100任务累计",
+            [("输入参数", [inputs]), *groups],
+            str(view.get("footer") or ""),
         )
     )
-
 
 def format_balance_history(
     label: str,

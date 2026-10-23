@@ -31,7 +31,7 @@ class ScCoreClient:
             timeout=httpx.Timeout(self.TIMEOUT),
             follow_redirects=True,
             headers={
-                "User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/0.16)",
+                "User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-stalzone/1.0.10)",
                 "Accept": "application/json",
             },
         )
