@@ -681,7 +681,7 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertIn("STALZONE · 运行诊断", text)
         self.assertIn("插件 9.9.9", text)
-        self.assertIn("物品索引：2615 件", text)
+        self.assertIn("物品索引：2,615 件", text)
         self.assertIn("缓存命中率：80%", text)
 
     def test_emission_view_active_and_idle(self):
@@ -1077,6 +1077,8 @@ class ParserTests(unittest.TestCase):
             "/sz 行动": ("operations", ""),
             "/sz diag": ("diag", ""),
             "/sz 诊断": ("diag", ""),
+            "/sz 状态": ("diag", ""),
+            "/sz 运行状态": ("diag", ""),
             "/sz 战队列表": ("clans", ""),
             "/sz 市场 y1q9": ("auction", "y1q9"),
             "/sz 交易行 y1q9": ("auction", "y1q9"),

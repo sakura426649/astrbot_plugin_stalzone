@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -109,7 +109,7 @@
 | `/sz clans [页码]` | 战队列表 | `/sz 战队列表 2` |
 | `/sz operations [地图ID]` | 最近行动记录 | `/sz 行动 operation_bigcleanup` |
 | `/sz regions` | 官方区服列表 | `/sz 区服` |
-| `/sz diag` | 版本、区服、API 环境、数据量和缓存状态（不含凭证） | `/sz diag` |
+| `/sz diag` / `/sz 状态` | 运行环境、API、数据资产、缓存、存储和渲染状态（不含凭证） | `/sz 状态` |
 | `/sz help` | 图片帮助菜单 | `/sz help` |
 
 常用中文别名：`拍卖行`、`风暴`/`爆发`、`玩家`/`角色`、`物品`、`战队`、`行动`、`区服`。风暴查询还支持简写 `fb`。

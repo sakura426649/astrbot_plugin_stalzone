@@ -35,6 +35,9 @@ except ImportError:  # older/newer layout fallback
 
 try:  # Package import (normal AstrBot plugin loading).
     from .api_client import (
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_RETRY_BASE_DELAY,
+        DEFAULT_TIMEOUT_SECONDS,
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
@@ -50,6 +53,7 @@ try:  # Package import (normal AstrBot plugin loading).
         CST,
         build_auction_view,
         build_clan_candidate_view,
+        build_diag_view,
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
@@ -76,7 +80,9 @@ try:  # Package import (normal AstrBot plugin loading).
     )
     from .image_renderer import (
         HELP_BACKGROUND,
+        find_cjk_font,
         render_auction_card,
+        render_diag_card,
         faction_icon_path,
         render_candidate_card,
         render_emission_card,
@@ -97,6 +103,9 @@ try:  # Package import (normal AstrBot plugin loading).
 except ImportError:  # Direct execution / flat import fallback.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from api_client import (  # type: ignore[no-redef]
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_RETRY_BASE_DELAY,
+        DEFAULT_TIMEOUT_SECONDS,
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
@@ -112,6 +121,7 @@ except ImportError:  # Direct execution / flat import fallback.
         CST,
         build_auction_view,
         build_clan_candidate_view,
+        build_diag_view,
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
@@ -139,8 +149,10 @@ except ImportError:  # Direct execution / flat import fallback.
     from image_renderer import (  # type: ignore[no-redef]
         HELP_BACKGROUND,
         faction_icon_path,
+        find_cjk_font,
         render_auction_card,
         render_candidate_card,
+        render_diag_card,
         render_emission_card,
         render_help_card,
         render_notice_card,
@@ -162,7 +174,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.7"
+PLUGIN_VERSION = "1.0.8"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -198,6 +210,7 @@ IMAGE_COMMANDS = {
     "balance",
     "pass",
     "notice",
+    "diag",
 }
 
 
@@ -211,6 +224,7 @@ class PluginReply:
     item_meta: dict[str, Any] | None = None
     profile_view: dict[str, Any] | None = None
     notice_view: dict[str, Any] | None = None
+    diag_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -241,7 +255,7 @@ USAGE = {
     "clan": "用法：/sz clan <战队名/标签/ID>",
     "clans": "用法：/sz clans [页码]",
     "operations": "用法：/sz operations [地图ID]",
-    "diag": "用法：/sz diag\n查看版本、区服、API 环境、数据量和缓存状态（不包含凭证）",
+    "diag": "用法：/sz diag 或 /sz 状态\n查看运行环境、API、数据资产、缓存、存储与渲染状态（不包含凭证）",
     "balance": "用法：/sz 调整 <武器/神器/装备名或ID>\n示例：/sz 调整 AK-308 或 /sz 调整 多面体",
     "pass": (
         "用法：/sz 通行证计算 <当前等级> <每日任务>[+超载] <剩余天数> [每周天数=7]\n"
@@ -270,6 +284,7 @@ class StalzonePlugin(Star):
         self._api_cache_misses = 0
         self._api_semaphore: asyncio.Semaphore | None = None
         self._last_command_at: dict[str, float] = {}
+        self._started_at = time.monotonic()
         data_dir = self._cache_dir()
         self.item_index = ItemIndex(
             overrides_path=data_dir / "item_name_overrides.json",
@@ -595,6 +610,7 @@ class StalzonePlugin(Star):
         profile_view: dict[str, Any] | None = None,
         faction: str | None = None,
         notice_view: dict[str, Any] | None = None,
+        diag_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -633,6 +649,12 @@ class StalzonePlugin(Star):
                 path = await asyncio.to_thread(
                     render_notice_card,
                     notice_view,
+                    font_path=font_path,
+                )
+            elif sub == "diag" and diag_view:
+                path = await asyncio.to_thread(
+                    render_diag_card,
+                    diag_view,
                     font_path=font_path,
                 )
             else:
@@ -965,6 +987,7 @@ class StalzonePlugin(Star):
         item_meta = None
         profile_view = None
         notice_view = None
+        diag_view = None
         faction = None
         render_sub = sub
         try:
@@ -979,6 +1002,7 @@ class StalzonePlugin(Star):
                 item_meta = result.item_meta
                 profile_view = result.profile_view
                 notice_view = result.notice_view
+                diag_view = result.diag_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -1006,6 +1030,7 @@ class StalzonePlugin(Star):
             profile_view,
             faction,
             notice_view,
+            diag_view,
         )
         if image is not None:
             try:
@@ -1798,32 +1823,118 @@ class StalzonePlugin(Star):
         async with self._make_client() as client:
             return format_regions(await client.get_regions())
 
-    async def _handle_diag(self) -> str:
+    @staticmethod
+    def _dir_stats(directory: Path, pattern: str = "*") -> tuple[int, int]:
+        files = 0
+        total = 0
+        try:
+            for path in Path(directory).glob(pattern):
+                if path.is_file():
+                    files += 1
+                    total += path.stat().st_size
+        except OSError:
+            pass
+        return files, total
+
+    async def _handle_diag(self) -> PluginReply:
         entries, hits, misses = self._cache_stats()
         credentials = bool(
             str(self._cfg("client_id", "") or "").strip()
             and str(self._cfg("client_secret", "") or "").strip()
         )
-        return format_diag(
-            {
-                "version": PLUGIN_VERSION,
-                "system": f"{platform.system()} {platform.release()}",
-                "python": platform.python_version(),
-                "region": self._region().upper(),
-                "api_base": self._api_base(),
-                "env": "演示环境" if self._is_demo() else "生产环境",
-                "render_mode": self._render_mode(),
-                "font": str(self._cfg("font_path", "") or "").strip() or "自动查找",
-                "credentials": "已配置" if credentials else "未配置",
-                "items": len(self.item_index.items),
-                "details": len(self.item_index.details),
-                "balance_patches": len(self.balance_history.historical_patches),
-                "pending": len(self._pending_choices),
-                "http": "已建立" if self._http_client is not None else "未建立",
-                "cache_entries": entries,
-                "cache_hits": hits,
-                "cache_misses": misses,
-            }
+        data_dir = self._cache_dir()
+        temp_root = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+        help_files, help_bytes = self._dir_stats(data_dir / "help", "*.png")
+        icon_files, icon_bytes = self._dir_stats(temp_root / "icons", "*.png")
+        temp_files, temp_bytes = self._dir_stats(temp_root, "sz_*.png")
+        icon_dir = Path(__file__).with_name("item_icons")
+        item_icon_files, item_icon_bytes = self._dir_stats(icon_dir, "*.png")
+        faction_dir = Path(__file__).with_name("assets") / "factions"
+        faction_files, _faction_bytes = self._dir_stats(faction_dir, "*.png")
+        configured_font = str(self._cfg("font_path", "") or "").strip()
+        font_path = find_cjk_font(configured_font or None)
+        font_ready = font_path is not None
+        font_label = (
+            Path(font_path).name if font_path is not None else "未找到"
+        )
+        try:
+            import PIL
+
+            pillow = str(getattr(PIL, "__version__", "已安装"))
+        except Exception:
+            pillow = "未安装"
+        offset = datetime.now().astimezone().utcoffset()
+        if offset is None:
+            timezone_label = "UTC+8"
+        else:
+            total_minutes = int(offset.total_seconds() // 60)
+            sign = "+" if total_minutes >= 0 else "-"
+            hours, minutes = divmod(abs(total_minutes), 60)
+            timezone_label = f"UTC{sign}{hours:02d}:{minutes:02d}"
+        categories = len(
+            {str(item.get("cat") or "") for item in self.item_index.items}
+        )
+        aliases = sum(len(values) for values in self.item_index._alias_cache.values())
+        info = {
+            "version": PLUGIN_VERSION,
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine() or "—",
+            "python": platform.python_version(),
+            "implementation": platform.python_implementation(),
+            "pid": os.getpid(),
+            "uptime_seconds": time.monotonic() - self._started_at,
+            "timezone": timezone_label,
+            "region": self._region().upper(),
+            "api_base": self._api_base(),
+            "env": "演示环境" if self._is_demo() else "生产环境",
+            "render_mode": self._render_mode(),
+            "font": font_label,
+            "font_ready": font_ready,
+            "pillow": pillow,
+            "credentials": "已配置" if credentials else "未配置",
+            "http": "已建立" if self._http_client is not None else "未建立",
+            "items": len(self.item_index.items),
+            "details": len(self.item_index.details),
+            "categories": categories,
+            "aliases": aliases,
+            "balance_patches": len(self.balance_history.historical_patches),
+            "balance_weapons": len(self.balance_history.weapon_rows),
+            "balance_generated": str(self.balance_history.generated_at or "—")[:10],
+            "pending": len(self._pending_choices),
+            "pending_limit": self.MAX_PENDING_CHOICES,
+            "pending_ttl": self.CHOICE_TTL_SECONDS,
+            "sc_keys": len(self._sc_item_keys),
+            "sc_limit": 4096,
+            "cooldown_scopes": len(self._last_command_at),
+            "cooldown_limit": 500,
+            "cooldown": self._cfg("command_cooldown", 1.0),
+            "lunar_enrich": bool(self._cfg("lunar_enrich", True)),
+            "sc_core_fallback": bool(self._cfg("sc_core_fallback", True)),
+            "cache_entries": entries,
+            "cache_limit": 128,
+            "cache_hits": hits,
+            "cache_misses": misses,
+            "help_files": help_files,
+            "help_bytes": help_bytes,
+            "icon_files": icon_files,
+            "icon_bytes": icon_bytes,
+            "temp_files": temp_files,
+            "temp_bytes": temp_bytes,
+            "item_icon_files": item_icon_files,
+            "item_icon_bytes": item_icon_bytes,
+            "faction_icons": faction_files,
+            "data_dir_ok": os.access(data_dir, os.W_OK),
+            "concurrency": 6,
+            "timeout": DEFAULT_TIMEOUT_SECONDS,
+            "retries": DEFAULT_MAX_RETRIES,
+            "retry_base": DEFAULT_RETRY_BASE_DELAY,
+        }
+        view = build_diag_view(info)
+        return PluginReply(
+            format_diag(info, view=view),
+            diag_view=view,
+            sub="diag",
         )
 
     async def _handle_operations(self, map_arg: str) -> str:

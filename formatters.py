@@ -1982,44 +1982,225 @@ def format_regions(regions: list[dict[str, Any]] | None) -> str:
     )
 
 
-def format_diag(info: dict[str, Any]) -> str:
-    """Render a compact, copyable diagnostic card without any secret."""
+def _diag_bytes(value: Any) -> str:
+    try:
+        size = float(value or 0)
+    except (TypeError, ValueError):
+        size = 0.0
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return "0 B"
+
+
+def _diag_uptime(value: Any) -> str:
+    try:
+        seconds = max(0, int(float(value or 0)))
+    except (TypeError, ValueError):
+        seconds = 0
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if days:
+        return f"{days}天 {hours:02d}小时 {minutes:02d}分"
+    return f"{hours:02d}小时 {minutes:02d}分 {secs:02d}秒"
+
+
+def build_diag_view(
+    info: dict[str, Any] | None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the detailed diagnostic model shared by text and image output."""
     info = info if isinstance(info, dict) else {}
     cache_entries = int(info.get("cache_entries") or 0)
     hits = int(info.get("cache_hits") or 0)
     misses = int(info.get("cache_misses") or 0)
     total = hits + misses
-    hit_rate = f"{hits * 100 / total:.0f}%" if total else "—"
+    hit_rate = f"{hits * 100 / total:.0f}%" if total else "无请求"
+    stamp = (now or datetime.now(CST)).strftime("%Y-%m-%d %H:%M")
+    version = str(info.get("version") or "?")
+    system = str(info.get("system") or "?")
+    release = str(info.get("release") or "")
+    machine = str(info.get("machine") or "?")
+    python = str(info.get("python") or "?")
+    implementation = str(info.get("implementation") or "Python")
+    region = str(info.get("region") or "?").upper()
+    api_base = str(info.get("api_base") or "?")
+    env = str(info.get("env") or "?")
+    render_mode = str(info.get("render_mode") or "?")
+    credentials = str(info.get("credentials") or "未配置")
+    font = str(info.get("font") or "未找到")
+    font_ready = bool(info.get("font_ready"))
+    pillow = str(info.get("pillow") or "未安装")
+    items = int(info.get("items") or 0)
+    details = int(info.get("details") or 0)
+    categories = int(info.get("categories") or 0)
+    aliases = int(info.get("aliases") or 0)
+    balance_patches = int(info.get("balance_patches") or 0)
+    balance_weapons = int(info.get("balance_weapons") or 0)
+    balance_generated = str(info.get("balance_generated") or "—")
+    pending = int(info.get("pending") or 0)
+    sc_keys = int(info.get("sc_keys") or 0)
+    cooldown_scopes = int(info.get("cooldown_scopes") or 0)
+    data_dir_ok = bool(info.get("data_dir_ok"))
+    http = str(info.get("http") or "未建立")
+    uptime = _diag_uptime(info.get("uptime_seconds"))
+
+    def yes_no(value: Any) -> str:
+        if value is True:
+            return "开启"
+        if value is False:
+            return "关闭"
+        return "—"
+
+    runtime_rows = [
+        ("Python", f"{python} · {implementation}"),
+        ("操作系统", f"{system} {release}".strip()),
+        ("架构", machine),
+        ("运行时间", uptime),
+        ("进程 PID", str(info.get("pid") or "—")),
+        ("时区", str(info.get("timezone") or "UTC+8")),
+        ("渲染模式", render_mode),
+    ]
+    api_rows = [
+        ("区服", region),
+        ("API 地址", api_base),
+        ("环境", env),
+        ("凭证", credentials),
+        ("HTTP 连接池", http),
+        ("并发 / 超时", f"{info.get('concurrency', 6)} / {info.get('timeout', 10)}s"),
+        ("重试", f"{info.get('retries', 2)} 次 · {info.get('retry_base', 0.5)}s"),
+        ("Lunar 补充", yes_no(info.get("lunar_enrich"))),
+        ("SC CORE 兜底", yes_no(info.get("sc_core_fallback"))),
+        ("群冷却", f"{info.get('cooldown', 1.0)}s"),
+    ]
+    data_rows = [
+        ("物品索引", f"{items:,} 件"),
+        ("物品详情", f"{details:,} 件"),
+        ("分类", f"{categories:,} 类"),
+        ("别名", f"{aliases:,} 条"),
+        ("平衡武器", f"{balance_weapons:,} 条"),
+        ("平衡公告", f"{balance_patches:,} 份"),
+        ("公告生成", balance_generated),
+        ("离线图标", f"{int(info.get('item_icon_files') or 0):,} 个 · {_diag_bytes(info.get('item_icon_bytes'))}"),
+        ("阵营图标", f"{int(info.get('faction_icons') or 0)} 个"),
+    ]
+    cache_rows = [
+        ("API 缓存", f"{cache_entries:,} / {int(info.get('cache_limit') or 128):,} 条"),
+        ("命中 / 未命中", f"{hits:,} / {misses:,}"),
+        ("缓存命中率", hit_rate),
+        ("待选会话", f"{pending:,} / {int(info.get('pending_limit') or 200):,} · TTL {int(info.get('pending_ttl') or 600)}s"),
+        ("SC 物品键", f"{sc_keys:,} / {int(info.get('sc_limit') or 4096):,}"),
+        ("冷却会话", f"{cooldown_scopes:,} / {int(info.get('cooldown_limit') or 500):,}"),
+    ]
+    storage_rows = [
+        ("数据目录", "可写" if data_dir_ok else "不可写"),
+        ("帮助图缓存", f"{int(info.get('help_files') or 0):,} 个 · {_diag_bytes(info.get('help_bytes'))}"),
+        ("图标下载缓存", f"{int(info.get('icon_files') or 0):,} 个 · {_diag_bytes(info.get('icon_bytes'))}"),
+        ("临时卡片", f"{int(info.get('temp_files') or 0):,} 个 · {_diag_bytes(info.get('temp_bytes'))}"),
+        ("CJK 字体", font if font_ready else f"{font}（不可用）"),
+        ("Pillow", pillow),
+    ]
+
+    health = [
+        ("凭证", "ok" if credentials == "已配置" else "warn", credentials),
+        ("物品索引", "ok" if items else "bad", f"{items:,} 件"),
+        ("平衡库", "ok" if balance_patches or balance_weapons else "bad", f"{balance_patches:,} 份"),
+        ("CJK 字体", "ok" if font_ready else "bad", font),
+        ("Pillow", "ok" if pillow != "未安装" else "bad", pillow),
+        ("数据目录", "ok" if data_dir_ok else "bad", "可写" if data_dir_ok else "不可写"),
+    ]
+    summary_lines = [
+        f"核心数据：物品 {items:,} 件 / 详情 {details:,} 件 / 图标 {int(info.get('item_icon_files') or 0):,} 个",
+        f"凭证：{credentials}｜HTTP 连接池：{http}",
+        f"字体：{font if font_ready else '不可用'}｜Pillow：{pillow}",
+    ]
+    if credentials != "已配置":
+        summary_lines.append("配置 Client-Id / Client-Secret 后可执行实时查询。")
+    critical_bad = any(
+        state == "bad" for label, state, _ in health if label != "凭证"
+    )
+    if critical_bad:
+        status, status_key = "需要检查", "bad"
+    elif credentials != "已配置":
+        status, status_key = "待配置凭证", "warn"
+    else:
+        status, status_key = "运行正常", "ok"
+
+    groups = [
+        {"title": "运行环境", "subtitle": "RUNTIME", "column": 0, "rows": runtime_rows},
+        {"title": "API 与配置", "subtitle": "API & CONFIG", "column": 0, "rows": api_rows},
+        {"title": "数据资产", "subtitle": "DATA", "column": 1, "rows": data_rows},
+        {"title": "缓存与队列", "subtitle": "CACHE", "column": 1, "rows": cache_rows},
+        {"title": "存储与渲染", "subtitle": "STORAGE", "column": 1, "rows": storage_rows},
+    ]
+    return {
+        "version": version,
+        "system": system,
+        "release": release,
+        "machine": machine,
+        "python": python,
+        "implementation": implementation,
+        "region": region,
+        "api_base": api_base,
+        "env": env,
+        "render_mode": render_mode,
+        "credentials": credentials,
+        "font": font,
+        "font_ready": font_ready,
+        "pillow": pillow,
+        "items": items,
+        "details": details,
+        "categories": categories,
+        "aliases": aliases,
+        "balance_patches": balance_patches,
+        "balance_weapons": balance_weapons,
+        "pending": pending,
+        "cache_entries": cache_entries,
+        "cache_hits": hits,
+        "cache_misses": misses,
+        "hit_rate": hit_rate,
+        "now": stamp,
+        "status": status,
+        "status_key": status_key,
+        "health": health,
+        "metrics": [
+            {"label": "物品索引", "value": f"{items:,}", "unit": "件"},
+            {"label": "物品详情", "value": f"{details:,}", "unit": "件"},
+            {"label": "平衡公告", "value": f"{balance_patches:,}", "unit": "份"},
+            {"label": "缓存命中率", "value": hit_rate, "unit": ""},
+        ],
+        "groups": groups,
+        "uptime": uptime,
+        "summary_lines": summary_lines,
+        "footer_note": "凭证只显示配置状态，不读取或输出 Client-Secret；诊断不包含玩家账号或聊天内容。",
+    }
+
+
+def format_diag(
+    info: dict[str, Any],
+    *,
+    view: dict[str, Any] | None = None,
+) -> str:
+    """Render a copyable fallback card with all diagnostic sections."""
+    view = view if isinstance(view, dict) and view else build_diag_view(info)
+    sections = [
+        (
+            str(group.get("title") or ""),
+            [f"{key}：{value}" for key, value in group.get("rows") or []],
+        )
+        for group in view.get("groups") or []
+    ]
     return _card(
         "STALZONE · 运行诊断",
-        [f"插件 {info.get('version', '?')}｜{info.get('system', '?')}"],
         [
-            (
-                "运行环境",
-                [
-                    f"Python：{info.get('python', '?')}",
-                    f"区服：{info.get('region', '?')}｜API：{info.get('api_base', '?')}",
-                    f"环境：{info.get('env', '?')}｜渲染：{info.get('render_mode', '?')}",
-                    f"凭证：{info.get('credentials', '?')}｜字体：{info.get('font', '?')}",
-                ],
-            ),
-            (
-                "本地数据",
-                [
-                    f"物品索引：{info.get('items', 0)} 件｜详情：{info.get('details', 0)} 件",
-                    f"平衡公告：{info.get('balance_patches', 0)} 份｜待选会话：{info.get('pending', 0)}",
-                    f"HTTP 连接池：{info.get('http', '?')}",
-                ],
-            ),
-            (
-                "缓存",
-                [
-                    f"API 缓存：{cache_entries} 条｜命中 {hits}｜未命中 {misses}",
-                    f"缓存命中率：{hit_rate}",
-                ],
-            ),
+            f"插件 {view.get('version', '?')}｜{view.get('system', '?')}",
+            f"状态：{view.get('status', '?')}｜{view.get('region', '?')}｜{view.get('now', '?')} UTC+8",
         ],
-        "诊断不包含 Client-Secret、玩家账号或聊天内容",
+        sections,
+        str(view.get("footer_note") or "诊断不包含凭证或玩家数据"),
     )
 
 
@@ -2066,7 +2247,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz clans [页码] — 战队列表",
         "/sz operations [地图ID] — 最近行动记录",
         "/sz regions — 官方区服列表",
-        "/sz diag — 查看运行状态与缓存（不包含凭证）",
+        "/sz diag / 状态 — 查看运行环境、数据、缓存与存储状态（不包含凭证）",
         "/sz help — 显示本帮助",
     ]
     return _card(

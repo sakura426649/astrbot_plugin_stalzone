@@ -1317,7 +1317,7 @@ def render_help_card(
             "其他",
             "MORE",
             "/sz 战队列表 · /sz 行动 · /sz 区服 · /sz 帮助",
-            ["战队列表、行动记录、区服列表", "候选 /sz 候选 <序号>｜诊断 /sz diag"],
+            ["战队列表、行动记录、区服列表", "候选 /sz 候选 <序号>｜诊断 /sz diag / 状态"],
             "#8FA2B8",
         ),
     ]
@@ -1911,6 +1911,200 @@ def render_profile_card(
     output = out_dir / f"sz_profile_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
         image.convert("RGB").save(output, "PNG", optimize=True)
+    except OSError:
+        return None
+    return output
+
+
+def render_diag_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+) -> Path | None:
+    """Render a dense, readable diagnostics dashboard."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    path = find_cjk_font(font_path)
+    if path is None:
+        return None
+    mono_path = find_mono_font(path)
+    display_path = _find_display_font(font_path) or path
+    try:
+        title_font = ImageFont.truetype(str(display_path), 34)
+        section_font = ImageFont.truetype(str(path), 20)
+        body_font = ImageFont.truetype(str(path), 15)
+        label_font = ImageFont.truetype(str(path), 13)
+        small_font = ImageFont.truetype(str(path), 12)
+        mono_font = ImageFont.truetype(str(mono_path or path), 12)
+        metric_font = ImageFont.truetype(str(display_path), 31)
+        chip_font = ImageFont.truetype(str(path), 13)
+    except Exception:
+        return None
+
+    def text_width(value: Any, fnt: Any) -> int:
+        return int(draw.textlength(str(value), font=fnt))
+
+    width = 1200
+    groups = [
+        group for group in (view.get("groups") or [])
+        if isinstance(group, dict)
+    ]
+    left = [g for g in groups if g.get("column") != 1]
+    right = [g for g in groups if g.get("column") == 1]
+    col_x = (PAD, 610)
+    col_w = (540, 544)
+    body_top = 322
+
+    def group_height(group: dict[str, Any]) -> int:
+        return 38 + len(group.get("rows") or []) * 29 + 12
+
+    left_groups_h = sum(group_height(g) for g in left)
+    right_h = sum(group_height(g) for g in right)
+    summary_h = 160
+    left_h = left_groups_h + summary_h + 12
+    body_h = max(left_h, right_h)
+    footer_h = 102
+    height = max(1040, body_top + body_h + footer_h)
+    canvas = _card_canvas(width, height, alpha=234)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+
+    accent = "#5AD1FF"
+    state_key = str(view.get("status_key") or "ok")
+    state_color = {
+        "ok": "#69F0B0",
+        "warn": "#FFD166",
+        "bad": "#FF7A7A",
+    }.get(state_key, "#A9B8C8")
+    draw.text((PAD, 34), "STALZONE · 运行状态", font=title_font, fill=TEXT)
+    status_text = str(view.get("status") or "未知")
+    chip_w = text_width(status_text, chip_font) + 38
+    chip_x = width - PAD - chip_w
+    draw.rounded_rectangle(
+        (chip_x, 34, chip_x + chip_w, 70), radius=18,
+        fill=(16, 24, 28, 230), outline=_rgba_value(state_color, 160), width=1,
+    )
+    draw.ellipse((chip_x + 13, 46, chip_x + 21, 54), fill=state_color)
+    draw.text((chip_x + 27, 41), status_text, font=chip_font, fill=state_color)
+    draw.text(
+        (PAD, 82),
+        f"插件 {view.get('version', '?')}  ·  Python {view.get('python', '?')}  ·  {view.get('system', '?')}",
+        font=body_font, fill="#C7D5E4",
+    )
+    draw.text(
+        (width - PAD, 82),
+        f"{view.get('region', '?')} · {view.get('env', '?')} · {view.get('now', '?')} UTC+8",
+        font=small_font, fill=MUTED, anchor="ra",
+    )
+    draw.line((PAD, 112, width - PAD, 112), fill=(90, 110, 130, 80), width=1)
+
+    # Health strip
+    hx, hy = PAD, 128
+    for label, state, detail in view.get("health") or []:
+        color = {"ok": "#69F0B0", "warn": "#FFD166", "bad": "#FF7A7A"}.get(state, "#A9B8C8")
+        text = f"{label} {detail}"
+        text = _fit_text(draw, text, small_font, 170)
+        cw = text_width(text, small_font) + 30
+        draw.rounded_rectangle(
+            (hx, hy, hx + cw, hy + 28), radius=14,
+            fill=(15, 24, 33, 220), outline=_rgba_value(color, 90), width=1,
+        )
+        draw.ellipse((hx + 10, hy + 10, hx + 16, hy + 16), fill=color)
+        draw.text((hx + 23, hy + 5), text, font=small_font, fill=color)
+        hx += cw + 8
+
+    # Top metrics
+    metrics = [m for m in (view.get("metrics") or []) if isinstance(m, dict)][:4]
+    tile_gap = 12
+    tile_w = (width - 2 * PAD - tile_gap * max(0, len(metrics) - 1)) // max(1, len(metrics))
+    for index, metric in enumerate(metrics):
+        x = PAD + index * (tile_w + tile_gap)
+        y = 176
+        draw.rounded_rectangle(
+            (x, y, x + tile_w, y + 94), radius=12,
+            fill=(11, 20, 30, 220), outline=(70, 96, 118, 75), width=1,
+        )
+        draw.text((x + 16, y + 12), str(metric.get("label") or ""), font=label_font, fill=MUTED)
+        draw.text((x + 15, y + 38), str(metric.get("value") or "—"), font=metric_font, fill=accent)
+        unit = str(metric.get("unit") or "")
+        if unit:
+            draw.text((x + 17, y + 76), unit, font=small_font, fill="#7E93A8")
+
+    def draw_group(group: dict[str, Any], x: int, y: int, w: int) -> int:
+        title = str(group.get("title") or "")
+        subtitle = str(group.get("subtitle") or "")
+        _draw_section_heading(draw, x, y, title, section_font, accent)
+        if subtitle:
+            draw.text(
+                (x + w, y + 6),
+                subtitle, font=mono_font, fill="#56758B", anchor="ra",
+            )
+        draw.line((x, y + 34, x + w, y + 34), fill=(80, 105, 125, 70), width=1)
+        yy = y + 44
+        for key, value in group.get("rows") or []:
+            draw.text((x, yy), str(key), font=label_font, fill=MUTED)
+            value_text = _fit_text(draw, str(value), small_font, w - 150)
+            draw.text((x + w, yy), value_text, font=small_font, fill=TEXT, anchor="ra")
+            yy += 29
+        return y + group_height(group)
+
+    for index, group in enumerate(left):
+        y = body_top + sum(group_height(g) for g in left[:index])
+        draw_group(group, col_x[0], y, col_w[0])
+    for index, group in enumerate(right):
+        y = body_top + sum(group_height(g) for g in right[:index])
+        draw_group(group, col_x[1], y, col_w[1])
+
+    # Conclusion panel fills the lower-left rail and summarizes the raw data.
+    summary_y = body_top + left_groups_h + 12
+    panel_h = min(summary_h, max(120, body_top + body_h - summary_y - 8))
+    draw.rounded_rectangle(
+        (PAD, summary_y, PAD + col_w[0], summary_y + panel_h),
+        radius=12, fill=(10, 20, 29, 220),
+        outline=(75, 105, 125, 85), width=1,
+    )
+    draw.text((PAD + 16, summary_y + 12), "诊断结论 / SUMMARY", font=label_font, fill=accent)
+    status_text = str(view.get("status") or "未知")
+    status_w = text_width(status_text, small_font) + 30
+    status_x = PAD + col_w[0] - 16 - status_w
+    draw.rounded_rectangle(
+        (status_x, summary_y + 8, status_x + status_w, summary_y + 32),
+        radius=12, fill=(15, 24, 28, 230),
+        outline=_rgba_value(state_color, 110), width=1,
+    )
+    draw.ellipse((status_x + 10, summary_y + 17, status_x + 16, summary_y + 23), fill=state_color)
+    draw.text((status_x + 22, summary_y + 12), status_text, font=small_font, fill=state_color)
+    sy = summary_y + 46
+    for line in (view.get("summary_lines") or [])[:4]:
+        draw.text(
+            (PAD + 16, sy),
+            _fit_text(draw, str(line), small_font, col_w[0] - 32),
+            font=small_font, fill="#B8C9D8",
+        )
+        sy += 20
+    footer_y = height - 82
+    draw.line((PAD, footer_y, width - PAD, footer_y), fill=(80, 105, 125, 65), width=1)
+    note = str(view.get("footer_note") or "诊断不包含凭证或玩家数据")
+    note_lines = _wrap(note, small_font, width - 2 * PAD - 210)[:2]
+    for line in note_lines:
+        draw.text((PAD, footer_y + 12), line, font=small_font, fill=MUTED)
+        footer_y += 18
+    _draw_signature(
+        draw, width, height - 64, path, small_font, max_bottom=height,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    output = out_dir / f"sz_diag_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(output, "PNG", optimize=True)
     except OSError:
         return None
     return output

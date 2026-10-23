@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.8 - 2026-10-23
+
+### Added
+
+- `/sz 状态` is listed alongside `/sz diag` in text and image help; the alias resolves to the same command.
+- Diagnostics now render as a full dashboard image: system/runtime, API and safety status, data assets, cache/queues, storage/render status, health checks and a conclusion panel. Text mode carries the same detailed sections as fallback.
+- Diagnostics include Python implementation, OS/arch, uptime, PID, timezone, API base, retry/timeout/concurrency, Lunar/SC CORE flags, alias/balance/icon counts, cache hit rate, SC keys, cooldown scopes, help/icon/temp cache sizes, font and Pillow versions. Secrets and player data are excluded.
+
+### Tests
+
+- Added the `/sz 状态` parser case and a diagnostic image regression; 149 tests pass.
+
 ## 1.0.7 - 2026-10-23
 
 ### Fixed

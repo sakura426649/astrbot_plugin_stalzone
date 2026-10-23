@@ -820,6 +820,24 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("插件 ", text)
         self.assertIn("凭证：未配置", text)
         self.assertIn("API 缓存", text)
+        alias = await collect(self.make_plugin(), "/sz 状态")
+        self.assertIn("STALZONE · 运行诊断", alias)
+
+    async def test_diag_image_view(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_diag()
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "diag")
+        self.assertIn("groups", result.diag_view)
+        self.assertIn("metrics", result.diag_view)
+        from image_renderer import find_cjk_font, render_diag_card
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        path = render_diag_card(result.diag_view)
+        self.assertIsNotNone(path)
+        self.assertTrue(path.exists())
+        path.unlink(missing_ok=True)
 
     async def test_player_command(self):
         plugin = self.make_plugin()

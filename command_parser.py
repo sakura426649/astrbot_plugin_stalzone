@@ -64,8 +64,10 @@ ALIASES = {
     "行动": "operations",
     "行动记录": "operations",
     "diag": "diag",
+    "diagnostic": "diag",
     "诊断": "diag",
     "状态": "diag",
+    "运行状态": "diag",
     "candidate": "candidate",
     "候选": "candidate",
 }
