@@ -1,0 +1,85 @@
+{
+  "client_id": {
+    "description": "STALZONE API 应用 Client-Id",
+    "type": "string",
+    "default": "",
+    "hint": "在 EXBO 应用管理页创建应用并获批后获得；不是游戏账号。",
+    "obvious_hint": true
+  },
+  "client_secret": {
+    "description": "STALZONE API 应用 Client-Secret",
+    "type": "string",
+    "default": "",
+    "secret": true,
+    "hint": "只填在 AstrBot 配置中，不要发到群里或提交到仓库。",
+    "obvious_hint": true
+  },
+  "region": {
+    "description": "默认区服",
+    "type": "string",
+    "default": "ru",
+    "options": [
+      "ru",
+      "eu",
+      "na",
+      "sea",
+      "nea"
+    ],
+    "labels": [
+      "俄罗斯 RU",
+      "欧洲 EU",
+      "北美 NA",
+      "东南亚 SEA",
+      "东北亚 NEA"
+    ],
+    "hint": "群内以 EU 玩家为主时改成 eu；演示环境常用 EU。"
+  },
+  "api_base": {
+    "description": "API 环境",
+    "type": "string",
+    "default": "https://eapi.stalzone.com",
+    "options": [
+      "https://eapi.stalzone.com",
+      "https://dapi.stalzone.com"
+    ],
+    "labels": [
+      "生产环境（正式数据）",
+      "演示环境（假数据，先跑通）"
+    ],
+    "hint": "首次部署可先选演示环境；需要正式查询时切回生产环境。"
+  },
+  "render_mode": {
+    "description": "输出样式",
+    "type": "string",
+    "default": "auto",
+    "options": [
+      "auto",
+      "text",
+      "image"
+    ],
+    "labels": [
+      "自动（有字体就发图片）",
+      "纯文本卡片",
+      "强制图片"
+    ],
+    "hint": "auto 最稳：Pillow 和中文字体可用时发图片，否则发纯文本。"
+  },
+  "font_path": {
+    "description": "中文字体路径（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "Linux 无中文字体时填写，例如 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc；留空自动查找。"
+  },
+  "lunar_enrich": {
+    "description": "追加 Lunar 第三方战队战报",
+    "type": "bool",
+    "default": true,
+    "hint": "在角色资料里追加 K/D、KDA、战斗分和最近场次；数据来自 lunar-zone.com，非官方 API。关闭后不请求第三方。"
+  },
+  "sc_core_fallback": {
+    "description": "官方历史翻页失效时使用 SC CORE 补全",
+    "type": "bool",
+    "default": true,
+    "hint": "官方成交历史接口若重复返回同一页，改用 sccore.ru 的公开历史接口按时间游标补全旧记录；输出会标注“SC CORE 第三方存档”。关闭后只使用官方 API。"
+  }
+}
