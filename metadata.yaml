@@ -13,6 +13,7 @@ tags:
   - 游戏查询
   - 拍卖行
   - QQ机器人
+astrbot_version: ">=4.0.0"
 compatibility:
   min_astrbot_version: "4.0.0"
 platforms:
