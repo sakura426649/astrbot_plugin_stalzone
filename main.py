@@ -38,6 +38,7 @@ try:  # Package import (normal AstrBot plugin loading).
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        NotFoundError,
         StalzoneAPIClient,
         StalzoneAPIError,
         normalize_base_url,
@@ -46,6 +47,7 @@ try:  # Package import (normal AstrBot plugin loading).
     from .command_parser import parse_command
     from .season_pass import SeasonPassError, calculate, parse_arguments
     from .formatters import (
+        CST,
         build_auction_view,
         build_clan_candidate_view,
         build_emission_view,
@@ -79,6 +81,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_candidate_card,
         render_emission_card,
         render_help_card,
+        render_notice_card,
         render_profile_card,
         render_text_card,
     )
@@ -97,6 +100,7 @@ except ImportError:  # Direct execution / flat import fallback.
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        NotFoundError,
         StalzoneAPIClient,
         StalzoneAPIError,
         normalize_base_url,
@@ -105,6 +109,7 @@ except ImportError:  # Direct execution / flat import fallback.
     from command_parser import parse_command  # type: ignore[no-redef]
     from season_pass import SeasonPassError, calculate, parse_arguments  # type: ignore[no-redef]
     from formatters import (  # type: ignore[no-redef]
+        CST,
         build_auction_view,
         build_clan_candidate_view,
         build_emission_view,
@@ -138,6 +143,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_candidate_card,
         render_emission_card,
         render_help_card,
+        render_notice_card,
         render_profile_card,
         render_text_card,
     )
@@ -156,7 +162,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.0.2"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -191,6 +197,7 @@ IMAGE_COMMANDS = {
     "regions",
     "balance",
     "pass",
+    "notice",
 }
 
 
@@ -203,6 +210,7 @@ class PluginReply:
     emission_view: dict[str, Any] | None = None
     item_meta: dict[str, Any] | None = None
     profile_view: dict[str, Any] | None = None
+    notice_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -586,6 +594,7 @@ class StalzonePlugin(Star):
         item_meta: dict[str, Any] | None = None,
         profile_view: dict[str, Any] | None = None,
         faction: str | None = None,
+        notice_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -620,6 +629,12 @@ class StalzonePlugin(Star):
                     profile_view,
                     font_path=font_path,
                 )
+            elif sub == "notice" and notice_view:
+                path = await asyncio.to_thread(
+                    render_notice_card,
+                    notice_view,
+                    font_path=font_path,
+                )
             else:
                 path = await asyncio.to_thread(
                     render_text_card,
@@ -648,6 +663,59 @@ class StalzonePlugin(Star):
         value["cat_label"] = category_label(value.get("cat"))
         value["display"] = display_name(value)
         return value
+
+    def _not_found(
+        self,
+        kind: str,
+        query: str,
+        *,
+        region: str | None = None,
+        note: str = "",
+    ) -> PluginReply:
+        """Build a query-specific empty result card instead of a generic error."""
+        specs = {
+            "player": (
+                "玩家",
+                "请检查角色名拼写与区服；也可以提供 UUID。",
+            ),
+            "item": (
+                "物品",
+                "请检查物品名或 ID；可先用更短的关键词查看候选。",
+            ),
+            "auction": (
+                "拍卖",
+                "请检查物品名或 ID；也可以尝试其他区服。",
+            ),
+            "clan": (
+                "战队",
+                "请检查战队名、4 位标签或 UUID；标签匹配不区分大小写。",
+            ),
+            "balance": (
+                "平衡调整",
+                "该物品不存在，或没有可检索的官方平衡调整记录。",
+            ),
+        }
+        label, default_note = specs.get(kind, ("数据", "请检查查询内容后重试。"))
+        clean = str(query or "").strip() or "未知"
+        region_label = str(region or self._region()).upper()
+        now = datetime.now(CST).strftime("%Y-%m-%d %H:%M")
+        detail = note.strip() or default_note
+        headline = f"未查到关于「{clean}」的{label}信息"
+        text = (
+            f"{headline}\n"
+            f"区服：{region_label}｜查询时间：{now} UTC+8\n"
+            f"{detail}"
+        )
+        view = {
+            "title": "STALZONE · 查询结果",
+            "kind_label": label,
+            "query": clean,
+            "region": region_label,
+            "now": now,
+            "note": detail,
+            "accent": "#FFB454",
+        }
+        return PluginReply(text, notice_view=view, sub="notice")
 
     def _resolve_item(self, query: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         if not self.item_index.ready:
@@ -889,6 +957,7 @@ class StalzonePlugin(Star):
         emission_view = None
         item_meta = None
         profile_view = None
+        notice_view = None
         faction = None
         render_sub = sub
         try:
@@ -902,6 +971,7 @@ class StalzonePlugin(Star):
                 emission_view = result.emission_view
                 item_meta = result.item_meta
                 profile_view = result.profile_view
+                notice_view = result.notice_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -928,6 +998,7 @@ class StalzonePlugin(Star):
             item_meta,
             profile_view,
             faction,
+            notice_view,
         )
         if image is not None:
             try:
@@ -997,7 +1068,14 @@ class StalzonePlugin(Star):
         else:
             raw = item_query.strip()
             if not ITEM_ID_RE.match(raw):
-                return "未找到相关数据，请先 /sz item <中文名/英文名> 确认物品 ID。"
+                return self._not_found(
+                    "auction",
+                    item_query,
+                    note=(
+                        "没有找到该物品。请先确认物品名/ID，"
+                        "或改用更短的关键词查看候选。"
+                    ),
+                )
             item_id = raw
             raw_item = self.item_index.get(raw) if self.item_index.ready else None
             label = display_name(raw_item) if raw_item else None
@@ -1130,7 +1208,7 @@ class StalzonePlugin(Star):
                 if before_date is not None:
                     text = (
                         f"截至 {before_date.year}/{before_date.month}/{before_date.day} "
-                        f"没有找到{short_label}成交记录。"
+                        f"未查到关于「{short_label}」的成交记录。"
                     )
                     if history_payload.get("window_exhausted"):
                         coverage = str(history_payload.get("sc_coverage_from") or "")
@@ -1152,7 +1230,7 @@ class StalzonePlugin(Star):
                                 note += f"；SC CORE 存档覆盖自 {coverage[:10]}"
                         text += "\n" + note
                 else:
-                    text = f"没有找到{short_label}成交记录。"
+                    text = f"未查到关于「{short_label}」的成交记录。"
                 empty_view = build_empty_auction_view(
                     item_id,
                     label,
@@ -1450,11 +1528,33 @@ class StalzonePlugin(Star):
                 value,
             )
             if UUID_RE.match(value):
-                payload = await client.get_profile_by_uuid(
-                    value, region=target_region
-                )
+                try:
+                    payload = await client.get_profile_by_uuid(
+                        value, region=target_region
+                    )
+                except NotFoundError:
+                    return self._not_found(
+                        "player",
+                        value,
+                        region=target_region,
+                        note=(
+                            "未找到该 UUID 对应的角色。请检查 UUID 与区服，"
+                            "或改用角色名查询。"
+                        ),
+                    )
             else:
-                payload = await client.get_profile(value, region=target_region)
+                try:
+                    payload = await client.get_profile(value, region=target_region)
+                except NotFoundError:
+                    return self._not_found(
+                        "player",
+                        value,
+                        region=target_region,
+                        note=(
+                            f"请检查角色名拼写，或确认该角色是否在 "
+                            f"{target_region.upper()} 区服。"
+                        ),
+                    )
 
             player_name = str(payload.get("username") or value)
             lunar = None
@@ -1478,6 +1578,16 @@ class StalzonePlugin(Star):
                 lunar_url=lunar_url,
                 hq_url=hq_url,
             )
+            if not view:
+                return self._not_found(
+                    "player",
+                    value,
+                    region=target_region,
+                    note=(
+                        "官方接口没有返回该角色的公开资料。"
+                        "请检查角色名与区服后重试。"
+                    ),
+                )
             return PluginReply(
                 format_profile(
                     payload,
@@ -1521,7 +1631,7 @@ class StalzonePlugin(Star):
                 candidate_view=build_item_candidate_view(query, candidates),
                 sub="candidates",
             )
-        return "未找到相关数据，请检查物品 ID / 物品名是否正确。"
+        return self._not_found("item", query)
 
     async def _handle_pass(self, argument: str) -> str | PluginReply:
         try:
@@ -1557,10 +1667,13 @@ class StalzonePlugin(Star):
                     candidate_view=build_item_candidate_view(query, candidates),
                     sub="candidates",
                 )
-            return (
-                f"物品「{query}」不存在，无法查询平衡调整。\n"
-                "请用 /sz item <中文名/英文名/ID> 确认物品名，"
-                "或直接提供物品 ID。"
+            return self._not_found(
+                "balance",
+                query,
+                note=(
+                    "物品不存在，无法查询平衡调整。"
+                    "请先确认物品名/ID，再使用 /sz 调整。"
+                ),
             )
         names = [
             str(item.get("en") or ""),
@@ -1581,7 +1694,15 @@ class StalzonePlugin(Star):
         value = query.strip()
         async with self._make_client() as client:
             if UUID_RE.match(value):
-                clan = await client.get_clan(value)
+                try:
+                    clan = await client.get_clan(value)
+                except NotFoundError:
+                    return self._not_found(
+                        "clan",
+                        value,
+                        region=client.region,
+                        note="未找到该 UUID 对应的战队，请检查 UUID 与区服。",
+                    )
                 return PluginReply(
                     format_clan(clan, client.region),
                     faction=str(clan.get("alliance") or ""),
@@ -1630,8 +1751,13 @@ class StalzonePlugin(Star):
             matches = exact if tag_only else (exact or partial)
             if not matches:
                 if tag_only:
-                    return f"没有找到标签 [{q_tag.upper()}] 的战队。"
-                return "未找到相关数据，请检查战队名/标签/ID 是否正确。"
+                    return self._not_found(
+                        "clan",
+                        q_tag.upper(),
+                        region=client.region,
+                        note=f"没有找到标签 [{q_tag.upper()}] 的战队。",
+                    )
+                return self._not_found("clan", query, region=client.region)
             if len(matches) == 1:
                 clan = matches[0]
                 return PluginReply(

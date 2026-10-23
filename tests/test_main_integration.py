@@ -509,11 +509,11 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin = self.make_plugin()
         plugin._make_client = lambda: EmptyClient()  # type: ignore[assignment]
         text = await collect(plugin, "/sz 拍卖 原子")
-        self.assertIn("没有找到原子成交记录", text)
+        self.assertIn("未查到关于「原子」的成交记录", text)
         self.assertNotIn("稀有", text)
 
         dated = await collect(plugin, "/sz 拍卖 原子 6.11")
-        self.assertIn("截至 2026/6/11 没有找到原子成交记录", dated)
+        self.assertIn("截至 2026/6/11 未查到关于「原子」的成交记录", dated)
 
     async def test_premium_synonym_suggests_candidates(self):
         auction = await collect(self.make_plugin(), "/sz 拍卖 高级会员")
@@ -673,6 +673,69 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("bbb｜EU", text)
         self.assertIn("阵营：纪律", text)
         self.assertEqual(RegionClient.last_region, "eu")
+
+    async def test_missing_item_returns_notice_card(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_item("qqqzzzxxx999")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "notice")
+        self.assertIn("未查到关于「qqqzzzxxx999」的物品信息", result.text)
+        self.assertEqual(result.notice_view["kind_label"], "物品")
+        self.assertEqual(result.notice_view["query"], "qqqzzzxxx999")
+
+    async def test_missing_player_returns_notice_card(self):
+        from api_client import NotFoundError
+
+        class MissingProfileClient(FakeClient):
+            async def get_profile(self, name, *, region=None):
+                raise NotFoundError("HTTP 404", status_code=404)
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda region=None: MissingProfileClient()  # type: ignore[assignment]
+        result = await plugin._handle_profile("Nobody RU")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "notice")
+        self.assertIn("未查到关于「Nobody」的玩家信息", result.text)
+        self.assertEqual(result.notice_view["region"], "RU")
+        self.assertIn("RU 区服", result.notice_view["note"])
+
+    def test_icon_library_covers_catalog(self):
+        icons = list((PLUGIN_ROOT / "item_icons").glob("*.png"))
+        self.assertGreaterEqual(len(icons), 2600)
+
+    def test_notice_card_renders_query(self):
+        from image_renderer import find_cjk_font, render_notice_card
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        path = render_notice_card(
+            {
+                "title": "STALZONE · 查询结果",
+                "kind_label": "玩家",
+                "query": "Nobody",
+                "region": "RU",
+                "now": "2026-10-23 20:00",
+                "note": "请检查角色名拼写与区服。",
+            }
+        )
+        self.assertIsNotNone(path)
+        self.assertTrue(path.exists())
+        path.unlink(missing_ok=True)
+
+    async def test_notice_card_routes_through_plugin(self):
+        plugin = self.make_plugin()
+        plugin.config["render_mode"] = "image"
+        result = await plugin._handle_item("qqqzzzxxx999")
+        self.assertIsInstance(result, PluginReply)
+        path = await plugin._render_image(
+            result.text,
+            result.sub or "",
+            notice_view=result.notice_view,
+        )
+        if path is None:
+            self.skipTest("Pillow or CJK font unavailable")
+        self.assertTrue(path.exists())
+        path.unlink(missing_ok=True)
 
     async def test_shared_http_client_reused(self):
         plugin = self.make_plugin()

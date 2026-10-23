@@ -1010,7 +1010,9 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
         lines.append("")
         if view.get("before"):
             lines.append(f"截至 {view['before']}")
-        lines.append(f"没有找到{view.get('empty_name') or view.get('short')}成交记录。")
+        lines.append(
+            f"未查到关于「{view.get('empty_name') or view.get('short')}」的成交记录。"
+        )
         if view.get("empty_note"):
             lines.append(view["empty_note"])
         lines.extend([SEP, "数据来自官方 API｜价格为卢布｜时间为 UTC+8（北京时间）"])

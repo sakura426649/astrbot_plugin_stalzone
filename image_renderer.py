@@ -719,6 +719,159 @@ def render_text_card(
     return output
 
 
+def render_notice_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    width: int = WIDTH,
+) -> Path | None:
+    """Render a clear, query-specific empty-result card."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    path = find_cjk_font(font_path)
+    if path is None:
+        return None
+    display_path = _find_display_font(font_path) or path
+    try:
+        title_font = ImageFont.truetype(str(display_path), 34)
+        chip_font = ImageFont.truetype(str(path), 17)
+        eyebrow_font = ImageFont.truetype(str(path), 16)
+        prefix_font = ImageFont.truetype(str(path), 26)
+        query_font = ImageFont.truetype(str(display_path), 40)
+        note_font = ImageFont.truetype(str(path), 19)
+        small_font = ImageFont.truetype(str(path), 15)
+    except Exception:
+        return None
+
+    kind = str(view.get("kind_label") or "数据").strip()
+    query = str(view.get("query") or "").strip() or "未知"
+    region = str(view.get("region") or "").strip().upper()
+    now = str(view.get("now") or "").strip()
+    note = str(view.get("note") or "").strip()
+    accent = str(view.get("accent") or ACCENT)
+
+    note_lines = _wrap(note, note_font, width - 2 * PAD - 34)[:3] if note else []
+    panel_top = 326
+    panel_height = 44 + max(1, len(note_lines)) * 25
+    height = panel_top + panel_height + 18 + SIGNATURE_HEIGHT + 18
+    image = _card_canvas(width, height, alpha=228)
+    if image is None:
+        return None
+    draw = ImageDraw.Draw(image)
+
+    draw.rounded_rectangle(
+        (PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=accent
+    )
+    draw.text(
+        (PAD + 26, PAD),
+        str(view.get("title") or "STALZONE · 查询结果"),
+        font=title_font,
+        fill=TEXT,
+    )
+    chip_text = f"未找到 {kind}"
+    chip_width = int(draw.textlength(chip_text, font=chip_font)) + 30
+    chip_x = width - PAD - chip_width
+    draw.rounded_rectangle(
+        (chip_x, 34, chip_x + chip_width, 70),
+        radius=18,
+        fill=(48, 30, 18, 220),
+        outline=_rgba_value(accent, 150),
+        width=1,
+    )
+    draw.text(
+        (chip_x + 15, 43),
+        chip_text,
+        font=chip_font,
+        fill=accent,
+    )
+    draw.line((PAD, 150, width - PAD, 150), fill=BORDER, width=1)
+
+    draw.text((PAD + 20, 174), "NO MATCH · 查询无结果", font=eyebrow_font, fill=accent)
+    draw.rounded_rectangle(
+        (PAD, 214, PAD + 4, 266), radius=2, fill=accent
+    )
+
+    prefix = "未查到关于 "
+    suffix = f" 的{kind}信息"
+    prefix_width = draw.textlength(prefix, font=prefix_font)
+    suffix_width = draw.textlength(suffix, font=prefix_font)
+    query_text = _fit_text(
+        draw,
+        query,
+        query_font,
+        int(width - 2 * PAD - 24 - prefix_width - suffix_width - 8),
+    )
+    baseline = 258
+    x = PAD + 20
+    draw.text((x, baseline), prefix, font=prefix_font, fill=MUTED, anchor="ls")
+    x += prefix_width
+    draw.text((x, baseline), query_text, font=query_font, fill=accent, anchor="ls")
+    x += draw.textlength(query_text, font=query_font)
+    draw.text((x, baseline), suffix, font=prefix_font, fill=TEXT, anchor="ls")
+
+    meta_parts = [f"类型：{kind}"]
+    if region:
+        meta_parts.append(f"区服：{region}")
+    if now:
+        meta_parts.append(f"查询时间：{now} UTC+8")
+    draw.text(
+        (PAD + 20, 284),
+        "｜".join(meta_parts),
+        font=small_font,
+        fill=MUTED,
+    )
+
+    draw.rounded_rectangle(
+        (PAD, panel_top, width - PAD, panel_top + panel_height),
+        radius=12,
+        fill=(8, 14, 22, 175),
+        outline=(92, 72, 48, 130),
+        width=1,
+    )
+    draw.text(
+        (PAD + 17, panel_top + 13),
+        "建议",
+        font=chip_font,
+        fill=accent,
+    )
+    note_y = panel_top + 43
+    if note_lines:
+        for line in note_lines:
+            draw.text((PAD + 17, note_y), line, font=note_font, fill=TEXT)
+            note_y += 25
+    else:
+        draw.text(
+            (PAD + 17, note_y),
+            "请检查查询内容后重试。",
+            font=note_font,
+            fill=TEXT,
+        )
+
+    _draw_signature(
+        draw,
+        width,
+        panel_top + panel_height + 18,
+        path,
+        small_font,
+        max_bottom=height,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    output = out_dir / f"sz_notice_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        image.convert("RGB").save(output, "PNG", optimize=True)
+    except OSError:
+        return None
+    return output
+
+
 def _fit_text(draw: Any, text: str, font: Any, max_width: int) -> str:
     if draw.textlength(text, font=font) <= max_width:
         return text
@@ -1474,6 +1627,9 @@ def render_profile_card(
         value_font = ImageFont.truetype(str(path), 18)
         score_font = ImageFont.truetype(str(path), 30)
         label_font = ImageFont.truetype(str(path), 17)
+        hero_font = ImageFont.truetype(str(path), 32)
+        hero_small_font = ImageFont.truetype(str(path), 15)
+        region_font = ImageFont.truetype(str(path), 18)
     except Exception:
         return None
 
@@ -1488,7 +1644,9 @@ def render_profile_card(
     lunar_rows: list[str] = [str(row) for row in (view.get("lunar_rows") or [])][:4]
     achievements = [str(x) for x in (view.get("achievements") or [])]
 
-    y = 170
+    identity_height = 84
+    identity_gap = 20
+    y = 174 + identity_height + identity_gap
     if bio["height"]:
         y += 42 + bio["height"] + 24
     y += 30 + 3 * 31 + 43  # 档案 heading + rows + gap before PvP
@@ -1541,6 +1699,57 @@ def render_profile_card(
             pass
 
     y = 174
+    identity_top = y
+    draw.rounded_rectangle(
+        (PAD, identity_top, width - PAD, identity_top + identity_height),
+        radius=14,
+        fill=(8, 15, 24, 175),
+        outline=(88, 116, 145, 95),
+        width=1,
+    )
+    draw.rounded_rectangle(
+        (PAD, identity_top + 12, PAD + 4, identity_top + identity_height - 12),
+        radius=2,
+        fill=ACCENT,
+    )
+    hero_name = str(view.get("name") or "未知")
+    hero_region = str(view.get("region") or "未知").upper()
+    region_text = f"区服 {hero_region}"
+    region_width = int(draw.textlength(region_text, font=region_font)) + 30
+    region_x = width - PAD - 18 - region_width
+    draw.rounded_rectangle(
+        (
+            region_x,
+            identity_top + 24,
+            region_x + region_width,
+            identity_top + 60,
+        ),
+        radius=18,
+        fill=(19, 42, 62, 235),
+        outline=(94, 166, 218, 165),
+        width=1,
+    )
+    draw.text(
+        (region_x + 15, identity_top + 31),
+        region_text,
+        font=region_font,
+        fill="#9FD4FF",
+    )
+    name_width = max(80, region_x - (PAD + 24) - 18)
+    draw.text(
+        (PAD + 24, identity_top + 12),
+        _fit_text(draw, hero_name, hero_font, name_width),
+        font=hero_font,
+        fill="#F4F8FD",
+    )
+    draw.text(
+        (PAD + 24, identity_top + 54),
+        "角色档案 · 官方公开资料",
+        font=hero_small_font,
+        fill=MUTED,
+    )
+    y += identity_height + identity_gap
+
     if bio["height"]:
         draw.text((PAD, y), "简介 / STATUS", font=section_font, fill=ACCENT)
         y += 42
@@ -1739,7 +1948,7 @@ def render_candidate_card(
         detail_font = ImageFont.truetype(str(body_path), 16)
         meta_font = ImageFont.truetype(str(body_path), 14)
         footer_font = ImageFont.truetype(str(body_path), 15)
-        placeholder_font = ImageFont.truetype(str(title_path), 30)
+        placeholder_font = ImageFont.truetype(str(body_path), 15)
     except Exception:
         return None
 
@@ -1851,7 +2060,7 @@ def render_candidate_card(
         if not icon_rendered:
             draw.text(
                 (icon_left + icon_size / 2, icon_top + icon_size / 2),
-                "?",
+                "暂无图标",
                 font=placeholder_font,
                 fill=MUTED,
                 anchor="mm",
@@ -1995,8 +2204,8 @@ def render_auction_card(
                 fill=MUTED,
             )
             y += 36
-        prefix = "没有找到"
-        suffix = "成交记录"
+        prefix = "未查到关于「"
+        suffix = "」的成交记录"
         name = str(view.get("empty_name") or view.get("short") or "物品")
         prefix_w = draw.textlength(prefix, font=empty_font)
         suffix_w = draw.textlength(suffix, font=empty_font)
