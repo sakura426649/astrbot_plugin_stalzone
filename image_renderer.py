@@ -1632,6 +1632,7 @@ def render_profile_card(
         metric_font = ImageFont.truetype(str(path), 17)
         score_font = ImageFont.truetype(str(display_path), 54)
         hero_score_font = ImageFont.truetype(str(display_path), 48)
+        pvp_label_font = ImageFont.truetype(str(display_path), 18)
         mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
         return None
@@ -1710,7 +1711,7 @@ def render_profile_card(
                 faction = faction.crop(bbox)
             faction.thumbnail((176, 176), Image.LANCZOS)
             fx = left_x + (left_w - faction.width) // 2
-            image.alpha_composite(faction, (fx, rail_top + 70))
+            image.alpha_composite(faction, (fx, rail_top + 58))
         except Exception:
             pass
     faction_label = f"{view.get('alliance', '未知')} / {str(view.get('alliance_raw') or '').upper()}"
@@ -1828,14 +1829,14 @@ def render_profile_card(
     )
     panel_y = section_y + 40
     draw.rounded_rectangle(
-        (right_x, panel_y, right_x + right_w, panel_y + 118),
+        (right_x, panel_y, right_x + right_w, panel_y + 128),
         radius=14, fill=(12, 19, 28, 195),
         outline=(78, 98, 118, 70), width=1,
     )
     if hq:
-        draw.text((right_x + 22, panel_y + 16), "PvP SCORE", font=label_font, fill="#D8BE83")
-        draw.text((right_x + 20, panel_y + 36), f"{hq.get('score', 0):,}", font=hero_score_font, fill="#FFD166")
-        draw.text((right_x + 152, panel_y + 78), "估算值", font=small_font, fill="#C6B182")
+        draw.text((right_x + 22, panel_y + 13), "PvP SCORE", font=pvp_label_font, fill="#F0D49C")
+        draw.text((right_x + 20, panel_y + 40), f"{hq.get('score', 0):,}", font=hero_score_font, fill="#FFD166")
+        draw.text((right_x + 152, panel_y + 94), "估算值", font=small_font, fill="#C6B182")
         values = [
             ("击杀", f"{hq.get('kills', 0):,}"),
             ("助攻", f"{hq.get('assists', 0):,}"),
@@ -1848,7 +1849,7 @@ def render_profile_card(
             draw.text((mx, panel_y + 46), value, font=metric_font, fill=TEXT)
     else:
         draw.text((right_x + 22, panel_y + 42), "暂无 PvP 统计", font=body_font, fill=MUTED)
-    ry = panel_y + 118 + 28
+    ry = panel_y + 128 + 28
 
     section_label_y = ry
     _draw_section_heading(

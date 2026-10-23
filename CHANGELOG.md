@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.17 - 2026-10-23
+
+### Changed
+
+- Moved the player-card faction emblem up slightly.
+- Enlarged the `PvP SCORE` label from 13px to 18px, brightened it, and adjusted the panel height so the score and “估算值” do not collide.
+
 ## 1.0.16 - 2026-10-23
 
 ### Fixed
