@@ -645,7 +645,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
 
         # Four letters are always treated as a tag, never a name substring.
         text = await collect(plugin, "/sz 战队 clan")
-        self.assertIn("没有找到标签 [CLAN]", text)
+        self.assertIn("没有找到标签 [clan]", text)
 
     async def test_operations(self):
         plugin = self.make_plugin()
@@ -682,6 +682,14 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("未查到关于「qqqzzzxxx999」的物品信息", result.text)
         self.assertEqual(result.notice_view["kind_label"], "物品")
         self.assertEqual(result.notice_view["query"], "qqqzzzxxx999")
+
+    def test_notice_query_casing_preserves_input(self):
+        plugin = self.make_plugin()
+        upper = plugin._not_found("player", "SAKURA_AKIRA")
+        self.assertEqual(upper.notice_view["query"], "sakura_akira")
+        mixed = plugin._not_found("player", "Sakura_Akira")
+        self.assertEqual(mixed.notice_view["query"], "Sakura_Akira")
+        self.assertIn("Sakura_Akira", mixed.text)
 
     async def test_missing_player_returns_notice_card(self):
         from api_client import NotFoundError

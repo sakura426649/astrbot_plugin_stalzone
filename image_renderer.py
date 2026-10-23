@@ -808,7 +808,7 @@ def render_notice_card(
     )
     baseline = 258
     x = PAD + 20
-    draw.text((x, baseline), prefix, font=prefix_font, fill=MUTED, anchor="ls")
+    draw.text((x, baseline), prefix, font=prefix_font, fill=TEXT, anchor="ls")
     x += prefix_width
     draw.text((x, baseline), query_text, font=query_font, fill=accent, anchor="ls")
     x += draw.textlength(query_text, font=query_font)

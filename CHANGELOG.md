@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.3 - 2026-10-23
+
+### Fixed
+
+- The not-found card no longer wraps the enlarged query in normal-sized brackets, which could collide with the query text.
+- “未查到关于” and “的…信息” now use the same text color; only the query remains highlighted.
+- All-uppercase query names are displayed in lowercase on the not-found card, while mixed-case user input is preserved. Successful queries continue to use the name returned by the API.
+- Clan tag misses now show the lowercase tag instead of forcing uppercase.
+
+### Tests
+
+- Added casing coverage for not-found queries; 146 tests pass.
+
 ## 1.0.2 - 2026-10-23
 
 ### Added

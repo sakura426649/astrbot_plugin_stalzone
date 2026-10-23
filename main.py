@@ -162,7 +162,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.2"
+PLUGIN_VERSION = "1.0.3"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -664,6 +664,14 @@ class StalzonePlugin(Star):
         value["display"] = display_name(value)
         return value
 
+    @staticmethod
+    def _display_query(value: str) -> str:
+        """Keep the user's casing unless the whole query was typed in caps."""
+        text = str(value or "").strip() or "未知"
+        if text.isupper():
+            return text.lower()
+        return text
+
     def _not_found(
         self,
         kind: str,
@@ -673,8 +681,7 @@ class StalzonePlugin(Star):
         note: str = "",
     ) -> PluginReply:
         """Build a query-specific empty result card instead of a generic error."""
-        specs = {
-            "player": (
+        specs = {            "player": (
                 "玩家",
                 "请检查角色名拼写与区服；也可以提供 UUID。",
             ),
@@ -696,7 +703,7 @@ class StalzonePlugin(Star):
             ),
         }
         label, default_note = specs.get(kind, ("数据", "请检查查询内容后重试。"))
-        clean = str(query or "").strip() or "未知"
+        clean = self._display_query(query)
         region_label = str(region or self._region()).upper()
         now = datetime.now(CST).strftime("%Y-%m-%d %H:%M")
         detail = note.strip() or default_note
@@ -1753,9 +1760,9 @@ class StalzonePlugin(Star):
                 if tag_only:
                     return self._not_found(
                         "clan",
-                        q_tag.upper(),
+                        q_tag,
                         region=client.region,
-                        note=f"没有找到标签 [{q_tag.upper()}] 的战队。",
+                        note=f"没有找到标签 [{q_tag}] 的战队。",
                     )
                 return self._not_found("clan", query, region=client.region)
             if len(matches) == 1:
