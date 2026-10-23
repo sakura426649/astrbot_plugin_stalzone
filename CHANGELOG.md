@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.19 - 2026-10-23
+
+### Changed
+
+- Enlarged player-card metadata labels/values (clan, rank, level, last login), combat metrics (kills/assists/deaths/KD) and official-stat labels/values for readability.
+- Increased stat row spacing to match the larger type.
+
 ## 1.0.18 - 2026-10-23
 
 ### Changed

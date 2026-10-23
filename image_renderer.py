@@ -1633,6 +1633,12 @@ def render_profile_card(
         score_font = ImageFont.truetype(str(display_path), 54)
         hero_score_font = ImageFont.truetype(str(display_path), 48)
         pvp_label_font = ImageFont.truetype(str(display_path), 18)
+        meta_label_font = ImageFont.truetype(str(path), 15)
+        meta_value_font = ImageFont.truetype(str(path), 17)
+        combat_label_font = ImageFont.truetype(str(path), 15)
+        combat_value_font = ImageFont.truetype(str(path), 20)
+        stat_label_font = ImageFont.truetype(str(path), 15)
+        stat_value_font = ImageFont.truetype(str(path), 19)
         mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
         return None
@@ -1655,7 +1661,7 @@ def render_profile_card(
     if stat_rows and stat_rows[-1].startswith("另有"):
         stat_note = stat_rows.pop()
     per_col = max(1, (len(stat_rows) + 1) // 2)
-    stats_height = per_col * 32
+    stats_height = per_col * 36
     achievements = [str(x) for x in (view.get("achievements") or [])]
     hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
     achievement_rows = 1
@@ -1784,13 +1790,13 @@ def render_profile_card(
     ]
     my = rail_top + 360
     for key, value in meta_rows:
-        draw.text((left_x + 26, my), key, font=label_font, fill=MUTED)
-        fitted = _fit_text(draw, value, small_font, left_w - 100)
+        draw.text((left_x + 26, my), key, font=meta_label_font, fill=MUTED)
+        fitted = _fit_text(draw, value, meta_value_font, left_w - 100)
         draw.text(
-            (left_x + left_w - 26 - int(draw.textlength(fitted, font=small_font)), my),
-            fitted, font=small_font, fill=TEXT,
+            (left_x + left_w - 26 - int(draw.textlength(fitted, font=meta_value_font)), my),
+            fitted, font=meta_value_font, fill=TEXT,
         )
-        my += 46
+        my += 48
 
     source_y = max(rail_top + 680, rail_bottom - 220)
     draw.text((left_x + 28, source_y), "记录来源", font=label_font, fill=MUTED)
@@ -1844,8 +1850,8 @@ def render_profile_card(
         ]
         for index, (key, value) in enumerate(values):
             mx = right_x + 258 + index * 116
-            draw.text((mx, panel_y + 22), key, font=label_font, fill=MUTED)
-            draw.text((mx, panel_y + 46), value, font=metric_font, fill=TEXT)
+            draw.text((mx, panel_y + 22), key, font=combat_label_font, fill=MUTED)
+            draw.text((mx, panel_y + 48), value, font=combat_value_font, fill=TEXT)
     else:
         draw.text((right_x + 22, panel_y + 42), "暂无 PvP 统计", font=body_font, fill=MUTED)
     ry = panel_y + 128 + 28
@@ -1863,12 +1869,12 @@ def render_profile_card(
         col = index // per_col
         row_index = index % per_col
         xx = right_x + col * col_w
-        yy = stats_y + row_index * 32
-        draw.text((xx, yy), _fit_text(draw, label_text, label_font, col_w - 90), font=label_font, fill=MUTED)
-        draw.text((xx + col_w - 20, yy), value, font=metric_font, fill=TEXT, anchor="ra")
+        yy = stats_y + row_index * 36
+        draw.text((xx, yy), _fit_text(draw, label_text, stat_label_font, col_w - 90), font=stat_label_font, fill=MUTED)
+        draw.text((xx + col_w - 20, yy), value, font=stat_value_font, fill=TEXT, anchor="ra")
     if stat_note:
-        draw.text((right_x, stats_y + per_col * 32 + 4), stat_note, font=label_font, fill=MUTED)
-    ry = stats_y + per_col * 32 + (24 if stat_note else 0) + 28
+        draw.text((right_x, stats_y + per_col * 36 + 4), stat_note, font=label_font, fill=MUTED)
+    ry = stats_y + per_col * 36 + (24 if stat_note else 0) + 28
 
     if achievements:
         _draw_section_heading(
