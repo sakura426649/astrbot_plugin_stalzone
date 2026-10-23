@@ -1626,7 +1626,7 @@ def format_item(item: dict[str, Any], details: dict[str, Any] | None = None) -> 
         "STALZONE · 物品",
         [name],
         sections,
-        f"查实时价格：/sz auction {item.get('id', '')}｜图标与属性来自 STALZONE WIKI / 官方物品库",
+        f"查实时价格：/sz auction {item.get('id', '')}｜图标与属性来自 STALZONE WIKI｜中文名来自社区汉化（非官方）",
     )
 
 

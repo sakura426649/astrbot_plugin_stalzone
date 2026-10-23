@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.48.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.48.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -289,13 +289,14 @@ python tests/demo_smoke.py
 | 来源 | 用途 |
 | --- | --- |
 | [STALZONE 官方 API](https://eapi.stalzone.com/reference) | 拍卖、风暴、玩家、战队、行动记录、区服 |
-| [STALZONE WIKI](https://stalzone.wiki/) | 物品名称、属性、图标 |
+| [STALZONE WIKI](https://stalzone.wiki/) | 物品英文名称、属性、图标 |
+| 社区汉化 `zh.lang` | 物品中文名（玩家社区维护，非官方；官方不支持中文） |
 | [StalzoneHQ](https://stalzonehq.com/) | 阵营图标与开放世界 PvP 公式参考 |
 | [Lunar Zone](https://lunar-zone.com/) | 可选的第三方战队战报 K/D/KDA |
 | [SC CORE](https://sccore.ru/) | 可选的第三方成交历史补全 |
 | [AstrBot](https://github.com/AstrBotDevs/AstrBot) | 插件运行框架 |
 
-物品中文名来自游戏本地化文件 `zh.lang`；平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
+物品中文名来自玩家社区维护的 `zh.lang` 汉化文件（**非官方**；游戏官方不支持中文，翻译可能滞后于新物品）；英文名与物品属性来自 STALZONE WIKI。平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
 
 > 本项目是非官方工具，与 EXBO / STALZONE 没有隶属关系。游戏名称、图标和数据的版权归各自权利人所有；第三方数据仅作补充并在输出中标注。
 
