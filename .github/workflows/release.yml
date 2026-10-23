@@ -1,0 +1,42 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build plugin zip and checksum
+        run: |
+          rm -f astrbot_plugin_stalzone.zip SHA256SUMS
+          zip -r astrbot_plugin_stalzone.zip astrbot_plugin_stalzone
+          sha256sum astrbot_plugin_stalzone.zip > SHA256SUMS
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            astrbot_plugin_stalzone.zip
+            SHA256SUMS
+          generate_release_notes: true
+          body: |
+            STALZONE 数据查询 1.0.0：首个稳定版。
+
+            完整变更见 CHANGELOG.md。安装包内包含插件源码、物品索引、离线图标、预览图和许可证。
