@@ -28,8 +28,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Build plugin zip and checksum
         run: |
-          rm -f astrbot_plugin_stalzone.zip SHA256SUMS
-          zip -r astrbot_plugin_stalzone.zip astrbot_plugin_stalzone
+          rm -rf package astrbot_plugin_stalzone.zip SHA256SUMS
+          mkdir -p package/astrbot_plugin_stalzone
+          git archive HEAD | tar -x -C package/astrbot_plugin_stalzone
+          (cd package && zip -r ../astrbot_plugin_stalzone.zip astrbot_plugin_stalzone)
           sha256sum astrbot_plugin_stalzone.zip > SHA256SUMS
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
