@@ -1836,7 +1836,6 @@ def render_profile_card(
     if hq:
         draw.text((right_x + 22, panel_y + 13), "PvP SCORE", font=pvp_label_font, fill="#F0D49C")
         draw.text((right_x + 20, panel_y + 40), f"{hq.get('score', 0):,}", font=hero_score_font, fill="#FFD166")
-        draw.text((right_x + 152, panel_y + 94), "估算值", font=small_font, fill="#C6B182")
         values = [
             ("击杀", f"{hq.get('kills', 0):,}"),
             ("助攻", f"{hq.get('assists', 0):,}"),

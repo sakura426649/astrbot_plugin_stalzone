@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.18 - 2026-10-23
+
+### Changed
+
+- Removed the redundant “估算值” caption under the player PvP score; the larger `PvP SCORE` label already identifies it.
+
 ## 1.0.17 - 2026-10-23
 
 ### Changed
