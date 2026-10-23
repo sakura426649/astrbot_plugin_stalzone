@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.11 - 2026-10-23
+
+### Fixed
+
+- Pass current/forecast levels now share one baseline; labels sit directly above their own `Lv` values instead of both being rendered above the forecast.
+- Fixed the overload card's second row showing the overloaded prediction instead of the non-overloaded prediction.
+- Reduced the forecast number from 82px to 40px (current 34px) and tightened the hero height, so the result stays prominent without leaving large gaps against the surrounding text. Both overload and non-overload rows use the same 34/40 sizes.
+
 ## 1.0.10 - 2026-10-23
 
 ### Changed

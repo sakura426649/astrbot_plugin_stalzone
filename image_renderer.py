@@ -2171,7 +2171,7 @@ def render_pass_card(
     left_x, left_w = PAD, 540
     right_x, right_w = 610, W - 610 - PAD
     hero_y = 122
-    hero_h = 260 if has_overload else 190
+    hero_h = 270 if has_overload else 170
     sections_y = hero_y + hero_h + 78
     groups = [
         ("每日任务", "DAILY", list(view.get("daily_rows") or [])),
@@ -2237,20 +2237,21 @@ def render_pass_card(
     ) -> int:
         current_font = ImageFont.truetype(str(path), current_size)
         final_font = ImageFont.truetype(str(display_path), final_size)
-        x = PAD + 110
+        start_x = PAD + 58
+        x = start_x
         draw.text((x, base_y), f"Lv {level}", font=current_font, fill=MUTED, anchor="ls")
         x += width_of(f"Lv {level}", current_font) + 18
         draw.text((x, base_y), "→", font=current_font, fill=MUTED, anchor="ls")
         x += width_of("→", current_font) + 18
         draw.text((x, base_y), f"Lv {final_value}", font=final_font, fill=final_color, anchor="ls")
-        draw.text((PAD + 24, base_y - 50), left_label, font=label_font, fill=label_color, anchor="ls")
+        draw.text((start_x, base_y - 46), left_label, font=label_font, fill=label_color, anchor="ls")
         if final_label:
-            draw.text((x, base_y - 50), final_label, font=label_font, fill=label_color, anchor="ls")
+            draw.text((x, base_y - 46), final_label, font=label_font, fill=label_color, anchor="ls")
         return x + width_of(f"Lv {final_value}", final_font)
 
     if has_overload:
         end_x = draw_levels(
-            hero_y + 105, 36, 48, final_with, green, "使用超载", label_color=green
+            hero_y + 90, 34, 40, final_with, green, "使用超载", label_color=green
         )
         chip_w = width_of(f"+{gain_with} 级", chip_font) + 28
         draw.rounded_rectangle(
@@ -2262,17 +2263,17 @@ def render_pass_card(
             f"+{gain_with} 级", font=chip_font, fill=green,
         )
         end_x = draw_levels(
-            hero_y + 190, 24, 30, final_without, cyan, "不使用超载", label_color=MUTED
+            hero_y + 180, 34, 40, final_without, cyan, "不使用超载", label_color=MUTED
         )
         draw.text(
-            (end_x + 12, hero_y + 190), f"+{gain_without} 级",
+            (end_x + 12, hero_y + 180), f"+{gain_without} 级",
             font=label_font, fill=cyan, anchor="ls",
         )
-        note_y = hero_y + 220
+        note_y = hero_y + 225
     else:
-        base_y = hero_y + 125
+        base_y = hero_y + 100
         end_x = draw_levels(
-            base_y, 36, 48, final, gain_color, "当前", "预测等级", gain_color
+            base_y, 34, 40, final, gain_color, "当前", "预测等级", gain_color
         )
         chip_text = f"+{gain} 级" if gain > 0 else "等级不变"
         chip_w = width_of(chip_text, chip_font) + 28
@@ -2285,7 +2286,7 @@ def render_pass_card(
             (W - PAD - 30 - chip_w + 14, base_y - 32),
             chip_text, font=chip_font, fill=gain_color,
         )
-        note_y = hero_y + 148
+        note_y = hero_y + 126
     note = str(view.get("note") or "")
     for line in _wrap(note, small_font, W - 2 * PAD - 60)[:2]:
         draw.text((PAD + 24, note_y), line, font=small_font, fill="#91A8B8")
