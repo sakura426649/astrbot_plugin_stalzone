@@ -1102,6 +1102,24 @@ class ItemIndexTests(unittest.TestCase):
         self.assertEqual(item["id"], "9nd0")
         self.assertIn("电水晶", item["zh"])
 
+    def test_custom_alias_overrides(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as directory:
+            alias_path = Path(directory) / "item_aliases.json"
+            alias_path.write_text(
+                json.dumps({"ljn2": ["冰晶", "Chilly Ice"]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            index = ItemIndex(
+                PLUGIN_ROOT / "item_index.json",
+                aliases_path=alias_path,
+            )
+            item, matches = index.resolve("冰晶")
+            self.assertEqual(item["id"], "ljn2")
+            self.assertEqual(matches[0]["id"], "ljn2")
+            self.assertEqual(index.search("Chilly Ice")[0]["id"], "ljn2")
+
     def test_artifact_additional_stats_are_merged(self):
         item = dict(self.index.get("gyq5"))
         item["cat_label"] = "神器 / 电物理"

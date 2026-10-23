@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.47.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.48.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -143,6 +143,21 @@
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
 | `lunar_enrich` | `true` | 玩家资料追加 Lunar 第三方 K/D、KDA、战斗分；关闭后不请求第三方 |
 | `sc_core_fallback` | `true` | 官方成交历史翻页失效时用 SC CORE 第三方存档补全旧成交；结果会标注来源 |
+
+### 自定义物品别名（无需重建索引）
+
+在 AstrBot 插件数据目录（通常是 `data/plugin_data/astrbot_plugin_stalzone/`）新建 `item_aliases.json`：
+
+```json
+{
+  "wg53": ["核弹", "Atom", "原子弹"],
+  "vjr1n": ["AK74", "AK-74"]
+}
+```
+
+键是物品 ID（用 `/sz 物品 原子` 可看到），值是别名数组。别名不区分大小写，空格和连字符会归一化；保存后在 WebUI 重载插件即可生效。别名只在本机生效，不会修改或重写 `item_index.json`。可参考 [`docs/item_aliases.example.json`](docs/item_aliases.example.json)。
+
+平衡公告、新物品/神器和新图标的维护流程见 [`docs/maintenance.md`](docs/maintenance.md)。
 
 **认证方式**：使用 `Client-Id` + `Client-Secret` 请求头，不需要 OAuth 用户授权。角色列表、好友列表、战队成员列表属于 UserAuth 端点，本插件不提供。
 

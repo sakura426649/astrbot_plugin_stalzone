@@ -111,6 +111,7 @@ class ItemIndex:
         self,
         path: str | Path | None = None,
         overrides_path: str | Path | None = None,
+        aliases_path: str | Path | None = None,
     ) -> None:
         self.path = Path(path) if path else Path(__file__).with_name("item_index.json")
         self.overrides_path = (
@@ -118,10 +119,16 @@ class ItemIndex:
             if overrides_path
             else self.path.with_name("item_name_overrides.json")
         )
+        self.aliases_path = (
+            Path(aliases_path)
+            if aliases_path
+            else self.path.with_name("item_aliases.json")
+        )
         self.items: list[dict[str, Any]] = []
         self.by_id: dict[str, dict[str, Any]] = {}
         self.details: dict[str, Any] = {}
         self._alias_cache: dict[str, tuple[str, ...]] = {}
+        self._alias_overrides: dict[str, list[str]] = {}
         self.generated_at = ""
         self._load_details()
         self._load()
@@ -139,6 +146,43 @@ class ItemIndex:
             if isinstance(name, str) and name.strip()
         }
 
+    def _load_alias_overrides(self) -> dict[str, list[str]]:
+        """Load optional ``{item_id: ["alias", ...]}`` from the data directory."""
+        try:
+            payload = json.loads(self.aliases_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        result: dict[str, list[str]] = {}
+        for raw_id, raw_aliases in payload.items():
+            item_id = str(raw_id).strip()
+            if not item_id:
+                continue
+            values = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
+            if not isinstance(values, list):
+                continue
+            aliases: list[str] = []
+            for value in values:
+                text = str(value or "").strip()
+                if text and len(text) <= 80 and text not in aliases:
+                    aliases.append(text)
+            if aliases:
+                result[item_id] = aliases[:50]
+        return result
+
+    def _merge_aliases(
+        self, item_id: str, aliases: list[str]
+    ) -> tuple[str, ...]:
+        merged = list(aliases)
+        seen = set(merged)
+        for raw in self._alias_overrides.get(item_id, []):
+            normalized = _normalize(raw)
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                merged.append(normalized)
+        return tuple(merged)
+
     def _load(self) -> None:
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
@@ -148,6 +192,7 @@ class ItemIndex:
         if not isinstance(raw_items, list):
             return
         overrides = self._load_overrides()
+        self._alias_overrides = self._load_alias_overrides()
         for raw in raw_items:
             if not isinstance(raw, dict) or not raw.get("id"):
                 continue
@@ -164,7 +209,9 @@ class ItemIndex:
             }
             self.items.append(item)
             self.by_id[item["id"]] = item
-            self._alias_cache[item_id] = tuple(_aliases(item))
+            self._alias_cache[item_id] = self._merge_aliases(
+                item_id, _aliases(item)
+            )
         self.generated_at = str(payload.get("generated_at") or "")
 
     def _load_details(self) -> None:
