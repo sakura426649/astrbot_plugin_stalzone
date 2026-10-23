@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.7 - 2026-10-23
+
+### Fixed
+
+- Section accent bars (简介, 战斗概览, 官方统计, 展示成就) now use the actual font glyph bounding box instead of a fixed vertical offset, so the gold bar aligns with each heading.
+
 ## 1.0.6 - 2026-10-23
 
 ### Changed

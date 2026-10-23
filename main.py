@@ -162,7 +162,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.6"
+PLUGIN_VERSION = "1.0.7"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]

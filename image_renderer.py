@@ -1605,6 +1605,20 @@ def _profile_fact(
     draw.text((x + label_width + 10, y), fitted, font=value_font, fill=TEXT)
 
 
+def _draw_section_heading(draw: Any, x: int, y: int, text: str, fnt: Any, accent: str = ACCENT) -> None:
+    """Draw a section label with the accent aligned to the actual glyph box."""
+    draw.text((x + 12, y), text, font=fnt, fill=TEXT)
+    try:
+        bbox = fnt.getbbox(text)
+        top = y + int(bbox[1])
+        bottom = y + int(bbox[3])
+    except Exception:
+        top, bottom = y + 2, y + 20
+    if bottom - top < 12:
+        top, bottom = y + 2, y + 20
+    draw.rounded_rectangle((x, top, x + 4, bottom), radius=2, fill=accent)
+
+
 def render_profile_card(
     view: dict[str, Any],
     *,
@@ -1798,13 +1812,8 @@ def render_profile_card(
     # Right-hand content column.
     ry = content_y
     if bio_height:
-        draw.rounded_rectangle(
-            (right_x, ry + 2, right_x + 4, ry + 20),
-            radius=2, fill="#FFD166",
-        )
-        draw.text(
-            (right_x + 12, ry), "简介 / STATUS",
-            font=section_font, fill=TEXT,
+        _draw_section_heading(
+            draw, right_x, ry, "简介 / STATUS", section_font, "#FFD166"
         )
         panel_y = ry + 42
         draw.rounded_rectangle(
@@ -1819,8 +1828,9 @@ def render_profile_card(
         ry += 42 + bio_height + 28
 
     section_y = ry
-    draw.rounded_rectangle((right_x, section_y + 2, right_x + 4, section_y + 20), radius=2, fill="#FFD166")
-    draw.text((right_x + 12, section_y), "战斗概览 / COMBAT", font=section_font, fill=TEXT)
+    _draw_section_heading(
+        draw, right_x, section_y, "战斗概览 / COMBAT", section_font, "#FFD166"
+    )
     panel_y = section_y + 40
     draw.rounded_rectangle(
         (right_x, panel_y, right_x + right_w, panel_y + 118),
@@ -1846,8 +1856,9 @@ def render_profile_card(
     ry = panel_y + 118 + 28
 
     section_label_y = ry
-    draw.rounded_rectangle((right_x, section_label_y + 2, right_x + 4, section_label_y + 20), radius=2, fill="#FFD166")
-    draw.text((right_x + 12, section_label_y), "官方统计 / STATISTICS", font=section_font, fill=TEXT)
+    _draw_section_heading(
+        draw, right_x, section_label_y, "官方统计 / STATISTICS", section_font, "#FFD166"
+    )
     stats_y = section_label_y + 42
     col_w = right_w // 2
     for index, row in enumerate(stat_rows):
@@ -1865,8 +1876,9 @@ def render_profile_card(
     ry = stats_y + per_col * 32 + (24 if stat_note else 0) + 28
 
     if achievements:
-        draw.rounded_rectangle((right_x, ry + 2, right_x + 4, ry + 20), radius=2, fill="#FFD166")
-        draw.text((right_x + 12, ry), "展示成就 / ACHIEVEMENTS", font=section_font, fill=TEXT)
+        _draw_section_heading(
+            draw, right_x, ry, "展示成就 / ACHIEVEMENTS", section_font, "#FFD166"
+        )
         ax, ay = right_x, ry + 38
         for item in achievements:
             item = _fit_text(draw, item, label_font, 220)
