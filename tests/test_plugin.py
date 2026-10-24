@@ -14,6 +14,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
 from api_client import (  # noqa: E402
+    ApiHealth,
     AuthenticationError,
     BadRequestError,
     DEMO_BASE_URL,
@@ -22,6 +23,7 @@ from api_client import (  # noqa: E402
     NotFoundError,
     RateLimitError,
     ResponseError,
+    ServerError,
     StalzoneAPIClient,
     normalize_base_url,
 )
@@ -90,6 +92,39 @@ def json_response(payload: dict, status: int = 200) -> httpx.Response:
 
 
 class APIClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_health_opens_circuit_after_repeated_5xx(self):
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return json_response({"title": "down"}, status=503)
+
+        health = ApiHealth()
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://example.test",
+        ) as raw:
+            api = StalzoneAPIClient(
+                "id",
+                "secret",
+                "eu",
+                client=raw,
+                max_retries=0,
+                retry_base_delay=0,
+                health=health,
+            )
+            for _ in range(3):
+                with self.assertRaises(ServerError):
+                    await api.get_regions()
+            with self.assertRaises(ServerError):
+                await api.get_regions()
+        self.assertEqual(calls, 3)
+        snapshot = health.snapshot()
+        self.assertEqual(snapshot["total"], 3)
+        self.assertEqual(snapshot["failures"], 3)
+        self.assertGreater(snapshot["circuit_seconds"], 0)
+
     async def test_success_and_auth_headers(self):
         seen: list[httpx.Request] = []
 
@@ -632,6 +667,42 @@ class FormatterTests(unittest.TestCase):
         self.assertNotIn("在售", text)
         self.assertNotIn("最近成交", text)
 
+    def test_auction_caps_high_volume_rows(self):
+        lots = {
+            "total": 40,
+            "lots": [
+                {
+                    "amount": 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 4},
+                }
+                for i in range(40)
+            ],
+        }
+        history = {
+            "total": 1,
+            "prices": [
+                {
+                    "amount": 1,
+                    "price": 2000,
+                    "time": "2026-10-24T05:00:00Z",
+                    "additional": {"qlt": 4},
+                }
+            ],
+        }
+        view = build_auction_view(
+            "wg53", lots, history, "ru", now=self.NOW, item_label="原子 / Atom"
+        )
+        self.assertIsNotNone(view)
+        self.assertEqual(view["active_total"], 40)
+        self.assertTrue(view["active_truncated"])
+        self.assertEqual(len(view["active"]), 30)
+        text = format_auction_text(view)
+        self.assertIn("共 40 条，显示前 30 条", text)
+        self.assertIn("仅显示 30 / 40 条在售", text)
+
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)
         self.assertIn("未找到相关数据", text)
@@ -680,12 +751,30 @@ class FormatterTests(unittest.TestCase):
                 "cache_entries": 3,
                 "cache_hits": 8,
                 "cache_misses": 2,
+                "api_requests": 10,
+                "api_successes": 8,
+                "api_failures": 2,
+                "api_last_status": 503,
+                "api_last_latency": 1200,
+                "api_avg_latency": 640,
+                "api_last_path": "/eu/emission",
+                "api_last_error": "HTTP 503: down",
+                "api_circuit_seconds": 12,
+                "auto_status": "已启用",
+                "auto_window": "2–4 小时窗口内",
+                "auto_whitelist": 2,
+                "auto_targets": 2,
+                "auto_last_check": "10-24 12:00",
+                "auto_last_send": "成功 2 / 失败 0 · 10-24 12:00",
+                "auto_last_error": "—",
             }
         )
         self.assertIn("STALZONE · 运行诊断", text)
         self.assertIn("插件 9.9.9", text)
         self.assertIn("物品索引：2,615 件", text)
         self.assertIn("缓存命中率：80%", text)
+        self.assertIn("请求 / 失败：10 / 2", text)
+        self.assertIn("自动提醒", text)
 
     def test_emission_view_active_and_idle(self):
         self.assertEqual(format_elapsed_hms(3661), "1小时01分01秒")

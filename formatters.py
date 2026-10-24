@@ -835,6 +835,22 @@ def build_auction_view(
                     row["lowest_label"] = "最低单价"
                     break
 
+    active_total = len(active)
+    active_truncated = active_total > MAX_AUCTION_ACTIVE_ROWS
+    if active_truncated:
+        shown = active[:MAX_AUCTION_ACTIVE_ROWS]
+        if non_artifact:
+            lowest = next((row for row in active if row.get("lowest")), None)
+            if lowest is not None and lowest not in shown:
+                shown[-1] = lowest
+        else:
+            cheapest = min(active, key=lambda row: row.get("sort_price") or 0)
+            if cheapest not in shown:
+                shown[-1] = cheapest
+        active = sorted(
+            shown, key=lambda row: row["sort_price"], reverse=True
+        )
+
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
         quality = None if non_artifact else _quality_of(entry)
@@ -943,6 +959,8 @@ def build_auction_view(
         "quality_filter": quality_filter,
         "quality_filter_label": quality_label(quality_filter) if quality_filter is not None else None,
         "active": active,
+        "active_total": active_total,
+        "active_truncated": active_truncated,
         "recent_groups": groups,
         "recent_limit": limit,
         "recent_total_limit": total_limit,
@@ -1038,7 +1056,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
         if is_non_artifact:
             lines.append("  名称  成交价  单价  时间")
     else:
-        lines.extend(["", "在售（按买断价从高到低）"])
+        active_heading = "在售（按买断价从高到低）"
+        if view.get("active_truncated"):
+            active_heading += (
+                f"｜共 {view['active_total']:,} 条，显示前 {len(view['active'])} 条"
+            )
+        lines.extend(["", active_heading])
         if view["active"]:
             if is_non_artifact:
                 lines.append("  名称  起拍  买断  单价  剩余时间")
@@ -1056,6 +1079,10 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                     )
         else:
             lines.append("当前无在售")
+        if view.get("active_truncated"):
+            lines.append(
+                f"仅显示 {len(view['active'])} / {view['active_total']:,} 条在售；可用品质或日期缩小范围"
+            )
         if view.get("recent_total_limit") is not None:
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"
@@ -1296,6 +1323,8 @@ def format_emission(
         view["footer"],
     )
 
+
+MAX_AUCTION_ACTIVE_ROWS = 30
 
 STAT_PRIORITY = [
     "level",
@@ -2221,6 +2250,21 @@ def build_diag_view(
     data_dir_ok = bool(info.get("data_dir_ok"))
     http = str(info.get("http") or "未建立")
     uptime = _diag_uptime(info.get("uptime_seconds"))
+    api_requests = int(info.get("api_requests") or 0)
+    api_failures = int(info.get("api_failures") or 0)
+    api_last_status = info.get("api_last_status")
+    api_last_latency = info.get("api_last_latency")
+    api_avg_latency = info.get("api_avg_latency")
+    api_last_path = str(info.get("api_last_path") or "—")
+    api_last_error = str(info.get("api_last_error") or "—")
+    api_circuit = int(info.get("api_circuit_seconds") or 0)
+    auto_status = str(info.get("auto_status") or "—")
+    auto_window = str(info.get("auto_window") or "—")
+    auto_whitelist = int(info.get("auto_whitelist") or 0)
+    auto_targets = int(info.get("auto_targets") or 0)
+    auto_last_check = str(info.get("auto_last_check") or "—")
+    auto_last_send = str(info.get("auto_last_send") or "—")
+    auto_last_error = str(info.get("auto_last_error") or "—")
 
     def yes_no(value: Any) -> str:
         if value is True:
@@ -2249,6 +2293,24 @@ def build_diag_view(
         ("Lunar 补充", yes_no(info.get("lunar_enrich"))),
         ("SC CORE 兜底", yes_no(info.get("sc_core_fallback"))),
         ("群冷却", f"{info.get('cooldown', 1.0)}s"),
+        ("请求 / 失败", f"{api_requests:,} / {api_failures:,}"),
+        (
+            "最近响应",
+            f"{api_last_status if api_last_status is not None else '—'} · "
+            f"{api_last_latency if api_last_latency is not None else '—'}ms"
+            f"｜均 {api_avg_latency if api_avg_latency is not None else '—'}ms",
+        ),
+        ("最近接口", api_last_path),
+        ("熔断", f"开启 · 剩余 {api_circuit}s" if api_circuit else "关闭"),
+        ("最近错误", api_last_error),
+    ]
+    auto_rows = [
+        ("状态", auto_status),
+        ("收件群", f"白名单 {auto_whitelist} · 目标 {auto_targets}"),
+        ("检查窗口", auto_window),
+        ("最近检查", auto_last_check),
+        ("最近群发", auto_last_send),
+        ("最近错误", auto_last_error),
     ]
     data_rows = [
         ("物品索引", f"{items:,} 件"),
@@ -2285,11 +2347,20 @@ def build_diag_view(
         ("CJK 字体", "ok" if font_ready else "bad", font),
         ("Pillow", "ok" if pillow != "未安装" else "bad", pillow),
         ("数据目录", "ok" if data_dir_ok else "bad", "可写" if data_dir_ok else "不可写"),
+        (
+            "API",
+            "bad" if api_circuit else (
+                "warn" if api_last_error not in {"", "—"} else "ok"
+            ),
+            f"熔断 {api_circuit}s" if api_circuit else f"失败 {api_failures}",
+        ),
     ]
     summary_lines = [
         f"核心数据：物品 {items:,} 件 / 详情 {details:,} 件 / 图标 {int(info.get('item_icon_files') or 0):,} 个",
         f"凭证：{credentials}｜HTTP 连接池：{http}",
         f"字体：{font if font_ready else '不可用'}｜Pillow：{pillow}",
+        f"API：最近 {api_last_status if api_last_status is not None else '—'}"
+        f" · 失败 {api_failures}｜自动提醒：{auto_status}（目标 {auto_targets}）",
     ]
     if credentials != "已配置":
         summary_lines.append("配置 Client-Id / Client-Secret 后可执行实时查询。")
@@ -2309,6 +2380,7 @@ def build_diag_view(
         {"title": "数据资产", "subtitle": "DATA", "column": 1, "rows": data_rows},
         {"title": "缓存与队列", "subtitle": "CACHE", "column": 1, "rows": cache_rows},
         {"title": "存储与渲染", "subtitle": "STORAGE", "column": 1, "rows": storage_rows},
+        {"title": "自动提醒", "subtitle": "AUTOMATION", "column": 1, "rows": auto_rows},
     ]
     return {
         "version": version,

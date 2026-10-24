@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.0 - 2026-10-24
+
+### Added
+
+- API health tracking with request totals, failures, last status/path/latency, average latency and the last error. Repeated 5xx/network failures open a 30-second circuit breaker so commands fail fast instead of hammering the official API.
+- `/sz diag` now shows API health, circuit state, last response, automatic-alert status/window, whitelist recipient count and the latest broadcast result.
+- Windows visual-regression snapshots for 10 main cards (profile, auction, candidate, notice, diag, pass, emission, automatic alert, item and help). Baselines can be regenerated with `tools/build_visual_baselines.py`.
+- High-volume auction results are capped at the first 30 active lots with a total-count note (the cheapest/lowest-unit row is kept), preventing multi-thousand-pixel cards and extremely long text output.
+
+### Changed
+
+- API failure logs now include the request path, status and latency; retries are still limited to two with backoff.
+
+### Tests
+
+- Added circuit-breaker, diagnostics and visual-signature coverage; 180 tests and 10 visual signatures pass.
+
 ## 1.0.42 - 2026-10-24
 
 ### Changed

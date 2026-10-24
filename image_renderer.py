@@ -3051,6 +3051,8 @@ def render_auction_card(
         height = header_h + 32 + history_header_h + groups_h + tail_h
     else:
         active_h = max(1, len(active)) * line_h + 30
+        if view.get("active_truncated"):
+            active_h += 24
         recent_h = 36 + history_header_h + groups_h
         height = header_h + active_h + 35 + recent_h + tail_h
     height = max(460, min(height, 8000 if history_only else 6000))
@@ -3159,6 +3161,14 @@ def render_auction_card(
         else:
             draw.text((left, y), "当前无在售", font=body_font, fill=MUTED)
             y += line_h
+        if view.get("active_truncated"):
+            draw.text(
+                (left, y),
+                f"仅显示 {len(active)} / {int(view.get('active_total') or 0):,} 条在售；可用品质或日期缩小范围",
+                font=small_font,
+                fill=MUTED,
+            )
+            y += 24
         y += 18
         draw.line((PAD, y, width - PAD, y), fill=BORDER, width=1)
         y += 18

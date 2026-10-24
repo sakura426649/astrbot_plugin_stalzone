@@ -15,8 +15,11 @@ Design notes
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import re
+import time
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
@@ -29,9 +32,96 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 0.5
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/1.0.42"
+USER_AGENT = "astrbot-plugin-stalzone/1.1.0"
+
+logger = logging.getLogger("astrbot_plugin_stalzone")
 
 _ITEM_ID_RE = re.compile(r"^[^\x00-\x1f/\\]{1,128}$")
+
+
+@dataclass
+class ApiHealth:
+    """Shared request health and a small circuit breaker for the official API."""
+
+    total_requests: int = 0
+    successes: int = 0
+    failures: int = 0
+    consecutive_failures: int = 0
+    circuit_open_until: float = 0.0
+    last_path: str = ""
+    last_status: int | None = None
+    last_latency_ms: int | None = None
+    last_error: str = ""
+    last_ok_at: str = ""
+    last_error_at: str = ""
+    latency_total_ms: float = 0.0
+    latency_samples: int = 0
+
+    def before_request(self, path: str) -> None:
+        remaining = self.circuit_open_until - time.monotonic()
+        if remaining > 0:
+            raise ServerError(
+                f"Circuit open for {path}; retry in {remaining:.0f}s"
+            )
+
+    def record_success(self, path: str, status: int, latency_ms: int) -> None:
+        self.total_requests += 1
+        self.successes += 1
+        self.consecutive_failures = 0
+        self.circuit_open_until = 0.0
+        self.last_path = path
+        self.last_status = status
+        self.last_latency_ms = latency_ms
+        self.last_error = ""
+        self.last_ok_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.latency_total_ms += latency_ms
+        self.latency_samples += 1
+
+    def record_failure(
+        self,
+        path: str,
+        status: int | None,
+        latency_ms: int,
+        error: str,
+        *,
+        trip: bool,
+    ) -> None:
+        self.total_requests += 1
+        self.failures += 1
+        self.last_path = path
+        self.last_status = status
+        self.last_latency_ms = latency_ms
+        self.last_error = str(error or "unknown error")[:240]
+        self.last_error_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.latency_total_ms += latency_ms
+        self.latency_samples += 1
+        if not trip:
+            return
+        self.consecutive_failures += 1
+        if self.consecutive_failures >= 3:
+            self.circuit_open_until = time.monotonic() + 30.0
+            self.consecutive_failures = 0
+
+    def snapshot(self) -> dict[str, Any]:
+        remaining = max(0.0, self.circuit_open_until - time.monotonic())
+        average = (
+            self.latency_total_ms / self.latency_samples
+            if self.latency_samples
+            else None
+        )
+        return {
+            "total": self.total_requests,
+            "successes": self.successes,
+            "failures": self.failures,
+            "last_path": self.last_path,
+            "last_status": self.last_status,
+            "last_latency_ms": self.last_latency_ms,
+            "last_error": self.last_error,
+            "last_ok_at": self.last_ok_at,
+            "last_error_at": self.last_error_at,
+            "avg_latency_ms": round(average) if average is not None else None,
+            "circuit_seconds": int(remaining + 0.999) if remaining else 0,
+        }
 
 
 class StalzoneAPIError(Exception):
@@ -118,6 +208,7 @@ class StalzoneAPIClient:
         client: httpx.AsyncClient | None = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
+        health: ApiHealth | None = None,
     ) -> None:
         self.client_id = str(client_id or "").strip()
         self.client_secret = str(client_secret or "").strip()
@@ -129,6 +220,7 @@ class StalzoneAPIClient:
         self.timeout = timeout
         self.max_retries = max(0, min(int(max_retries), 5))
         self.retry_base_delay = max(0.0, float(retry_base_delay))
+        self.health = health
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             base_url=self.base_url,
@@ -179,8 +271,11 @@ class StalzoneAPIClient:
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         attempts = self.max_retries + 1
         response: httpx.Response | None = None
+        started = time.monotonic()
 
         for attempt in range(attempts):
+            if self.health is not None:
+                self.health.before_request(path)
             try:
                 response = await self._client.get(
                     path,
@@ -191,11 +286,34 @@ class StalzoneAPIClient:
                 if attempt + 1 < attempts:
                     await self._retry_delay(attempt, None)
                     continue
+                latency = int((time.monotonic() - started) * 1000)
+                if self.health is not None:
+                    self.health.record_failure(
+                        path, None, latency, str(exc), trip=True
+                    )
+                logger.warning(
+                    "STALZONE API timeout path=%s attempts=%d latency=%dms",
+                    path,
+                    attempts,
+                    latency,
+                )
                 raise NetworkError(f"Request timed out: {path}") from exc
             except httpx.RequestError as exc:
                 if attempt + 1 < attempts:
                     await self._retry_delay(attempt, None)
                     continue
+                latency = int((time.monotonic() - started) * 1000)
+                if self.health is not None:
+                    self.health.record_failure(
+                        path, None, latency, str(exc), trip=True
+                    )
+                logger.warning(
+                    "STALZONE API network failure path=%s attempts=%d latency=%dms error=%r",
+                    path,
+                    attempts,
+                    latency,
+                    exc,
+                )
                 raise NetworkError(f"Request failed: {path}: {exc!r}") from exc
 
             if (
@@ -206,28 +324,69 @@ class StalzoneAPIClient:
                 continue
             break
 
+        latency = int((time.monotonic() - started) * 1000)
         if response is None:
+            if self.health is not None:
+                self.health.record_failure(
+                    path, None, latency, "No response", trip=True
+                )
             raise NetworkError(f"Request failed: {path}")
 
         if response.status_code == 200:
             try:
-                return response.json()
+                payload = response.json()
             except ValueError as exc:
+                if self.health is not None:
+                    self.health.record_failure(
+                        path, 200, latency, "Non-JSON response", trip=False
+                    )
+                logger.warning(
+                    "STALZONE API non-JSON path=%s status=200 latency=%dms",
+                    path,
+                    latency,
+                )
                 raise ResponseError(f"Non-JSON response from {path}") from exc
+            if self.health is not None:
+                self.health.record_success(path, 200, latency)
+            logger.debug(
+                "STALZONE API ok path=%s status=200 latency=%dms", path, latency
+            )
+            return payload
 
         detail = self._error_detail(response)
         status = response.status_code
         if status in (400, 422):
-            raise BadRequestError(f"HTTP {status}: {detail}", status_code=status)
-        if status == 401 or status == 403:
-            raise AuthenticationError(f"HTTP {status}: {detail}", status_code=status)
-        if status == 404:
-            raise NotFoundError(f"HTTP 404: {detail}", status_code=status)
-        if status == 429:
-            raise RateLimitError(f"HTTP 429: {detail}", status_code=status)
-        if status >= 500:
-            raise ServerError(f"HTTP {status}: {detail}", status_code=status)
-        raise StalzoneAPIError(f"HTTP {status}: {detail}", status_code=status)
+            error: StalzoneAPIError = BadRequestError(
+                f"HTTP {status}: {detail}", status_code=status
+            )
+        elif status == 401 or status == 403:
+            error = AuthenticationError(
+                f"HTTP {status}: {detail}", status_code=status
+            )
+        elif status == 404:
+            error = NotFoundError(f"HTTP 404: {detail}", status_code=status)
+        elif status == 429:
+            error = RateLimitError(f"HTTP 429: {detail}", status_code=status)
+        elif status >= 500:
+            error = ServerError(f"HTTP {status}: {detail}", status_code=status)
+        else:
+            error = StalzoneAPIError(f"HTTP {status}: {detail}", status_code=status)
+        if self.health is not None:
+            self.health.record_failure(
+                path,
+                status,
+                latency,
+                detail,
+                trip=status >= 500,
+            )
+        logger.warning(
+            "STALZONE API failure path=%s status=%s latency=%dms detail=%s",
+            path,
+            status,
+            latency,
+            detail,
+        )
+        raise error
 
     # ------------------------------------------------------------- validation
     @staticmethod

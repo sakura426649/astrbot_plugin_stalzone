@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.42-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -72,7 +72,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | `/sz clans [page]` | Clan list |
 | `/sz operations [map]` | Recent operation sessions |
 | `/sz regions` | Official region list |
-| `/sz diag` / `/sz 状态` | Runtime, API, data, cache, storage and render status (no secrets) |
+| `/sz diag` / `/sz 状态` | Runtime, API health/circuit breaker, auto-alert status, data, cache, storage and render status (no secrets) |
 | `/sz help` | Image help menu |
 
 The leading slash is optional, but a space is required after `sz`: `sz auction Atom` works, plain `sz` does not. All displayed times use UTC+8.
@@ -131,7 +131,7 @@ coverage run --source=. --omit="tests/*" -m unittest discover -s tests
 coverage report
 ```
 
-Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. CI runs on Windows/Linux and Python 3.10/3.12.
+Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 10 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
 
 The default branch is `master`; pull requests target `master`.
 

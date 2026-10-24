@@ -49,6 +49,7 @@ try:  # Package import (normal AstrBot plugin loading).
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        ApiHealth,
         BadRequestError,
         NotFoundError,
         StalzoneAPIClient,
@@ -123,6 +124,7 @@ except ImportError:  # Direct execution / flat import fallback.
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        ApiHealth,
         BadRequestError,
         NotFoundError,
         StalzoneAPIClient,
@@ -194,7 +196,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.42"
+PLUGIN_VERSION = "1.1.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
@@ -317,6 +319,7 @@ class StalzonePlugin(Star):
         self._api_cache_hits = 0
         self._api_cache_misses = 0
         self._api_semaphore: asyncio.Semaphore | None = None
+        self._api_health = ApiHealth()
         self._last_command_at: dict[str, float] = {}
         self._started_at = time.monotonic()
         data_dir = self._cache_dir()
@@ -383,6 +386,7 @@ class StalzonePlugin(Star):
             region=region or self._region(),
             base_url=self._api_base(),
             client=self._shared_http_client(),
+            health=self._api_health,
         )
 
     def _render_mode(self) -> str:
@@ -519,6 +523,61 @@ class StalzonePlugin(Star):
         if changed:
             self._save_auto_state()
 
+    def _auto_diag(self) -> dict[str, Any]:
+        state = self._auto_state
+        whitelist = self._group_values("emission_group_whitelist")
+        enabled = self._auto_notify_enabled()
+        targets = self._notify_targets() if enabled and whitelist else []
+        if not enabled:
+            status = "关闭"
+        elif not whitelist:
+            status = "未配置白名单"
+        else:
+            status = "已启用"
+        previous_end = parse_auction_time(state.get("last_previous_end"))
+        now = datetime.now(timezone.utc)
+        if not whitelist:
+            window = "不轮询"
+        elif state.get("active"):
+            window = "风暴进行中"
+        elif previous_end is None:
+            window = "等待探测"
+        else:
+            elapsed = (now - previous_end).total_seconds()
+            if elapsed < 2 * 3600:
+                window = f"等待窗口（约 {int((2 * 3600 - elapsed) // 60)} 分钟后）"
+            elif elapsed < 4 * 3600 + 90:
+                window = "2–4 小时窗口内"
+            else:
+                window = "等待下一场风暴"
+
+        def stamp(value: Any) -> str:
+            try:
+                moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                if moment.tzinfo is None:
+                    moment = moment.replace(tzinfo=timezone.utc)
+                return moment.astimezone(CST).strftime("%m-%d %H:%M")
+            except (TypeError, ValueError):
+                return "—"
+
+        sent = state.get("last_send_success")
+        failed = state.get("last_send_failed")
+        last_send = (
+            f"成功 {int(sent or 0)} / 失败 {int(failed or 0)}"
+            f" · {stamp(state.get('last_send_at'))}"
+            if state.get("last_send_at")
+            else "—"
+        )
+        return {
+            "auto_status": status,
+            "auto_window": window,
+            "auto_whitelist": len(whitelist),
+            "auto_targets": len(targets),
+            "auto_last_check": stamp(state.get("last_check_at")),
+            "auto_last_send": last_send,
+            "auto_last_error": str(state.get("last_error") or "—")[:160],
+        }
+
     async def _emission_auto_loop(self) -> None:
         force = True
         while True:
@@ -527,8 +586,18 @@ class StalzonePlugin(Star):
                     force = False
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 logger.exception("STALZONE automatic emission check failed")
+                self._auto_state["last_error"] = (
+                    f"{type(exc).__name__}: {exc}"
+                )[:240]
+                self._auto_state["last_error_at"] = datetime.now(
+                    timezone.utc
+                ).isoformat()
+                self._auto_state["last_check_at"] = datetime.now(
+                    timezone.utc
+                ).isoformat()
+                self._save_auto_state()
             try:
                 await asyncio.sleep(60)
             except asyncio.CancelledError:
@@ -563,6 +632,9 @@ class StalzonePlugin(Star):
             and previous_end is None
         ):
             return False
+        state["last_check_at"] = now.isoformat()
+        state["last_error"] = ""
+        state["last_error_at"] = ""
         if payload_previous_end is not None:
             state["last_previous_end"] = payload_previous_end.isoformat()
         state["region"] = region.lower()
@@ -602,6 +674,9 @@ class StalzonePlugin(Star):
         pending = [target for target in targets if target not in already]
         if pending:
             sent, failed = await self._send_emission_alert(payload, region, pending)
+            state["last_send_at"] = now.isoformat()
+            state["last_send_success"] = len(sent)
+            state["last_send_failed"] = len(failed)
             if sent:
                 state["notified_targets"] = list(
                     dict.fromkeys([*already, *sent])
@@ -2267,6 +2342,8 @@ class StalzonePlugin(Star):
             {str(item.get("cat") or "") for item in self.item_index.items}
         )
         aliases = sum(len(values) for values in self.item_index._alias_cache.values())
+        api_health = self._api_health.snapshot()
+        auto = self._auto_diag()
         info = {
             "version": PLUGIN_VERSION,
             "system": platform.system(),
@@ -2321,6 +2398,18 @@ class StalzonePlugin(Star):
             "timeout": DEFAULT_TIMEOUT_SECONDS,
             "retries": DEFAULT_MAX_RETRIES,
             "retry_base": DEFAULT_RETRY_BASE_DELAY,
+            "api_requests": api_health["total"],
+            "api_successes": api_health["successes"],
+            "api_failures": api_health["failures"],
+            "api_last_path": api_health["last_path"],
+            "api_last_status": api_health["last_status"],
+            "api_last_latency": api_health["last_latency_ms"],
+            "api_avg_latency": api_health["avg_latency_ms"],
+            "api_last_error": api_health["last_error"],
+            "api_last_error_at": api_health["last_error_at"],
+            "api_last_ok_at": api_health["last_ok_at"],
+            "api_circuit_seconds": api_health["circuit_seconds"],
+            **auto,
         }
         view = build_diag_view(info)
         return PluginReply(
