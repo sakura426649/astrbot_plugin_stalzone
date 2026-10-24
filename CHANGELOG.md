@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.25 - 2026-10-24
+
+### Fixed
+
+- The signature and the `更多功能` hint now stay inside the rounded card border; the signature clamp reserves the 12px border inset plus a small margin, and auction cards keep enough bottom space for the shared baseline.
+
+### Tests
+
+- Regenerated the 12 Windows visual signatures; 187 tests pass.
+
 ## 1.1.24 - 2026-10-24
 
 ### Changed

@@ -1602,7 +1602,9 @@ def _draw_signature(
     if ImageFont is None:
         return y
     if max_bottom is not None:
-        y = max(0, min(y, int(max_bottom) - SIGNATURE_HEIGHT - 4))
+        # Keep the signature and the shared-baseline tip inside the rounded
+        # border (inset 12px) with a small visible margin.
+        y = max(0, min(y, int(max_bottom) - SIGNATURE_HEIGHT - 16))
     art_path = _find_artist_font(font_path)
     name_path = find_cjk_font(str(font_path) if font_path else None)
     if art_path is None and name_path is None:
@@ -3066,7 +3068,7 @@ def render_auction_card(
     history_header_h = 28 if non_artifact else 0
     # Keep the footer tight: the old 84px tail left a visible empty strip
     # below the signature.
-    tail_h = SIGNATURE_HEIGHT + (80 if history_only else 59)
+    tail_h = SIGNATURE_HEIGHT + (92 if history_only else 71)
     if history_only:
         height = header_h + 32 + history_header_h + groups_h + tail_h
     else:
