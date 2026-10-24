@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_ZIP = "astrbot_plugin_stalzone.zip"
 ICON_ZIP = "stalzone_icons_full.zip"
+FULL_PLUGIN_ZIP = "astrbot_plugin_stalzone_full.zip"
 MAX_PLUGIN_BYTES = 16 * 1024 * 1024
 
 # Weapons, ammo, armor, artefacts, containers, devices and backpacks are the
@@ -81,17 +82,31 @@ def _package_files(outputs: set[Path]):
             continue
         if any(part in {"__pycache__", ".pytest_cache"} for part in relative.parts):
             continue
-        if path.suffix == ".pyc" or path.name in {PLUGIN_ZIP, ICON_ZIP, "SHA256SUMS"}:
+        if path.suffix == ".pyc" or path.name in {
+            PLUGIN_ZIP,
+            FULL_PLUGIN_ZIP,
+            ICON_ZIP,
+            "SHA256SUMS",
+        }:
             continue
         if path.name == ".coverage":
             continue
         yield path, relative
 
 
-def _write_plugin_zip(output: Path, base_ids: list[str]) -> None:
+def _write_plugin_zip(
+    output: Path,
+    base_ids: list[str],
+    *,
+    full_icon_dir: Path | None = None,
+) -> None:
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path, relative in _package_files({output.resolve()}):
             archive.write(path, f"{PLUGIN_NAME}/{relative.as_posix()}")
+        if full_icon_dir is not None:
+            for icon in sorted(full_icon_dir.glob("*.png")):
+                archive.write(icon, f"{PLUGIN_NAME}/item_icons/{icon.name}")
+            return
         for item_id in base_ids:
             icon = ROOT / "item_icons" / f"{item_id}.png"
             archive.write(icon, f"{PLUGIN_NAME}/item_icons/{icon.name}")
@@ -131,22 +146,39 @@ def main() -> int:
         action="store_true",
         help="also build the optional full icon pack zip",
     )
+    parser.add_argument(
+        "--full-icon-source",
+        help="directory containing all item_icons PNGs for the full GitHub build",
+    )
     args = parser.parse_args()
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     plugin_zip = output_dir / PLUGIN_ZIP
     icon_zip = output_dir / ICON_ZIP
+    full_plugin_zip = output_dir / FULL_PLUGIN_ZIP
     base_ids = _base_icon_ids()
     _write_plugin_zip(plugin_zip, base_ids)
     if args.with_icon_pack:
         _write_icon_zip(icon_zip)
     size = plugin_zip.stat().st_size
     checksums = [f"{_sha256(plugin_zip)}  {PLUGIN_ZIP}"]
+    if args.full_icon_source:
+        full_icon_dir = Path(args.full_icon_source).resolve()
+        if not full_icon_dir.is_dir():
+            print(f"ERROR: full icon directory not found: {full_icon_dir}")
+            return 1
+        _write_plugin_zip(full_plugin_zip, base_ids, full_icon_dir=full_icon_dir)
+        checksums.append(f"{_sha256(full_plugin_zip)}  {FULL_PLUGIN_ZIP}")
     if args.with_icon_pack:
         checksums.append(f"{_sha256(icon_zip)}  {ICON_ZIP}")
     (output_dir / "SHA256SUMS").write_text("\n".join(checksums) + "\n", encoding="utf-8")
     print(f"base icons: {len(base_ids)}")
     print(f"plugin zip: {size / 1024 / 1024:.2f} MiB -> {plugin_zip}")
+    if args.full_icon_source:
+        print(
+            f"full zip  : {full_plugin_zip.stat().st_size / 1024 / 1024:.2f} MiB "
+            f"-> {full_plugin_zip}"
+        )
     if args.with_icon_pack:
         print(f"icon pack : {icon_zip.stat().st_size / 1024 / 1024:.2f} MiB -> {icon_zip}")
     if size > MAX_PLUGIN_BYTES:

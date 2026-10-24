@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -41,8 +41,8 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 ## Quick start
 
 1. Install the plugin in AstrBot:
-   - download `astrbot_plugin_stalzone.zip` from the [latest release](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest) (under 16 MiB), or
-   - place the `astrbot_plugin_stalzone/` directory under `data/plugins/` for source installs.
+   - **GitHub users** download [`astrbot_plugin_stalzone_full.zip`](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/astrbot_plugin_stalzone_full.zip) (all 2,600 icons) and import it;
+   - **Marketplace users** use the small `astrbot_plugin_stalzone.zip` (under 16 MiB, 826 common icons).
 2. Get a `Client-Id` and `Client-Secret` from the [STALZONE API application page](https://eapi.stalzone.com/registration.html).
 3. Configure the credentials and set `region` to your server (`eu`, `ru`, `na` or `sea`).
 4. Reload/restart AstrBot and try:

@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -77,9 +77,9 @@
 
 ## 快速开始
 
-1. 在 AstrBot WebUI 的插件页安装本插件：
-   - 从 [最新 Release](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest) 下载 `astrbot_plugin_stalzone.zip`（16 MiB 内，含常用图标），在插件页导入；
-   - 或把 `astrbot_plugin_stalzone/` 目录放到 `data/plugins/`（开发/源码安装）。
+1. 安装本插件：
+   - **GitHub 用户**：从 [最新 Release](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest) 下载 [`astrbot_plugin_stalzone_full.zip`](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/astrbot_plugin_stalzone_full.zip)（含全部 2,600 个图标），直接导入插件页；
+   - **插件市场用户**：使用市场内的小包 `astrbot_plugin_stalzone.zip`（16 MiB 内，826 个常用图标）。
 2. 在 [STALZONE API 应用管理](https://eapi.stalzone.com/registration.html) 获取 `Client-Id` 与 `Client-Secret`。
 3. 进入插件配置，填写凭证，并把 `region` 设为你的群所在区服（EU 群填 `eu`）。
 4. 保存并重启/重载 AstrBot，在群里发送：
@@ -215,7 +215,9 @@ pip install -r requirements.txt
 
 ### 图标扩展（可选）
 
-发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**放在独立的 [`icons-full` 分支](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/icons-full/item_icons)：
+如果是从 GitHub 安装，直接下载 [`astrbot_plugin_stalzone_full.zip`](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/astrbot_plugin_stalzone_full.zip) 即可，已经包含全部 2,600 个图标。
+
+插件市场的小包只内置 **826 个常用物品图标**，避免超过市场的 16 MiB 限制。使用小包又想要完整图标时，可以从独立的 [`icons-full` 分支](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/icons-full/item_icons) 下载：
 
 1. 打开 [`item_icons/` 文件夹](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/icons-full/item_icons)，或直接下载 [icons-full 分支 ZIP](https://github.com/sakura426649/astrbot_plugin_stalzone/archive/refs/heads/icons-full.zip)；
 2. 解压后只取 `astrbot_plugin_stalzone-icons-full/item_icons/`；

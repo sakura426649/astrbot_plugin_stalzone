@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.8 - 2026-10-24
+
+### Added
+
+- GitHub releases now publish two zips: the marketplace-safe `astrbot_plugin_stalzone.zip` with 826 common icons, and `astrbot_plugin_stalzone_full.zip` with all 2,600 icons for GitHub/source users.
+- The full zip is built in CI from the current master code plus the `icons-full` branch's icon set, so GitHub users can install the complete version in one step without a separate icon pack.
+
+### Tests
+
+- Both zips are generated and size-checked; 181 tests and 10 visual signatures pass.
+
 ## 1.1.7 - 2026-10-24
 
 ### Fixed
