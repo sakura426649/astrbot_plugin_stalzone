@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.17 - 2026-10-24
+
+### Changed
+
+- Non-stackable non-artifact auction rows (guns, equipment, detectors, etc.) no longer show a unit-price column; they show start and buyout prices only.
+- The quantity table moves the unit-price column closer to the total, removing the wide empty middle.
+- Restored the `名称 / 成交价 / 单价 / 时间` header for the recent-trades table in the quantity card.
+
+### Tests
+
+- Updated non-stackable table/header coverage; 185 tests and 11 visual signatures pass.
+
 ## 1.1.16 - 2026-10-24
 
 ### Changed

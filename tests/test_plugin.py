@@ -450,13 +450,12 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(marked[0]["price"], "1,000")
         self.assertEqual(view["active"][0]["color"], "#E7EDF5")
         self.assertEqual(view["active"][0]["buyout"], "300")
-        self.assertEqual(view["active"][1]["unit_price"], "200")
-        self.assertTrue(view["active"][1]["lowest"])
+        self.assertEqual(view["active"][0]["start"], "300")
         text = format_auction_text(view)
         self.assertIn("最近成交（最多 10 条，按时间倒序）", text)
         self.assertIn("高级账户 180天", text)
-        self.assertIn("单价  剩余", text)
-        self.assertIn("[最低单价]", text)
+        self.assertIn("名称  起拍  买断  剩余时间", text)
+        self.assertNotIn("名称  起拍  买断  单价", text)
 
     def test_non_artifact_stacked_unit_price(self):
         lots = {

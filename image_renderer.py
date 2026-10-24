@@ -2781,7 +2781,7 @@ def _render_quantity_auction_card(
         for group in (view.get("recent_groups") or [])
         if isinstance(group, dict)
     ]
-    recent_h = 42 + sum(
+    recent_h = 42 + (24 if recent_groups else 0) + sum(
         24 + len(group.get("rows") or []) * 26
         for group in recent_groups
     )
@@ -2840,14 +2840,14 @@ def _render_quantity_auction_card(
             (x + col_w, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
         )
         draw.text(
-            (x + int(col_w * 0.86), y),
+            (x + int(col_w * 0.90), y),
             "总价",
             font=head_font,
             fill=MUTED,
             anchor="ra",
         )
         draw.text(
-            (x + int(col_w * 0.48), y),
+            (x + int(col_w * 0.64), y),
             "单价",
             font=head_font,
             fill=MUTED,
@@ -2864,7 +2864,7 @@ def _render_quantity_auction_card(
                 draw,
                 display_name,
                 body_font,
-                int(col_w * 0.34) - 10,
+                int(col_w * 0.42) - 10,
             )
             draw.text(
                 (x, ry),
@@ -2873,7 +2873,7 @@ def _render_quantity_auction_card(
                 fill=str(row.get("color") or TEXT),
             )
             draw.text(
-                (x + int(col_w * 0.48), ry),
+                (x + int(col_w * 0.64), ry),
                 str(row.get("unit_price") or "\\"),
                 font=body_font,
                 fill=TEXT,
@@ -2884,15 +2884,15 @@ def _render_quantity_auction_card(
             )
             if row.get("offer_kind") == "auction":
                 draw.text(
-                    (x + int(col_w * 0.48) + 8, ry),
-                    _fit_text(draw, total_text, small_font, int(col_w * 0.38)),
+                    (x + int(col_w * 0.64) + 8, ry),
+                    _fit_text(draw, total_text, small_font, int(col_w * 0.26)),
                     font=small_font,
                     fill=TEXT,
                 )
             else:
                 draw.text(
-                    (x + int(col_w * 0.86), ry),
-                    _fit_text(draw, total_text, small_font, int(col_w * 0.34)),
+                    (x + int(col_w * 0.90), ry),
+                    _fit_text(draw, total_text, small_font, int(col_w * 0.32)),
                     font=small_font,
                     fill=TEXT,
                     anchor="ra",
@@ -2920,6 +2920,29 @@ def _render_quantity_auction_card(
     draw.text((pad, ry), recent_heading, font=head_font, fill=ACCENT)
     ry += 28
     if recent_groups:
+        draw.text((pad, ry), "名称", font=small_font, fill=MUTED)
+        draw.text(
+            (pad + int(width * 0.58), ry),
+            "成交价",
+            font=small_font,
+            fill=MUTED,
+            anchor="ra",
+        )
+        draw.text(
+            (pad + int(width * 0.76), ry),
+            "单价",
+            font=small_font,
+            fill=MUTED,
+            anchor="ra",
+        )
+        draw.text(
+            (width - pad, ry),
+            "时间",
+            font=small_font,
+            fill=MUTED,
+            anchor="ra",
+        )
+        ry += 24
         for group in recent_groups:
             label = str(group.get("label") or "").split("（", 1)[0]
             if label:
@@ -3268,7 +3291,10 @@ def render_auction_card(
         start_w = max(
             56.0,
             _text_width("起拍", head_font),
-            max((_text_width(row.get("start", ""), body_font) for row in active_rows), default=0.0),
+            max(
+                (_text_width(row.get("start", ""), body_font) for row in active_rows),
+                default=0.0,
+            ),
         ) + 18
         buyout_w = max(
             56.0,
@@ -3290,10 +3316,14 @@ def render_auction_card(
             return nr, sr, br, rx, end
 
         name_right, start_right, buyout_right, remaining_x, content_end = _layout(name_w)
+        if non_artifact:
+            remaining_x = buyout_right + gap
         desired = content_end + PAD + 10
         if desired > WIDTH:
             name_w = max(160.0, name_w - (desired - WIDTH))
             name_right, start_right, buyout_right, remaining_x, content_end = _layout(name_w)
+            if non_artifact:
+                remaining_x = buyout_right + gap
             desired = content_end + PAD + 10
         width = int(max(700, min(WIDTH, desired)))
         price_right = buyout_right
@@ -3399,8 +3429,6 @@ def render_auction_card(
     else:
         draw.text((left, y), "名称", font=head_font, fill="#7F93A8")
         active_headers = [("起拍", start_right), ("买断", buyout_right)]
-        if non_artifact:
-            active_headers.append(("单价", unit_right))
         for label, x in active_headers:
             draw.text((x - draw.textlength(label, font=head_font), y), label, font=head_font, fill=MUTED)
         draw.text((remaining_x, y), "剩余时间", font=head_font, fill=MUTED)
@@ -3436,23 +3464,10 @@ def render_auction_card(
                 name = _fit_text(draw, str(row.get("name", "")), body_font, name_right - left - 12)
                 color = str(row.get("color") or TEXT)
                 draw.text((left, y), name, font=body_font, fill=color)
-                badges = [
-                    str(label) for label in (row.get("badges") or []) if label
-                ]
-                if row.get("lowest") and not badges:
-                    badges = [str(row.get("lowest_label") or "最低价")]
-                if badges:
-                    _draw_lowest_badge(
-                        left + int(draw.textlength(name, font=body_font)) + 6,
-                        y,
-                        "/".join(badges),
-                    )
                 values = [
                     (row.get("start", "\\"), start_right),
                     (row.get("buyout", "\\"), buyout_right),
                 ]
-                if non_artifact:
-                    values.append((row.get("unit_price", "\\"), unit_right))
                 for value, x in values:
                     text = str(value)
                     draw.text((x - draw.textlength(text, font=body_font), y), text, font=body_font, fill=TEXT)

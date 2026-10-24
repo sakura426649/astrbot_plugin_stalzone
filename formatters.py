@@ -821,7 +821,7 @@ def build_auction_view(
                     if non_artifact
                     else _quality_color(quality)
                 ),
-                "start": "\\" if non_artifact else _display_price(start),
+                "start": _display_price(start),
                 "buyout": _display_price(buyout),
                 "start_value": start or 0,
                 "buyout_value": buyout or 0,
@@ -1254,7 +1254,7 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             lines.extend(["", active_heading])
             if view["active"]:
                 if is_non_artifact:
-                    lines.append("  名称  起拍  买断  单价  剩余时间")
+                    lines.append("  名称  起拍  买断  剩余时间")
                 display_index = 0
                 for row in view["active"]:
                     if row.get("quality_header"):
@@ -1264,12 +1264,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                         lines.append(f"  {row['name']}")
                         continue
                     display_index += 1
-                    badges = _auction_badges(row)
+                    badges = [] if is_non_artifact else _auction_badges(row)
                     marker = f" [{'/'.join(badges)}]" if badges else ""
                     if is_non_artifact:
                         lines.append(
                             f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
-                            f"{row['unit_price']}  {row['remaining']}"
+                            f"{row['remaining']}"
                         )
                     else:
                         lines.append(
