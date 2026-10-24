@@ -352,6 +352,25 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_auction_uses_lowercase_market_id(self):
+        class RecordingClient(FakeClient):
+            calls = []
+
+            async def get_auction_lots(self, item_id, limit=100):
+                RecordingClient.calls.append(item_id)
+                return {"total": 0, "lots": []}
+
+            async def get_auction_history(self, item_id, limit=100, offset=0):
+                RecordingClient.calls.append(item_id)
+                return {"total": 0, "prices": []}
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: RecordingClient()  # type: ignore[assignment]
+        result = await plugin._handle_auction("rz6znadw")
+        self.assertIsInstance(result, PluginReply)
+        self.assertTrue(RecordingClient.calls)
+        self.assertTrue(all(item_id == "rz6znadw" for item_id in RecordingClient.calls))
+
     async def test_non_marketable_auction_item_is_friendly(self):
         from api_client import BadRequestError
         from main import PendingChoice

@@ -180,7 +180,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.24"
+PLUGIN_VERSION = "1.0.25"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -1152,6 +1152,9 @@ class StalzonePlugin(Star):
         if non_artifact:
             quality_filter = None
         short_label = (label or item_id).split(" / ", 1)[0].strip()
+        # Auction/market IDs are lowercase; catalog IDs can contain uppercase
+        # letters (for example rz6ZNaDw), which the auction API rejects.
+        request_item_id = item_id.lower()
 
         async with self._make_client() as client:
             errors: list[Exception] = []
@@ -1168,7 +1171,7 @@ class StalzonePlugin(Star):
                     fetch_limit = 5
                 history_payload, page_errors = await self._fetch_dated_history(
                     client,
-                    item_id,
+                    request_item_id,
                     before=before,
                     quality_filter=quality_filter,
                     limit=fetch_limit,
@@ -1185,7 +1188,7 @@ class StalzonePlugin(Star):
                     and (history_payload.get("window_exhausted") or not official_prices)
                 ):
                     sc_payload, sc_errors = await self._fetch_sc_core_history(
-                        item_id,
+                        request_item_id,
                         client.region,
                         before=before,
                         quality_filter=quality_filter,
@@ -1223,7 +1226,7 @@ class StalzonePlugin(Star):
                         errors.extend(sc_errors)
                 lots_payload: dict[str, Any] = {}
             else:
-                cache_key = f"auction:{client.region}:{item_id}"
+                cache_key = f"auction:{client.region}:{request_item_id}"
                 cached = self._cache_get(cache_key)
                 if isinstance(cached, tuple) and len(cached) == 2:
                     lots_payload, history_payload = cached
@@ -1231,8 +1234,8 @@ class StalzonePlugin(Star):
                 else:
                     # Fetch concurrently; one failed side should not hide the other.
                     results = await asyncio.gather(
-                        client.get_auction_lots(item_id, limit=100),
-                        client.get_auction_history(item_id, limit=100),
+                        client.get_auction_lots(request_item_id, limit=100),
+                        client.get_auction_history(request_item_id, limit=100),
                         return_exceptions=True,
                     )
                     lots, history = results

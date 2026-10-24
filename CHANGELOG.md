@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.25 - 2026-10-23
+
+### Fixed
+
+- Auction requests now normalize catalog item IDs to lowercase before calling the official auction endpoints. Mixed-case catalog IDs such as `rz6ZNaDw` (also searched as `rz6znadw`) are accepted by the market API instead of returning a false “参数无效”.
+- Added a regression that verifies mixed-case inputs are sent to the auction API in lowercase.
+
+### Tests
+
+- 152 tests pass.
+
 ## 1.0.24 - 2026-10-23
 
 ### Fixed
