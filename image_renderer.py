@@ -2876,7 +2876,13 @@ def render_auction_card(
         except Exception:
             return float(len(str(value)) * 19)
 
-    active_rows = [row for row in active if isinstance(row, dict)]
+    active_rows = [
+        row
+        for row in active
+        if isinstance(row, dict)
+        and not row.get("quality_header")
+        and not row.get("ellipsis")
+    ]
     recent_rows = [
         row
         for group in groups
@@ -3050,8 +3056,11 @@ def render_auction_card(
     if history_only:
         height = header_h + 32 + history_header_h + groups_h + tail_h
     else:
-        active_h = max(1, len(active)) * line_h + 30
-        if view.get("active_truncated"):
+        active_h = 30 + sum(
+            group_h if row.get("quality_header") else line_h
+            for row in active
+        )
+        if view.get("active_note"):
             active_h += 24
         recent_h = 36 + history_header_h + groups_h
         height = header_h + active_h + 35 + recent_h + tail_h
@@ -3138,6 +3147,21 @@ def render_auction_card(
 
         if active:
             for row in active:
+                if row.get("quality_header"):
+                    header = _fit_text(
+                        draw,
+                        str(row.get("name", "")),
+                        group_font,
+                        width - 2 * PAD,
+                    )
+                    draw.text(
+                        (left, y),
+                        header,
+                        font=group_font,
+                        fill=str(row.get("color") or ACCENT),
+                    )
+                    y += group_h
+                    continue
                 if row.get("ellipsis"):
                     draw.text(
                         (width / 2, y),

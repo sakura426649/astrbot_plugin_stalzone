@@ -840,8 +840,8 @@ def build_auction_view(
     active_truncated = active_total > MAX_AUCTION_ACTIVE_ROWS
     active_grouped = False
     active_note = ""
-    if active_truncated:
-        if non_artifact:
+    if non_artifact:
+        if active_truncated:
             head = active[:15]
             tail = active[-15:]
             lowest = next((row for row in active if row.get("lowest")), None)
@@ -860,31 +860,56 @@ def build_auction_view(
                 f"在售共 {active_total:,} 条；显示前 15 条和后 15 条，"
                 f"中间省略 {omitted:,} 条"
             )
-        else:
-            # Artifacts have upgrade levels (+0/+N). Keep the cheapest lot
-            # for every level instead of taking an arbitrary slice.
-            by_level: dict[int, dict[str, Any]] = {}
-            level_counts: dict[int, int] = {}
-            for row in active:
-                level = int(row.get("level") or 0)
-                level_counts[level] = level_counts.get(level, 0) + 1
-                current = by_level.get(level)
-                if current is None or row["sort_price"] < current["sort_price"]:
-                    by_level[level] = row
-            selected = list(by_level.values())
-            if len(selected) > MAX_AUCTION_ACTIVE_ROWS:
-                selected = selected[:MAX_AUCTION_ACTIVE_ROWS]
-            for row in selected:
-                level = int(row.get("level") or 0)
-                row["level_count"] = level_counts.get(level, 1)
-            active = sorted(
-                selected, key=lambda row: row["sort_price"], reverse=True
+    elif active:
+        # Artifacts are grouped by quality and upgrade level.  Show the
+        # cheapest lot for every quality/level pair, with quality sections.
+        by_quality: dict[int | None, dict[int, dict[str, Any]]] = {}
+        quality_counts: dict[int | None, int] = {}
+        level_counts: dict[tuple[int | None, int], int] = {}
+        for row in active:
+            quality = row.get("quality")
+            level = int(row.get("level") or 0)
+            quality_counts[quality] = quality_counts.get(quality, 0) + 1
+            level_counts[(quality, level)] = (
+                level_counts.get((quality, level), 0) + 1
             )
-            active_grouped = True
-            active_note = (
-                f"神器在售共 {active_total:,} 条；按 +等级保留每级最低价，"
-                f"显示 {len(active)} 个等级"
+            levels = by_quality.setdefault(quality, {})
+            current = levels.get(level)
+            if current is None or row["sort_price"] < current["sort_price"]:
+                levels[level] = row
+
+        def quality_key(value: int | None) -> int:
+            return -1 if value is None else value
+
+        grouped: list[dict[str, Any]] = []
+        selected_count = 0
+        for quality in sorted(
+            by_quality, key=quality_key, reverse=True
+        ):
+            levels = by_quality[quality]
+            short_label = quality_label(quality).split("（", 1)[0]
+            grouped.append(
+                {
+                    "quality_header": True,
+                    "quality": quality,
+                    "name": (
+                        f"{short_label}｜{quality_counts.get(quality, 0):,} 条在售"
+                        f"｜{len(levels)} 个等级"
+                    ),
+                    "color": _quality_color(quality),
+                }
             )
+            for level in sorted(levels):
+                row = levels[level]
+                row["level_count"] = level_counts.get((quality, level), 1)
+                grouped.append(row)
+                selected_count += 1
+        active = grouped
+        active_grouped = True
+        active_note = (
+            f"神器在售共 {active_total:,} 条；按品质分组，"
+            "每个 +等级显示最低价"
+        )
 
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
@@ -1094,22 +1119,23 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             lines.append("  名称  成交价  单价  时间")
     else:
         active_heading = "在售（按买断价从高到低）"
-        if view.get("active_truncated"):
-            if view.get("active_grouped"):
-                active_heading += (
-                    f"｜共 {view['active_total']:,} 条，按 +等级显示 "
-                    f"{len(view['active'])} 个等级"
-                )
-            else:
-                active_heading += (
-                    f"｜共 {view['active_total']:,} 条，显示前 15 条和后 15 条"
-                )
+        if view.get("active_grouped"):
+            active_heading += (
+                f"｜共 {view['active_total']:,} 条，按品质分组显示每级最低价"
+            )
+        elif view.get("active_truncated"):
+            active_heading += (
+                f"｜共 {view['active_total']:,} 条，显示前 15 条和后 15 条"
+            )
         lines.extend(["", active_heading])
         if view["active"]:
             if is_non_artifact:
                 lines.append("  名称  起拍  买断  单价  剩余时间")
             display_index = 0
             for row in view["active"]:
+                if row.get("quality_header"):
+                    lines.append(f"【{row['name']}】")
+                    continue
                 if row.get("ellipsis"):
                     lines.append(f"  {row['name']}")
                     continue

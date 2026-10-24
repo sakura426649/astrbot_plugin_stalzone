@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.3 - 2026-10-24
+
+### Changed
+
+- Artifact auctions are now grouped by quality first, then by +0/+N upgrade level. Each quality section shows one cheapest lot per level, with the lot count and level count in the section header.
+- Artifact rows are ordered by level inside each quality section; +0 uses the base item name, +1 and above use `＋N`.
+- Updated the auction preview and Windows visual baseline.
+
+### Tests
+
+- Adjusted the artifact grouping, quality-section and ordering assertions; 181 tests and 10 visual signatures pass.
+
 ## 1.1.2 - 2026-10-24
 
 ### Changed

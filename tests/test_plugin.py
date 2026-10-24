@@ -295,8 +295,8 @@ class FormatterTests(unittest.TestCase):
         lots = {
             "total": 2,
             "lots": [
-                {"amount": 1, "startPrice": 500, "buyoutPrice": 800, "endTime": "2026-10-22T15:00:00Z", "additional": {}},
-                {"amount": 2, "startPrice": 100, "buyoutPrice": 10000, "endTime": "2026-10-22T14:00:00Z", "additional": {}},
+                {"amount": 1, "startPrice": 500, "buyoutPrice": 800, "endTime": "2026-10-22T15:00:00Z", "additional": {"ptn": 1}},
+                {"amount": 2, "startPrice": 100, "buyoutPrice": 10000, "endTime": "2026-10-22T14:00:00Z", "additional": {"ptn": 15}},
             ],
         }
         history = {
@@ -311,7 +311,10 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("在售", text)
         self.assertIn("最近成交", text)
         self.assertIn("按买断价", text)
-        self.assertLess(text.index("1. y1q9  100"), text.index("2. y1q9  500"))
+        self.assertLess(
+            text.index("1. y1q9＋1  500"),
+            text.index("2. y1q9＋15  100"),
+        )
         self.assertLess(text.index("2,400 ×2"), text.index("  1,000"))
 
     def test_auction_quality_groups_and_levels(self):
@@ -378,8 +381,11 @@ class FormatterTests(unittest.TestCase):
             "wg53", lots, {}, "eu", item_label="原子 / Atom", now=self.NOW
         )
         self.assertEqual(QUALITY_COLORS[0], "#E7EDF5")
-        self.assertEqual(view["active"][0]["quality"], 0)
-        self.assertEqual(view["active"][0]["color"], "#E7EDF5")
+        rows = [
+            row for row in view["active"] if not row.get("quality_header")
+        ]
+        self.assertEqual(rows[0]["quality"], 0)
+        self.assertEqual(rows[0]["color"], "#E7EDF5")
 
     def test_item_rank_color(self):
         from formatters import item_rank_color
@@ -734,19 +740,16 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertIsNotNone(view)
         self.assertEqual(view["active_total"], 40)
-        self.assertTrue(view["active_truncated"])
         self.assertTrue(view["active_grouped"])
-        self.assertEqual(len(view["active"]), 10)
-        self.assertEqual(
-            sorted(row["level"] for row in view["active"]), list(range(10))
-        )
-        self.assertEqual(
-            {row["level"] for row in view["active"] if row.get("level_count") == 4},
-            set(range(10)),
-        )
+        rows = [
+            row for row in view["active"] if not row.get("quality_header")
+        ]
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(sorted(row["level"] for row in rows), list(range(10)))
+        self.assertEqual({row["level_count"] for row in rows}, {4})
         text = format_auction_text(view)
-        self.assertIn("按 +等级显示 10 个等级", text)
-        self.assertIn("按 +等级保留每级最低价", text)
+        self.assertIn("按品质分组显示每级最低价", text)
+        self.assertIn("每个 +等级显示最低价", text)
 
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)
