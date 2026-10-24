@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.7 - 2026-10-24
+
+### Fixed
+
+- Added `tests/__init__.py` so the release workflow's `unittest discover -s tests` can import the test package reliably. The v1.1.6 release job stopped at test discovery; runtime code and the slimmed marketplace archive are unchanged.
+
+### Tests
+
+- `python -m unittest discover -s tests` now runs all 181 tests and 10 visual signatures.
+
 ## 1.1.6 - 2026-10-24
 
 ### Changed
