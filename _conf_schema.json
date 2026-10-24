@@ -92,13 +92,13 @@
     "description": "自动辐射风暴提醒",
     "type": "bool",
     "default": true,
-    "hint": "默认开启。只在上一场风暴结束后的 2–4 小时窗口内每分钟查询；检测到新风暴后向提醒目标发送“风暴已开始”图片。重启后继续使用已保存的窗口与提醒记录。"
+    "hint": "默认开启；但只有白名单非空时才工作和轮询。只在上一场风暴结束后的 2–4 小时窗口内每分钟查询；检测到新风暴后向白名单群发送“风暴已开始”图片。白名单为空时不发送也不请求 API。"
   },
   "emission_notify_target": {
-    "description": "自动提醒发送目标（可选）",
+    "description": "自动提醒平台前缀种子（可选）",
     "type": "string",
     "default": "",
-    "hint": "只接受 QQ 群聊的 unified_msg_origin，例如 aiocqhttp:GroupMessage:123456；私聊不会被使用。白名单为空时作为单目标；白名单非空时仅用于提供平台前缀，实际收件群由白名单决定。"
+    "hint": "可选，仅用于给纯群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；白名单为空时不会单独发送，也不会成为收件群。"
   },
   "emission_group_whitelist": {
     "description": "自动提醒 QQ 群白名单",
@@ -107,7 +107,7 @@
     "items": {
       "type": "string"
     },
-    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。填写后向名单内每个群发送（黑名单优先）；留空则使用单个默认目标。"
+    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。"
   },
   "emission_group_blacklist": {
     "description": "自动提醒 QQ 群黑名单",

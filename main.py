@@ -192,7 +192,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.37"
+PLUGIN_VERSION = "1.0.38"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
@@ -465,31 +465,25 @@ class StalzonePlugin(Star):
         return ""
 
     def _notify_targets(self) -> list[str]:
-        """Return every allowed QQ group target; the image is rendered once."""
+        """Return every allow-listed QQ group; an empty list sends nothing."""
         blacklist = self._group_ids("emission_group_blacklist")
         whitelist = self._group_values("emission_group_whitelist")
-        if whitelist:
-            prefix = self._platform_prefix()
-            targets: list[str] = []
-            seen: set[str] = set()
-            for value in whitelist:
-                group = self._group_number(value)
-                if not group or group in blacklist or group in seen:
-                    continue
-                seen.add(group)
-                explicit = self._group_id_from_target(value)
-                if explicit:
-                    targets.append(str(value).strip())
-                elif prefix:
-                    targets.append(f"{prefix}:GroupMessage:{group}")
-            return targets
-        configured = str(self._cfg("emission_notify_target", "") or "").strip()
-        if configured and self._group_id_from_target(configured):
-            return [configured] if self._auto_target_allowed(configured) else []
-        remembered = str(self._auto_state.get("target", "") or "").strip()
-        if not self._group_id_from_target(remembered):
+        if not whitelist:
             return []
-        return [remembered] if self._auto_target_allowed(remembered) else []
+        prefix = self._platform_prefix()
+        targets: list[str] = []
+        seen: set[str] = set()
+        for value in whitelist:
+            group = self._group_number(value)
+            if not group or group in blacklist or group in seen:
+                continue
+            seen.add(group)
+            explicit = self._group_id_from_target(value)
+            if explicit:
+                targets.append(str(value).strip())
+            elif prefix:
+                targets.append(f"{prefix}:GroupMessage:{group}")
+        return targets
 
     def _auto_target_allowed(self, target: str) -> bool:
         group = self._group_id_from_target(target)
@@ -531,6 +525,8 @@ class StalzonePlugin(Star):
 
     async def _emission_auto_tick(self, *, force: bool = False) -> bool:
         """Poll the official emission API only in the 2–4h after-storm window."""
+        if not self._group_values("emission_group_whitelist"):
+            return False
         state = self._auto_state
         now = datetime.now(timezone.utc)
         previous_end = parse_auction_time(state.get("last_previous_end"))
@@ -649,12 +645,17 @@ class StalzonePlugin(Star):
                             chain = MessageChain().message(text)
                     else:
                         chain = MessageChain().message(text)
-                    await self.context.send_message(target, chain)
+                    result = await self.context.send_message(target, chain)
+                    if result is False:
+                        raise RuntimeError("send_message returned False")
                     sent.append(target)
                 except Exception:
                     failed.append(target)
-                    logger.exception(
-                        "STALZONE automatic emission alert failed for %s", target
+                    logger.warning(
+                        "STALZONE automatic emission alert failed for %s; "
+                        "check the group number and whether the bot is in that group",
+                        target,
+                        exc_info=True,
                     )
             return sent, failed
         finally:
@@ -673,6 +674,11 @@ class StalzonePlugin(Star):
         if not str(self._cfg("client_secret", "") or "").strip():
             logger.warning("STALZONE automatic emission disabled: missing client_secret")
             return
+        if not self._group_values("emission_group_whitelist"):
+            logger.warning(
+                "STALZONE automatic emission has no group whitelist; "
+                "polling and sending stay disabled until groups are added"
+            )
         if self._auto_task is not None and not self._auto_task.done():
             return
         self._auto_task = asyncio.create_task(self._emission_auto_loop())

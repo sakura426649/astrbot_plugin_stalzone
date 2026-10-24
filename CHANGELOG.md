@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.38 - 2026-10-24
+
+### Changed
+
+- An empty group allow-list now does nothing: no automatic sends and no emission API polling. The previous single-target fallback (configured target or latest group) has been removed; `emission_notify_target` is now only an optional platform-prefix seed for numeric allow-list entries.
+- Sending now treats `send_message()` returning `False` as a delivery failure. Failures log the target with a hint to check the group number and bot membership; other groups continue and failed groups are retried while the storm is active.
+
+### Tests
+
+- Added empty-allow-list no-send/no-poll and false-return failure coverage; 173 tests pass.
+
 ## 1.0.37 - 2026-10-24
 
 ### Changed

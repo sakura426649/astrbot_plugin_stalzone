@@ -1002,6 +1002,14 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         plugin.config["emission_auto_notify"] = False
         self.assertFalse(plugin._auto_notify_enabled())
 
+    async def test_empty_whitelist_skips_api_polling(self):
+        plugin = self.make_plugin()
+        client = self.Client({})
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        await plugin._emission_auto_tick(force=True)
+        self.assertEqual(client.calls, 0)
+        self.assertEqual(plugin._notify_targets(), [])
+
     async def test_outside_window_does_not_query_api(self):
         plugin = self.make_plugin()
         client = self.Client({"previousEnd": "2026-10-22T03:30:00Z"})
@@ -1016,6 +1024,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_window_detects_once_and_deduplicates(self):
         plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [self.GROUP_TARGET]
         now = datetime.now(timezone.utc)
         start = now - timedelta(minutes=8)
         client = self.Client(
@@ -1047,6 +1056,28 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         await plugin._emission_auto_tick()
         self.assertEqual(client.calls, 2)
         self.assertEqual(len(sent), 1)
+
+    async def test_send_false_is_treated_as_failure(self):
+        class FailingContext(Context):
+            async def send_message(self, target, chain):
+                return False
+
+        class FakeChain:
+            def message(self, text):
+                return self
+
+        plugin = StalzonePlugin(FailingContext(), {"region": "eu"})
+        payload = {"currentStart": datetime.now(timezone.utc).isoformat()}
+        with patch.object(main_module, "MessageChain", FakeChain), patch.object(
+            main_module,
+            "render_emission_alert_card",
+            lambda view, font_path=None: None,
+        ):
+            sent, failed = await plugin._send_emission_alert(
+                payload, "eu", [self.GROUP_TARGET]
+            )
+        self.assertEqual(sent, [])
+        self.assertEqual(failed, [self.GROUP_TARGET])
 
     async def test_partial_delivery_retries_only_failed_groups(self):
         plugin = self.make_plugin()
@@ -1129,6 +1160,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         from formatters import parse_auction_time
 
         plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [self.GROUP_TARGET]
         now = datetime.now(timezone.utc)
         old_end = (now - timedelta(hours=4, minutes=40)).isoformat()
         client = self.Client({"previousEnd": old_end})
@@ -1240,13 +1272,11 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    def test_whitelist_empty_falls_back_to_blacklist_filtered_target(self):
+    def test_empty_whitelist_sends_nothing(self):
         plugin = self.make_plugin()
-        plugin.config["emission_notify_target"] = ""
-        plugin.config["emission_group_blacklist"] = ["999999"]
         plugin._auto_state = {"target": "aiocqhttp:GroupMessage:999999"}
         self.assertEqual(plugin._notify_targets(), [])
-        plugin.config["emission_group_blacklist"] = []
+        plugin.config["emission_group_whitelist"] = ["999999"]
         self.assertEqual(
             plugin._notify_targets(), ["aiocqhttp:GroupMessage:999999"]
         )
@@ -1268,6 +1298,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_force_probe_updates_window_after_restart(self):
         plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [self.GROUP_TARGET]
         now = datetime.now(timezone.utc)
         previous_end = now - timedelta(hours=5)
         client = self.Client({"previousEnd": previous_end.isoformat()})
@@ -1295,7 +1326,8 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 )
                 first._save_auto_state()
                 second = StalzonePlugin(Context(), {"region": "eu"})
-                self.assertEqual(second._notify_targets(), [self.GROUP_TARGET])
+                self.assertEqual(second._auto_state["target"], self.GROUP_TARGET)
+                self.assertEqual(second._notify_targets(), [])
                 self.assertTrue(second._auto_state["active"])
                 self.assertEqual(second._auto_state["last_notified_start"], start)
                 client = self.Client(
@@ -1307,6 +1339,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                     }
                 )
                 second._make_client = lambda: client  # type: ignore[assignment]
+                second.config["emission_group_whitelist"] = [self.GROUP_TARGET]
                 sent = []
 
                 async def fake_send(payload, region, targets):
