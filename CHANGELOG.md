@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.19 - 2026-10-24
+
+### Fixed
+
+- Quantity-table total prices now use the same 18px font as unit prices; overlap is handled by measured column widths and by dropping the remaining-time column in two-column mode instead of shrinking the total font.
+
+### Tests
+
+- Regenerated the 12 Windows visual signatures; 185 tests pass.
+
 ## 1.1.18 - 2026-10-24
 
 ### Fixed

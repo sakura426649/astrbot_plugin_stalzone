@@ -2851,7 +2851,7 @@ def _render_quantity_auction_card(
     total_w = (
         max(
             int(draw.textlength("总价", font=head_font)),
-            *(int(draw.textlength(text, font=small_font)) for text in total_texts),
+            *(int(draw.textlength(text, font=body_font)) for text in total_texts),
         )
         + 10
     )
@@ -2935,7 +2935,7 @@ def _render_quantity_auction_card(
             draw.text(
                 (total_x, ry),
                 total_text,
-                font=small_font,
+                font=body_font,
                 fill=TEXT,
                 anchor="ra",
             )
