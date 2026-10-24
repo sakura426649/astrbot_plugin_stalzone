@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.12 - 2026-10-24
+
+### Changed
+
+- Stackable non-artifact quantity rows are ordered by unit price ascending (cheapest first) after keeping one cheapest listing per actual amount. Amounts are only a tie-breaker.
+
+### Tests
+
+- Updated the quantity-order assertion; 184 tests and 11 visual signatures pass.
+
 ## 1.1.11 - 2026-10-24
 
 ### Added

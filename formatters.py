@@ -876,9 +876,9 @@ def build_auction_view(
         active = sorted(
             best_by_amount.values(),
             key=lambda row: (
-                int(row.get("amount") or 1),
                 row.get("unit_value", 0),
                 row.get("sort_price", 0),
+                int(row.get("amount") or 1),
             ),
         )
         for row in active:

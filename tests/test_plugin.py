@@ -504,12 +504,12 @@ class FormatterTests(unittest.TestCase):
         active = view["active"]
         self.assertTrue(view["quantity_mode"])
         self.assertEqual(
-            [row["buyout"] for row in active], ["4,000", "6,000", "10,000"]
+            [row["buyout"] for row in active], ["10,000", "6,000", "4,000"]
         )
         self.assertEqual(
-            [row["unit_price"] for row in active], ["800", "600", "500"]
+            [row["unit_price"] for row in active], ["500", "600", "800"]
         )
-        self.assertEqual(active[0]["name"], "香烟×5")
+        self.assertEqual(active[0]["name"], "香烟×20")
         self.assertNotIn("lowest", active[0])
         rows = view["recent_groups"][0]["rows"]
         self.assertEqual([row["unit_price"] for row in rows], ["1,200", "800", "550"])
