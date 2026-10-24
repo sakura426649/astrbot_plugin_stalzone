@@ -41,6 +41,7 @@ try:  # Package import (normal AstrBot plugin loading).
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        BadRequestError,
         NotFoundError,
         StalzoneAPIClient,
         StalzoneAPIError,
@@ -111,6 +112,7 @@ except ImportError:  # Direct execution / flat import fallback.
         DEMO_BASE_URL,
         PRODUCTION_BASE_URL,
         VALID_REGIONS,
+        BadRequestError,
         NotFoundError,
         StalzoneAPIClient,
         StalzoneAPIError,
@@ -178,7 +180,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.23"
+PLUGIN_VERSION = "1.0.24"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -218,6 +220,7 @@ IMAGE_COMMANDS = {
     "item",
     "emission",
     "candidates",
+    "candidate",
     "clans",
     "operations",
     "regions",
@@ -1152,6 +1155,7 @@ class StalzonePlugin(Star):
 
         async with self._make_client() as client:
             errors: list[Exception] = []
+            unavailable = False
             if before is not None:
                 # A dated query is historical only; current lots would be noise.
                 if history_count is not None:
@@ -1234,7 +1238,15 @@ class StalzonePlugin(Star):
                     lots, history = results
                     errors = [value for value in results if isinstance(value, Exception)]
                     if len(errors) == 2:
-                        raise errors[0]
+                        if all(isinstance(error, (BadRequestError, NotFoundError)) for error in errors):
+                            # Some catalog items (devices, quest items, etc.)
+                            # are not marketable. Treat a consistent API 400 as
+                            # an empty auction result rather than “参数无效”.
+                            lots_payload, history_payload = {}, {}
+                            errors = []
+                            unavailable = True
+                        else:
+                            raise errors[0]
                     if errors:
                         logger.warning(
                             "STALZONE auction partial failure for %s: %s",
@@ -1243,7 +1255,7 @@ class StalzonePlugin(Star):
                         )
                     lots_payload = lots if isinstance(lots, dict) else {}
                     history_payload = history if isinstance(history, dict) else {}
-                    if not errors:
+                    if not errors and not unavailable:
                         self._cache_set(
                             cache_key,
                             (lots_payload, history_payload),
@@ -1264,7 +1276,11 @@ class StalzonePlugin(Star):
             text = format_auction_text(view)
             empty_view = None
             if view is None:
-                note = ""
+                note = (
+                    "该物品没有可查询的拍卖数据，可能不可交易或当前区服未开放拍卖。"
+                    if unavailable
+                    else ""
+                )
                 if before_date is not None:
                     text = (
                         f"截至 {before_date.year}/{before_date.month}/{before_date.day} "
@@ -1290,7 +1306,11 @@ class StalzonePlugin(Star):
                                 note += f"；SC CORE 存档覆盖自 {coverage[:10]}"
                         text += "\n" + note
                 else:
-                    text = f"未查到关于「{short_label}」的成交记录。"
+                    text = (
+                        f"「{short_label}」没有可查询的拍卖数据，可能不可交易。"
+                        if unavailable
+                        else f"未查到关于「{short_label}」的成交记录。"
+                    )
                 empty_view = build_empty_auction_view(
                     item_id,
                     label,

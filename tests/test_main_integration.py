@@ -352,6 +352,40 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_non_marketable_auction_item_is_friendly(self):
+        from api_client import BadRequestError
+        from main import PendingChoice
+        import time
+
+        class RejectingAuctionClient(FakeClient):
+            async def get_auction_lots(self, item_id, limit=100):
+                raise BadRequestError("HTTP 400", status_code=400)
+
+            async def get_auction_history(self, item_id, limit=100, offset=0):
+                raise BadRequestError("HTTP 400", status_code=400)
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: RejectingAuctionClient()  # type: ignore[assignment]
+        direct = await plugin._handle_auction("rz6znadw")
+        self.assertIsInstance(direct, PluginReply)
+        self.assertIsNotNone(direct.auction_view)
+        self.assertIn("不可交易", direct.text)
+
+        item = plugin.item_index.get("rz6ZNaDw")
+        self.assertIsNotNone(item)
+        event = FakeEvent("/sz 候选 1")
+        plugin._pending_choices[plugin._choice_scope(event)] = PendingChoice(
+            kind="auction",
+            query="rz6znadw",
+            candidates=[item],
+            created=time.monotonic(),
+        )
+        replayed = await plugin._handle_candidate("1", event)
+        self.assertIsInstance(replayed, PluginReply)
+        self.assertEqual(replayed.sub, "auction")
+        self.assertIsNotNone(replayed.auction_view)
+        self.assertIn("不可交易", replayed.text)
+
     async def test_season_pass_calculator(self):
         text = await collect(self.make_plugin(), "/sz 通行证 15 15+2 20")
         self.assertIn("STALZONE · 通行证计算", text)

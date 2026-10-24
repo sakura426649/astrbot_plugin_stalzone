@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.24 - 2026-10-23
+
+### Fixed
+
+- Auction queries for catalog items that are not marketable (for example the mixed-case `rz6ZNaDw` device, queried as `rz6znadw`) no longer surface the raw “参数无效” API error. When both official auction endpoints return 400/404, the plugin now renders an empty auction card explaining that the item may not be tradable.
+- Candidate replay for such items now keeps the auction image rendering path instead of falling back to plain text.
+- Unavailable auction results are not cached, so a later retry can still succeed if the API state changes.
+
+### Tests
+
+- Added direct and candidate-replay regressions for a non-marketable item; 151 tests pass.
+
 ## 1.0.23 - 2026-10-23
 
 ### Changed
