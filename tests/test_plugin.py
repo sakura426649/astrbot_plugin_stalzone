@@ -862,7 +862,7 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertIn("开放世界 PvP", text)
         self.assertIn("PvP Score：4,158", text)
-        self.assertIn("PvP 死亡估计：11,430", text)
+        self.assertIn("大世界 PvP 死亡（估算）：11,430", text)
         self.assertIn("StalzoneHQ", text)
 
     def test_profile_lunar_section(self):
@@ -905,9 +905,15 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("11:30 UTC+8", text)
 
     def test_profile_missing_stats_does_not_crash(self):
-        text = format_profile({"username": "Solo", "status": "online"}, "ru", now=self.NOW)
+        payload = {"username": "Solo", "status": "online"}
+        view = build_profile_view(payload, "ru", now=self.NOW)
+        text = format_profile(payload, "ru", now=self.NOW, view=view)
         self.assertIn("Solo", text)
         self.assertIn("API 未返回", text)
+        self.assertNotIn("无 / API 未返回", text)
+        self.assertEqual(view["clan_label"], "—")
+        self.assertEqual(view["clan_rank"], "—")
+        self.assertFalse(view["has_clan"])
 
     def test_help(self):
         text = format_help("eu")

@@ -41,7 +41,7 @@ STAT_LABELS = {
     "kil": "击杀（kil）",
     "ast": "助攻",
     "dea": "总死亡",
-    "bul-dea": "子弹死亡",
+    "bul-dea": "子弹死亡（含团竞）",
     "exp-dea": "爆炸死亡",
     "ble-to-dea": "流血死亡",
     "mel-dea": "近战死亡",
@@ -1477,7 +1477,7 @@ def _combined_profile_stat_rows(
         f"开放世界击杀：{hq['kills']:,}",
         f"助攻：{hq['assists']:,}",
         f"总死亡（含 PvE）：{hq['deaths_total']:,}",
-        f"PvP 死亡估计：{hq['deaths']:,}",
+        f"大世界 PvP 死亡（估算）：{hq['deaths']:,}",
         f"异常死亡：{hq['anomaly_deaths']:,}",
         f"K/D（总）：{num(hq.get('kd_total'))}",
         f"PvP K/D：{num(hq.get('pvp_kd'))}",
@@ -1556,7 +1556,7 @@ def build_profile_view(
         clan_rows.append(clan_label)
         clan_rows.append(f"职位：{rank}｜战队等级：{clan_level if clan_level is not None else '未知'}")
     else:
-        clan_rows.append("无 / API 未返回")
+        clan_rows.append("—")
 
     hq = calculate_hq_pvp_score(payload.get("stats"))
     if hq:
@@ -1625,9 +1625,10 @@ def build_profile_view(
         "bio": bio,
         "bio_lines": bio_lines,
         "last_login": last_login,
-        "clan_label": clan_rows[0] if clan_rows else "无 / API 未返回",
-        "clan_rank": member.get("rank") or "未知",
-        "clan_level": info.get("level"),
+        "clan_label": clan_rows[0] if info.get("name") else "—",
+        "has_clan": bool(info.get("name")),
+        "clan_rank": (member.get("rank") or "未知") if info.get("name") else "—",
+        "clan_level": info.get("level") if info.get("name") else "—",
         "clan_rows": clan_rows,
         "hq": hq,
         "stat_rows": stat_rows,
@@ -1681,8 +1682,8 @@ def format_profile(
                 "开放世界 PvP（StalzoneHQ 公式）",
                 [
                     f"PvP Score：{hq['score']:,}",
-                    f"开放世界击杀：{hq['kills']:,}｜助攻：{hq['assists']:,}｜PvP 死亡估计：{hq['deaths']:,}",
-                    "公式：((开放世界击杀 + 助攻×0.5) ÷ (PvP 死亡估计×0.33)) × 1000，向下取整",
+                    f"开放世界击杀：{hq['kills']:,}｜助攻：{hq['assists']:,}｜大世界 PvP 死亡（估算）：{hq['deaths']:,}",
+                    "公式：((开放世界击杀 + 助攻×0.5) ÷ (大世界 PvP 死亡估算×0.33)) × 1000，向下取整",
                     "注：HQ 页面显示的是其缓存分，可能与此实时统计值不同",
                 ],
             )

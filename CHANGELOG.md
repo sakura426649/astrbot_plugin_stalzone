@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.42 - 2026-10-24
+
+### Changed
+
+- Player-card labels now state both scopes explicitly: `子弹死亡（含团竞）` and `大世界 PvP 死亡（估算）`; the combat summary uses `PvP 死亡`.
+- A player with no clan now shows a dash for the clan, rank and clan-level fields instead of `无 / API 未返回`. The text profile uses the same dash-only clan section.
+
+### Tests
+
+- Updated the HQ/profile assertions for the new labels and no-clan display; 177 tests pass.
+
 ## 1.0.41 - 2026-10-24
 
 ### Changed

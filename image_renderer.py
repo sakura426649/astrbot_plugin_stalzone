@@ -1929,8 +1929,15 @@ def render_profile_card(
 
     meta_rows = [
         ("战队", str(view.get("clan_label") or "无")),
-        ("职位", str(view.get("clan_rank") or "未知")),
-        ("战队等级", str(view.get("clan_level") if view.get("clan_level") is not None else "未公开")),
+        ("职位", str(view.get("clan_rank") or "—")),
+        (
+            "战队等级",
+            str(
+                view.get("clan_level")
+                if view.get("clan_level") is not None
+                else ("未公开" if view.get("has_clan") else "—")
+            ),
+        ),
         ("最后登录", str(view.get("last_login") or "未知").replace(" UTC+8", "")),
     ]
     my = rail_top + 360
@@ -2004,7 +2011,7 @@ def render_profile_card(
         values = [
             ("击杀", f"{hq.get('kills', 0):,}"),
             ("助攻", f"{hq.get('assists', 0):,}"),
-            ("估算死亡", f"{hq.get('deaths', 0):,}"),
+            ("PvP 死亡", f"{hq.get('deaths', 0):,}"),
             ("K/D", f"{hq.get('kd', 0):.2f}"),
         ]
         for index, (key, value) in enumerate(values):
