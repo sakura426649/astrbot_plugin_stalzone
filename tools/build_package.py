@@ -126,6 +126,11 @@ def _sha256(path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", default=".", help="directory for zip artifacts")
+    parser.add_argument(
+        "--with-icon-pack",
+        action="store_true",
+        help="also build the optional full icon pack zip",
+    )
     args = parser.parse_args()
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -133,16 +138,17 @@ def main() -> int:
     icon_zip = output_dir / ICON_ZIP
     base_ids = _base_icon_ids()
     _write_plugin_zip(plugin_zip, base_ids)
-    _write_icon_zip(icon_zip)
+    if args.with_icon_pack:
+        _write_icon_zip(icon_zip)
     size = plugin_zip.stat().st_size
-    checksums = [
-        f"{_sha256(plugin_zip)}  {PLUGIN_ZIP}",
-        f"{_sha256(icon_zip)}  {ICON_ZIP}",
-    ]
+    checksums = [f"{_sha256(plugin_zip)}  {PLUGIN_ZIP}"]
+    if args.with_icon_pack:
+        checksums.append(f"{_sha256(icon_zip)}  {ICON_ZIP}")
     (output_dir / "SHA256SUMS").write_text("\n".join(checksums) + "\n", encoding="utf-8")
     print(f"base icons: {len(base_ids)}")
     print(f"plugin zip: {size / 1024 / 1024:.2f} MiB -> {plugin_zip}")
-    print(f"icon pack : {icon_zip.stat().st_size / 1024 / 1024:.2f} MiB -> {icon_zip}")
+    if args.with_icon_pack:
+        print(f"icon pack : {icon_zip.stat().st_size / 1024 / 1024:.2f} MiB -> {icon_zip}")
     if size > MAX_PLUGIN_BYTES:
         print(f"ERROR: plugin zip exceeds {MAX_PLUGIN_BYTES / 1024 / 1024:.0f} MiB")
         return 1

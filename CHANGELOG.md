@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.41 - 2026-10-24
+
+### Changed
+
+- Icon delivery now matches the repository layout: the release package contains only the 826 common icons, while users download the complete `item_icons/` folder directly from GitHub and place it under `data/plugin_data/astrbot_plugin_stalzone/`.
+- The release workflow no longer publishes the 35 MiB icon-pack asset; it uploads only the under-16-MiB plugin zip and `SHA256SUMS`. `tools/build_package.py` can still build an icon pack locally with `--with-icon-pack` when needed.
+
+### Tests
+
+- Packaging and extension-icon lookup coverage remains at 177 passing tests.
+
 ## 1.0.40 - 2026-10-24
 
 ### Changed

@@ -82,7 +82,7 @@ python scripts/build_item_catalog.py --lang "路径/zh.lang"
 ```
 
 4. 查看未翻译报告（`dist/导入参考/未翻译物品_待补全.tsv`）；能自动解析的会保留，无法解析的补到 `MANUAL_NAMES` 或运行时 `item_name_overrides.json`。
-5. 新图标下载为 `item_icons/{item_id}.png`。基础包只按 `tools/build_package.py` 里的常用分类选图标；完整图标会自动打进 `stalzone_icons_full.zip`。如果新增了一整个常用分类，记得把前缀加进 `BASE_CATEGORY_PREFIXES`。
+5. 新图标下载为 `item_icons/{item_id}.png`。基础包只按 `tools/build_package.py` 里的常用分类选图标；完整图标继续放在仓库 `item_icons/` 供用户手动下载。如果新增了一整个常用分类，记得把前缀加进 `BASE_CATEGORY_PREFIXES`。
 6. 跑测试、检查新物品的 `/sz 物品` 和 `/sz 拍卖`，再发版。
 
 为什么不能完全自动：
@@ -99,10 +99,10 @@ python scripts/build_item_catalog.py --lang "路径/zh.lang"
 - [ ] `metadata.yaml` / `main.py` 版本一致
 - [ ] README 版本徽章、CHANGELOG 已更新
 - [ ] 新增/变更数据已抽查
-- [ ] 运行 `python tools/build_package.py --output-dir .`，插件 zip 小于 16 MiB，并生成完整图标扩展包
+- [ ] 运行 `python tools/build_package.py --output-dir .`，插件 zip 小于 16 MiB
 - [ ] 插件 zip 不包含 `.git`、`__pycache__`、`.pyc`、`tests/`、`tools/`
-- [ ] 验证把扩展包的 `item_icons/` 解压到 `data/plugin_data/astrbot_plugin_stalzone/` 后能读取图标
-- [ ] Release 同时上传插件 zip、`stalzone_icons_full.zip` 和 `SHA256SUMS`
+- [ ] 验证从仓库 `item_icons/` 复制图标到 `data/plugin_data/astrbot_plugin_stalzone/` 后能读取
+- [ ] Release 上传插件 zip 和 `SHA256SUMS`
 - [ ] 干净 AstrBot 环境安装 release zip，填写凭证后可查询
 - [ ] 图片卡在 QQ 缩略图和点开查看都正常
 - [ ] Release 附 SHA256，PR 目标分支为 `master`

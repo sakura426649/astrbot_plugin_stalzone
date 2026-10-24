@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.40-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.41-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -213,21 +213,23 @@ cd astrbot_plugin_stalzone
 pip install -r requirements.txt
 ```
 
-### 图标扩展包（可选）
+### 图标扩展（可选）
 
-发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**单独提供：
+发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**保留在 GitHub 仓库的 [`item_icons/` 文件夹](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/master/item_icons)，直接去仓库下载即可：
 
-**[下载 stalzone_icons_full.zip](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/stalzone_icons_full.zip)**
-
-解压后把里面的 `item_icons/` 文件夹放到 AstrBot 插件数据目录：
+1. 打开 GitHub 仓库，点 **Code → Download ZIP**；
+2. 解压后只取 `astrbot_plugin_stalzone/item_icons/` 文件夹（也可以只下载需要的单个 `.png`）；
+3. 把整个 `item_icons/` 放到 AstrBot 插件数据目录：
 
 ```text
 data/plugin_data/astrbot_plugin_stalzone/item_icons/<物品ID>.png
 ```
 
-然后在 WebUI 重载插件。Windows 下同样放在 `AstrBot/data/plugin_data/astrbot_plugin_stalzone/item_icons/`。未安装扩展包时，缺失图标会尝试 CDN 懒加载；若仍无图会显示「暂无图标」。需要离线完整图标时请安装扩展包。
+4. 在 WebUI 重载插件。
 
-> 发布到插件市场时请使用 Release 中的 `astrbot_plugin_stalzone.zip`，不要用 GitHub 源码仓库 ZIP；源码仓库保留完整图标用于生成扩展包，体积会超过 16 MiB。
+Windows 下同样放在 `AstrBot/data/plugin_data/astrbot_plugin_stalzone/item_icons/`。未安装完整图标时，缺失图标会尝试 CDN 懒加载；若仍无图会显示「暂无图标」。
+
+> 发布到插件市场时请使用 Release 中的 `astrbot_plugin_stalzone.zip`，不要用 GitHub 源码仓库 ZIP；源码仓库保留完整图标，体积会超过 16 MiB。源码 ZIP 只用于取 `item_icons/`。
 
 Linux 容器如果缺少中文字体，安装 Noto CJK：
 
@@ -262,7 +264,7 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ## 数据与缓存
 
 - **实时数据**：拍卖、风暴、玩家、战队、行动记录、区服全部来自官方 API，不写入知识库。
-- **静态数据**：物品索引、物品详情、常用图标和 2023–2026 平衡公告随插件打包；完整 2,600 图标作为独立扩展包下载，离线可查。
+- **静态数据**：物品索引、物品详情、常用图标和 2023–2026 平衡公告随插件打包；完整 2,600 图标保留在 GitHub 仓库 `item_icons/`，可按需手动安装，离线可查。
 - **第三方数据**：Lunar 只用于玩家资料的 K/D/KDA 补充；SC CORE 只用于官方历史翻页失效时的旧成交补全；两者都会在输出中标注来源。
 - **性能**：物品搜索使用别名缓存和模糊匹配预筛；搜索、图片渲染和 base64 编码在线程池执行；官方 API 复用同一个 `httpx.AsyncClient` 连接池。
 - **API 缓存、重试与并发**：普通拍卖在售/成交缓存 20 秒，风暴状态缓存 10 秒；429/5xx/超时最多重试 2 次并指数退避；同一时刻最多 6 个查询进入 API 处理；同一群默认 1 秒查询冷却。带日期的历史查询不缓存，保证翻页结果准确。
@@ -282,7 +284,7 @@ astrbot_plugin_stalzone/
 ├── item_index.py            # 中/英/俄物品名 → item_id
 ├── item_index.json          # 2,615 件物品双语索引
 ├── item_details.json        # 1,338 件物品属性/描述
-├── item_icons/              # 826 个随包常用图标（完整扩展包单独下载）
+├── item_icons/              # 826 个随包常用图标（完整图标在仓库中按需下载）
 ├── balance_history.py       # 官方平衡公告索引
 ├── season_pass.py           # 通行证计算
 ├── pda_format.py            # PDA §颜色/渐变解析
@@ -290,7 +292,7 @@ astrbot_plugin_stalzone/
 ├── sc_core_client.py        # SC CORE 第三方历史补全（可选）
 ├── assets/                  # 壁纸、署名字体、阵营徽记
 ├── docs/images/             # README 预览图
-├── tools/build_package.py   # 16 MiB 插件包与完整图标扩展包构建
+├── tools/build_package.py   # 16 MiB 插件包构建（可选图标扩展包）
 ├── tests/                   # 单元测试与集成测试
 ├── _conf_schema.json
 ├── metadata.yaml
