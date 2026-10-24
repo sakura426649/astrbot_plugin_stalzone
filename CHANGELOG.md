@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.30 - 2026-10-23
+
+### Changed
+
+- Removed the outer achievement container; each achievement is now a separate rounded 44px row with 10px spacing and 16px text, using the neutral dark panel palette.
+
 ## 1.0.29 - 2026-10-23
 
 ### Changed

@@ -1635,7 +1635,7 @@ def render_profile_card(
         combat_value_font = ImageFont.truetype(str(path), 20)
         stat_label_font = ImageFont.truetype(str(path), 18)
         stat_value_font = ImageFont.truetype(str(path), 19)
-        achievement_font = ImageFont.truetype(str(path), 14)
+        achievement_font = ImageFont.truetype(str(path), 16)
         mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
         return None
@@ -1664,10 +1664,10 @@ def render_profile_card(
     pvp_detail_lines = list(hq.get("detail_lines") or []) if hq else []
     pvp_detail_h = 16 + len(pvp_detail_lines) * 24 if pvp_detail_lines else 0
     ach_y = 692
-    ach_chip_h = 36
-    ach_gap = 9
-    ach_container_h = 16 + len(achievements) * ach_chip_h + max(0, len(achievements) - 1) * ach_gap if achievements else 0
-    ach_end = ach_y + 30 + ach_container_h if achievements else 0
+    ach_chip_h = 44
+    ach_gap = 10
+    ach_block_h = len(achievements) * ach_chip_h + max(0, len(achievements) - 1) * ach_gap if achievements else 0
+    ach_end = ach_y + 30 + ach_block_h if achievements else 0
 
     y = content_y
     if bio_height:
@@ -1767,20 +1767,15 @@ def render_profile_card(
             draw, left_x + 24, ach_y, "展示成就 / ACHIEVEMENTS",
             ImageFont.truetype(str(path), 15), "#FFD166",
         )
-        container_top = ach_y + 30
-        draw.rounded_rectangle(
-            (left_x + 24, container_top, left_x + left_w - 24, container_top + ach_container_h),
-            radius=12, fill=(10, 16, 24, 145), outline=(78, 100, 120, 65), width=1,
-        )
-        cy = container_top + 8
+        cy = ach_y + 30
         for item in achievements:
             draw.rounded_rectangle(
-                (left_x + 32, cy, left_x + left_w - 32, cy + ach_chip_h),
-                radius=9, fill=(17, 25, 34, 230), outline=(82, 104, 124, 85), width=1,
+                (left_x + 24, cy, left_x + left_w - 24, cy + ach_chip_h),
+                radius=12, fill=(17, 25, 34, 235), outline=(82, 104, 124, 90), width=1,
             )
-            draw.ellipse((left_x + 45, cy + 15, left_x + 51, cy + 21), fill="#9DB8CC")
+            draw.ellipse((left_x + 39, cy + 18, left_x + 47, cy + 26), fill="#9DB8CC")
             draw.text(
-                (left_x + 60, cy + 8),
+                (left_x + 58, cy + 11),
                 _fit_text(draw, item, achievement_font, left_w - 100),
                 font=achievement_font, fill="#DCE6EF",
             )
