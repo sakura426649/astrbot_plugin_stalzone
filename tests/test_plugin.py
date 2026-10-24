@@ -312,8 +312,8 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("最近成交", text)
         self.assertIn("按买断价", text)
         self.assertLess(
-            text.index("1. y1q9＋1  500"),
-            text.index("2. y1q9＋15  100"),
+            text.index("1. y1q9＋15  100"),
+            text.index("2. y1q9＋1  500"),
         )
         self.assertLess(text.index("2,400 ×2"), text.index("  1,000"))
 
@@ -364,6 +364,47 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(
             [group["quality"] for group in view["recent_groups"]], [5, 3]
         )
+
+    def test_artifact_extras_keep_lowest_start_outside_group_selection(self):
+        lots = []
+        for q in (5, 4, 3, 2):
+            for level in (0, 1, 5, 10, 15):
+                for k in range(2):
+                    lots.append(
+                        {
+                            "amount": 1,
+                            "startPrice": 10000 + k,
+                            "buyoutPrice": 20000 + k,
+                            "endTime": "2026-10-25T06:00:00Z",
+                            "additional": {"qlt": q, "ptn": level},
+                        }
+                    )
+        lots.append(
+            {
+                "amount": 1,
+                "startPrice": 1,
+                "buyoutPrice": 999999,
+                "endTime": "2026-10-25T06:00:00Z",
+                "additional": {"qlt": 3, "ptn": 5},
+            }
+        )
+        view = build_auction_view(
+            "wg53",
+            {"total": len(lots), "lots": lots},
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertIsNotNone(view)
+        lowest_start = [
+            row
+            for row in view["active"]
+            if row.get("start_value") == 1
+        ]
+        self.assertEqual(len(lowest_start), 1)
+        self.assertNotIn("badges", lowest_start[0])
+        self.assertIn("另补最低买断/起拍", view["active_note"])
 
     def test_common_quality_uses_title_white_not_fallback_grey(self):
         lots = {
@@ -715,6 +756,53 @@ class FormatterTests(unittest.TestCase):
         text = format_auction_text(view)
         self.assertIn("共 40 条，显示前 15 条和后 15 条", text)
         self.assertIn("中间省略 10 条", text)
+
+    def test_auction_keeps_lowest_buyout_and_start_rows(self):
+        lots = []
+        for i in range(40):
+            if i < 15:
+                buyout = 20000 - i * 100
+            elif i < 25:
+                buyout = 12000 - (i - 15) * 100
+            else:
+                buyout = 10000 - (i - 25) * 100
+            start = 1 if i == 20 else buyout + 500
+            lots.append(
+                {
+                    "amount": 1,
+                    "startPrice": start,
+                    "buyoutPrice": buyout,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 4},
+                }
+            )
+        view = build_auction_view(
+            "wg53",
+            {"total": 40, "lots": lots},
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+            non_artifact=True,
+        )
+        self.assertIsNotNone(view)
+        lowest_start = [
+            row for row in view["active"] if row.get("start_value") == 1
+        ]
+        self.assertEqual(len(lowest_start), 1)
+        self.assertIn("最低起拍", lowest_start[0].get("badges", []))
+        lowest_buyout = [
+            row
+            for row in view["active"]
+            if row.get("buyout_value")
+            == min(item.get("buyout_value", 0) for item in view["active"]
+                   if item.get("buyout_value", 0) > 0)
+        ]
+        self.assertEqual(len(lowest_buyout), 1)
+        self.assertIn("最低买断", lowest_buyout[0].get("badges", []))
+        text = format_auction_text(view)
+        self.assertIn("[最低起拍]", text)
+        self.assertIn("最低买断", text)
 
     def test_artifact_cap_keeps_cheapest_row_per_level(self):
         lots = {

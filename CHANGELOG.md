@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.4 - 2026-10-24
+
+### Fixed
+
+- The auction display limit now applies only when more than 30 active lots exist; normal auctions show every listing.
+- When the display is reduced, the global lowest-buyout and lowest-start lots are always included even if they fall outside the head/tail or quality/level selection. Non-artifact rows get explicit badges; artifact sections omit the badge because every displayed per-level row is already the lowest.
+
+### Tests
+
+- Added lowest-buyout/lowest-start retention coverage; 183 tests and 10 visual signatures pass.
+
 ## 1.1.3 - 2026-10-24
 
 ### Changed

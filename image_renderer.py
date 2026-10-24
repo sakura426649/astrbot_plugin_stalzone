@@ -3175,11 +3175,16 @@ def render_auction_card(
                 name = _fit_text(draw, str(row.get("name", "")), body_font, name_right - left - 12)
                 color = str(row.get("color") or TEXT)
                 draw.text((left, y), name, font=body_font, fill=color)
-                if row.get("lowest"):
+                badges = [
+                    str(label) for label in (row.get("badges") or []) if label
+                ]
+                if row.get("lowest") and not badges:
+                    badges = [str(row.get("lowest_label") or "最低价")]
+                if badges:
                     _draw_lowest_badge(
                         left + int(draw.textlength(name, font=body_font)) + 6,
                         y,
-                        str(row.get("lowest_label") or "最低价"),
+                        "/".join(badges),
                     )
                 values = [
                     (row.get("start", "\\"), start_right),
