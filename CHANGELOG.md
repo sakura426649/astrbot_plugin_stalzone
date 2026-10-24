@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.15 - 2026-10-24
+
+### Changed
+
+- Auction offer metadata moved from the item name to the price column: auction rows now show `单价 (竞拍·总价xx)`, while buyout rows remain unlabeled.
+- Quantity table header uses `总价` for the buyout/auction total column.
+
+### Tests
+
+- Updated the quantity annotation assertion; 185 tests and 11 visual signatures pass.
+
 ## 1.1.14 - 2026-10-24
 
 ### Fixed

@@ -2834,14 +2834,14 @@ def _render_quantity_auction_card(
             (x + col_w, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
         )
         draw.text(
-            (x + int(col_w * 0.78), y),
-            "买断",
+            (x + int(col_w * 0.86), y),
+            "总价",
             font=head_font,
             fill=MUTED,
             anchor="ra",
         )
         draw.text(
-            (x + int(col_w * 0.54), y),
+            (x + int(col_w * 0.48), y),
             "单价",
             font=head_font,
             fill=MUTED,
@@ -2853,17 +2853,12 @@ def _render_quantity_auction_card(
             if row_index >= len(rows):
                 break
             row = rows[row_index]
-            label = str(row.get("offer_label") or "")
-            display_name = (
-                f"{row.get('name', '')} · 竞拍"
-                if row.get("offer_kind") == "auction"
-                else str(row.get("name", ""))
-            )
+            display_name = str(row.get("name", ""))
             name = _fit_text(
                 draw,
                 display_name,
                 body_font,
-                int(col_w * 0.50) - 10,
+                int(col_w * 0.34) - 10,
             )
             draw.text(
                 (x, ry),
@@ -2872,19 +2867,30 @@ def _render_quantity_auction_card(
                 fill=str(row.get("color") or TEXT),
             )
             draw.text(
-                (x + int(col_w * 0.54), ry),
+                (x + int(col_w * 0.48), ry),
                 str(row.get("unit_price") or "\\"),
                 font=body_font,
                 fill=TEXT,
                 anchor="ra",
             )
-            draw.text(
-                (x + int(col_w * 0.78), ry),
-                str(row.get("buyout") or "\\"),
-                font=body_font,
-                fill=TEXT,
-                anchor="ra",
+            total_text = str(
+                row.get("offer_total_display") or row.get("buyout") or "\\"
             )
+            if row.get("offer_kind") == "auction":
+                draw.text(
+                    (x + int(col_w * 0.48) + 8, ry),
+                    _fit_text(draw, total_text, small_font, int(col_w * 0.38)),
+                    font=small_font,
+                    fill=TEXT,
+                )
+            else:
+                draw.text(
+                    (x + int(col_w * 0.86), ry),
+                    _fit_text(draw, total_text, small_font, int(col_w * 0.34)),
+                    font=small_font,
+                    fill=TEXT,
+                    anchor="ra",
+                )
             draw.text(
                 (x + col_w, ry),
                 str(row.get("remaining") or ""),

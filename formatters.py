@@ -892,6 +892,9 @@ def build_auction_view(
                 row["offer_unit_value"] = (
                     int(row.get("buyout_value") or 0) / amount
                 )
+                row["offer_total_display"] = _display_price(
+                    int(row.get("buyout_value") or 0)
+                )
                 row.pop("lowest", None)
                 row.pop("lowest_label", None)
                 row.pop("badges", None)
@@ -910,6 +913,9 @@ def build_auction_view(
                     row["offer_unit_value"] = start_value / amount
                     unit = _unit_price(start_value, amount)
                     row["unit_price"] = f"{unit:,}" if unit is not None else "\\"
+                    row["offer_total_display"] = (
+                        f"(竞拍·总价{start_value:,})"
+                    )
                     row["buyout"] = "—"
                     row.pop("lowest", None)
                     row.pop("lowest_label", None)
@@ -1226,13 +1232,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 "",
                 f"在售（按数量最低单价｜{view['quantity_count']} 种数量 / "
                 f"{view['active_total']:,} 条在售）",
-                "  名称  单价  买断  剩余时间",
+                "  名称  单价  总价  剩余时间",
             ])
             for row in view["active"]:
-                label = " [竞拍]" if row.get("offer_kind") == "auction" else ""
                 lines.append(
-                    f"  {row['name']}{label}  {row['unit_price']}  "
-                    f"{row['buyout']}  {row['remaining']}"
+                    f"  {row['name']}  {row['unit_price']}  "
+                    f"{row.get('offer_total_display') or row['buyout']}  "
+                    f"{row['remaining']}"
                 )
             if view.get("active_note"):
                 lines.append(str(view["active_note"]))
