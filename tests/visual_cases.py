@@ -203,7 +203,17 @@ def _auction_quantity_many() -> Path | None:
     view = build_auction_view(
         "d1p5",
         {"total": len(lots), "lots": lots},
-        {"total": 0, "prices": []},
+        {
+            "total": 6,
+            "prices": [
+                {
+                    "amount": amount,
+                    "price": amount * 1_200,
+                    "time": f"2026-10-24T{5 - index:02d}:00:00Z",
+                }
+                for index, amount in enumerate((1, 2, 5, 10, 20, 31))
+            ],
+        },
         "ru",
         now=NOW,
         item_label="10mm 穿甲弹 / 10 mm Armor-Piercing Round",

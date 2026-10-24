@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.21 - 2026-10-24
+
+### Changed
+
+- The two-column quantity divider now uses the same border color as the horizontal separators.
+- Recent trades below a two-column quantity table are now an independent centered block with 19px names/prices and 16px headers/time, instead of stretching the small columns across the full card width.
+
+### Tests
+
+- Regenerated the 12 Windows visual signatures; 187 tests pass.
+
 ## 1.1.20 - 2026-10-24
 
 ### Fixed
