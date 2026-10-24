@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.34 - 2026-10-24
+
+### Fixed
+
+- Proactive alerts now use AstrBot's documented `MessageChain().file_image(...)` builder instead of passing raw components to the chain constructor. The temporary alert image is still removed after sending, and text fallback remains.
+
 ## 1.0.33 - 2026-10-24
 
 ### Added

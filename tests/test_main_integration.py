@@ -1075,8 +1075,6 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             ).isoformat(),
         }
         with patch.object(main_module, "MessageChain", FakeChain), patch.object(
-            main_module, "AstrImage", None
-        ), patch.object(main_module, "AstrPlain", FakePlain), patch.object(
             main_module,
             "render_emission_alert_card",
             lambda view, font_path=None: None,
@@ -1133,14 +1131,14 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             async def send_message(self, target, chain):
                 self.sent.append((target, chain))
 
-        class FakeImage:
-            @staticmethod
-            def fromBase64(encoded):
-                return ("image", encoded)
-
         class FakeChain:
             def __init__(self, components=None):
                 self.components = list(components or [])
+                self.image_path = None
+
+            def file_image(self, path):
+                self.image_path = path
+                return self
 
         context = RecordingContext()
         plugin = StalzonePlugin(
@@ -1154,8 +1152,6 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             image = Path(temp) / "alert.png"
             image.write_bytes(b"not-a-real-png")
             with patch.object(main_module, "MessageChain", FakeChain), patch.object(
-                main_module, "AstrImage", FakeImage
-            ), patch.object(
                 main_module,
                 "render_emission_alert_card",
                 lambda view, font_path=None: image,
@@ -1163,10 +1159,9 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 sent = await plugin._send_emission_alert(payload, "eu")
             self.assertTrue(sent)
             self.assertFalse(image.exists())
+            expected_path = str(image)
         self.assertEqual(len(context.sent), 1)
-        kind, encoded = context.sent[0][1].components[0]
-        self.assertEqual(kind, "image")
-        self.assertTrue(encoded)
+        self.assertEqual(context.sent[0][1].image_path, expected_path)
 
     async def test_force_probe_updates_window_after_restart(self):
         plugin = self.make_plugin()

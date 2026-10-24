@@ -34,11 +34,6 @@ try:
 except ImportError:  # older/newer layout fallback
     AstrImage = None  # type: ignore[assignment]
 try:
-    from astrbot.api.message_components import Plain as AstrPlain
-except ImportError:
-    AstrPlain = None  # type: ignore[assignment]
-
-try:
     from astrbot.core.message.message_event_result import MessageChain
 except ImportError:
     try:
@@ -197,7 +192,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.33"
+PLUGIN_VERSION = "1.0.34"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -514,15 +509,14 @@ class StalzonePlugin(Star):
                 view,
                 font_path=str(self._cfg("font_path", "") or "") or None,
             )
-            if image_path is not None and AstrImage is not None:
-                encoded = await asyncio.to_thread(self._image_base64, image_path)
-                chain = MessageChain([AstrImage.fromBase64(encoded)])
-            else:
-                text = str(view.get("text", "风暴已开始"))
-                if AstrPlain is not None:
-                    chain = MessageChain([AstrPlain(text)])
+            text = str(view.get("text", "风暴已开始"))
+            try:
+                if image_path is not None:
+                    chain = MessageChain().file_image(str(image_path))
                 else:
                     chain = MessageChain().message(text)
+            except Exception:
+                chain = MessageChain().message(text)
             await self.context.send_message(target, chain)
             return True
         except Exception:
