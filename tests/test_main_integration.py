@@ -784,6 +784,15 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mixed.notice_view["query"], "Sakura_Akira")
         self.assertIn("Sakura_Akira", mixed.text)
 
+    async def test_missing_auction_item_uses_item_notice(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_auction("qqqzzzxxx999")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "notice")
+        self.assertEqual(result.notice_view["kind_label"], "物品")
+        self.assertEqual(result.notice_view["region"], "全服")
+        self.assertIn("物品库中不存在该物品", result.notice_view["note"])
+
     async def test_missing_player_returns_notice_card(self):
         from api_client import NotFoundError
 

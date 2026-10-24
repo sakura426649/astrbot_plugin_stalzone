@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.32 - 2026-10-23
+
+### Fixed
+
+- Auction queries now check the local item catalog first. A fabricated or unknown item gets the item-not-found card instead of an auction “unsupported” message.
+- Only catalog items whose auction endpoints still return 400/404 produce the “暂不支持拍卖查询” auction card.
+
+### Tests
+
+- Added the missing-auction-item regression; 154 tests pass.
+
 ## 1.0.31 - 2026-10-23
 
 ### Changed

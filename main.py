@@ -180,7 +180,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.31"
+PLUGIN_VERSION = "1.0.32"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -1129,23 +1129,15 @@ class StalzonePlugin(Star):
                 sub="candidates",
             )
         else:
-            raw = item_query.strip()
-            if not ITEM_ID_RE.match(raw):
-                return self._not_found(
-                    "auction",
-                    item_query,
-                    note=(
-                        "没有找到该物品。请先确认物品名/ID，"
-                        "或改用更短的关键词查看候选。"
-                    ),
-                )
-            item_id = raw
-            raw_item = self.item_index.get(raw) if self.item_index.ready else None
-            label = display_name(raw_item) if raw_item else None
-            icon_url = raw_item.get("icon") if raw_item else None
-            if raw_item:
-                item_color = raw_item.get("color")
-                non_artifact = not str(raw_item.get("cat") or "").startswith("artefact")
+            # The auction endpoint is not the source of truth for catalog
+            # existence. If the item is absent from the local catalog, show
+            # the item-not-found card instead of blaming the auction query.
+            return self._not_found(
+                "item",
+                item_query,
+                region="全服",
+                note="物品库中不存在该物品，无法查询拍卖。请确认物品名或 ID。",
+            )
         item_name_color = (
             item_rank_color(item_color) if non_artifact else None
         )
