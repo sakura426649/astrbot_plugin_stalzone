@@ -1226,12 +1226,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 "",
                 f"在售（按数量最低单价｜{view['quantity_count']} 种数量 / "
                 f"{view['active_total']:,} 条在售）",
-                "  名称  类型  单价  买断  剩余时间",
+                "  名称  单价  买断  剩余时间",
             ])
             for row in view["active"]:
+                label = " [竞拍]" if row.get("offer_kind") == "auction" else ""
                 lines.append(
-                    f"  {row['name']}  [{row.get('offer_label') or '买断'}]  "
-                    f"{row['unit_price']}  {row['buyout']}  {row['remaining']}"
+                    f"  {row['name']}{label}  {row['unit_price']}  "
+                    f"{row['buyout']}  {row['remaining']}"
                 )
             if view.get("active_note"):
                 lines.append(str(view["active_note"]))

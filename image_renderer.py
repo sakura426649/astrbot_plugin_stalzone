@@ -2775,6 +2775,7 @@ def _render_quantity_auction_card(
     table_head_h = 30
     row_h = 32
     table_h = table_head_h + per_col * row_h
+    table_top = section_y + 36
     recent_groups = [
         group
         for group in (view.get("recent_groups") or [])
@@ -2787,7 +2788,7 @@ def _render_quantity_auction_card(
     if not recent_groups:
         recent_h = 62
     footer_h = 112
-    height = section_y + table_h + 28 + recent_h + footer_h
+    height = table_top + table_h + 24 + recent_h + footer_h
     canvas = _card_canvas(width, height, alpha=228)
     if canvas is None:
         return None
@@ -2825,7 +2826,7 @@ def _render_quantity_auction_card(
         fill=MUTED,
         anchor="ra",
     )
-    y = section_y + 36
+    y = table_top
     for column in range(columns):
         x = pad + column * (col_w + gap)
         draw.text((x, y), "名称", font=head_font, fill="#7F93A8")
@@ -2854,7 +2855,9 @@ def _render_quantity_auction_card(
             row = rows[row_index]
             label = str(row.get("offer_label") or "")
             display_name = (
-                f"{row.get('name', '')} · {label}" if label else str(row.get("name", ""))
+                f"{row.get('name', '')} · 竞拍"
+                if row.get("offer_kind") == "auction"
+                else str(row.get("name", ""))
             )
             name = _fit_text(
                 draw,
@@ -2862,7 +2865,12 @@ def _render_quantity_auction_card(
                 body_font,
                 int(col_w * 0.50) - 10,
             )
-            draw.text((x, ry), name, font=body_font, fill=TEXT)
+            draw.text(
+                (x, ry),
+                name,
+                font=body_font,
+                fill=str(row.get("color") or TEXT),
+            )
             draw.text(
                 (x + int(col_w * 0.54), ry),
                 str(row.get("unit_price") or "\\"),
@@ -2886,7 +2894,7 @@ def _render_quantity_auction_card(
             )
             ry += row_h
 
-    ry = section_y + table_h + 20
+    ry = table_top + table_h + 18
     draw.line((pad, ry, width - pad, ry), fill=BORDER, width=1)
     ry += 18
     if view.get("recent_total_limit") is not None:

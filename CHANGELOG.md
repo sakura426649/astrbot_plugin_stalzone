@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.14 - 2026-10-24
+
+### Fixed
+
+- Stackable quantity rows now use the item quality color instead of the neutral text color.
+- Only auction offers get a `竞拍` label; buyout rows no longer repeat a redundant `买断` label in the image or text.
+- Fixed the quantity table's bottom divider overlapping the final row by accounting for the section header offset in the card height.
+
+### Tests
+
+- Updated quantity-label assertions; 185 tests and 11 visual signatures pass.
+
 ## 1.1.13 - 2026-10-24
 
 ### Changed

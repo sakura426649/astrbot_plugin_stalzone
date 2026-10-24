@@ -891,7 +891,7 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("按数量最低单价", text)
         self.assertIn("5 种数量 / 15 条在售", text)
         self.assertIn("[竞拍]", text)
-        self.assertIn("[买断]", text)
+        self.assertNotIn("[买断]", text)
 
     def test_stackable_auction_omits_auction_when_not_cheaper(self):
         lots = {

@@ -4,7 +4,7 @@ short_desc: 查询 STALZONE 拍卖、爆发、角色、战队和物品
 desc: >-
   通过官方 STALZONE API 在 QQ 群内查询拍卖在售/成交、辐射爆发、角色资料、战队、行动记录和物品；
   支持中文/英文物品名解析到 ID；输出可选卡片图片或纯文本。实时数据不写入知识库，默认区服可配置为 ru/eu/na/sea/nea。
-version: 1.1.13
+version: 1.1.14
 author: Sakura_Akira
 repo: "https://github.com/sakura426649/astrbot_plugin_stalzone"
 license: MIT
