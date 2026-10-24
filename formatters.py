@@ -1240,7 +1240,6 @@ def build_emission_alert_view(
         now_utc = now_utc.replace(tzinfo=timezone.utc)
     now_utc = now_utc.astimezone(timezone.utc)
     start = current.astimezone(CST)
-    detected = now_utc.astimezone(CST)
     elapsed = max(0, int((now_utc - current).total_seconds()))
     if elapsed >= 3600:
         elapsed_text = format_elapsed_hms(elapsed)
@@ -1254,16 +1253,21 @@ def build_emission_alert_view(
         "start_time": start.strftime("%Y-%m-%d %H:%M:%S") + " UTC+8",
         "start_clock": start.strftime("%H:%M"),
         "start_date": start.strftime("%Y-%m-%d"),
-        "detected_time": detected.strftime("%Y-%m-%d %H:%M:%S") + " UTC+8",
         "elapsed_text": elapsed_text,
+        "artifact_notice": "风暴结束后 30 分钟内将伴随神器爆发",
+        "artifact_tip": "Tip：神器会在大世界的各处异常点中生成",
+        "more_tip": "更多功能：sz help 获取菜单",
         "state_label": "风暴进行中",
         "footer": "自动检测 · 官方 API · UTC+8",
         "text": chr(10).join(
             [
                 f"辐射风暴已开始｜{str(region).upper()}",
-                f"开始时间：{start.strftime('%Y-%m-%d %H:%M:%S')} UTC+8",
+                f"实际开始：{start.strftime('%Y-%m-%d %H:%M:%S')} UTC+8",
                 f"当前已持续：{elapsed_text}",
+                "风暴结束后 30 分钟内将伴随神器爆发。",
                 "请尽快上线。",
+                "Tip：神器会在大世界的各处异常点中生成",
+                "更多功能：sz help 获取菜单",
             ]
         ),
     }

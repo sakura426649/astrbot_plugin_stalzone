@@ -733,9 +733,26 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(view["start_clock"], "13:00")
         self.assertEqual(view["start_date"], "2026-10-22")
         self.assertEqual(view["elapsed_text"], "17分00秒")
+        self.assertEqual(view["start_time"], "2026-10-22 13:00:00 UTC+8")
+        self.assertIn("风暴结束后 30 分钟内将伴随神器爆发", view["text"])
+        self.assertIn("Tip：神器会在大世界的各处异常点中生成", view["text"])
+        self.assertIn("更多功能：sz help 获取菜单", view["text"])
         self.assertIn("辐射风暴已开始", view["text"])
         self.assertIn("请尽快上线", view["text"])
+        self.assertNotIn("检测时间", view["text"])
         self.assertEqual(build_emission_alert_view({}, "eu"), {})
+
+    def test_emission_alert_uses_actual_start(self):
+        view = build_emission_alert_view(
+            {"currentStart": "2026-10-22T05:00:00Z"},
+            "eu",
+            now=__import__("datetime").datetime(
+                2026, 10, 22, 5, 1, tzinfo=__import__("datetime").timezone.utc
+            ),
+        )
+        self.assertEqual(view["start_clock"], "13:00")
+        self.assertEqual(view["elapsed_text"], "1分00秒")
+        self.assertIn("实际开始：2026-10-22 13:00:00 UTC+8", view["text"])
 
     def test_profile_fields(self):
         payload = {
@@ -1670,7 +1687,7 @@ class ImageRendererTests(unittest.TestCase):
         path = render_emission_alert_card(view)
         self.assertIsNotNone(path)
         with Image.open(path) as image:
-            self.assertEqual(image.size, (1200, 660))
+            self.assertEqual(image.size, (1200, 700))
         path.unlink(missing_ok=True)
 
     @unittest.skipUnless(find_cjk_font(), "No CJK font installed")

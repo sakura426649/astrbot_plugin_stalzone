@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.34-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.35-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,7 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stacked items with unit price and lowest-price marker |
 | Emission | Time since the last emission, current status and region selection |
-| Auto emission alert | Enabled by default; polls once a minute only in the 2–4h window after the previous emission and pushes a distinct "emission started" alert image |
+| Auto emission alert | Enabled by default; polls once a minute only in the 2–4h window and pushes a distinct "emission started" alert image with the artifact window |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
 | Item | 2,615 bilingual entries, 1,338 detail records, 2,600 bundled icons, semantic stat colors |
@@ -103,7 +103,7 @@ The game does not start a new emission in the first 2 hours after one ends; the 
 - State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start and latest target, so a restart neither loses the window nor repeats an alert.
 - Target precedence: `emission_notify_target` → the latest `/sz` session. If no target exists yet, set the config value or run one query in the group first.
 
-The automatic card shares the doomsday emission style but leads with "风暴已开始" and the large start time instead of the elapsed duration. If image rendering is unavailable it falls back to text.
+The automatic card shares the doomsday emission style but leads with "风暴已开始" and the official start time (not the detection time). It also shows the 30-minute artifact window and where artifacts spawn. If image rendering is unavailable it falls back to text.
 
 ## Data notes
 

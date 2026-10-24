@@ -40,6 +40,7 @@ SIGNATURE_NAME = "@Sakura_Akira"
 SIGNATURE = f"{SIGNATURE_PREFIX} {SIGNATURE_NAME}"
 SIGNATURE_COLOR = "#e7c27d"
 SIGNATURE_HEIGHT = 38
+MORE_FEATURES_TIP = "更多功能：sz help 获取菜单"
 RANK_COLORS = {
     "newbie": "#53C353",
     "stalker": "#4EA8FF",
@@ -949,13 +950,17 @@ def _emission_canvas(width: int, height: int) -> Any:
     icon_path = Path(__file__).with_name("assets") / "factions" / "stalkers.png"
     try:
         icon = Image.open(icon_path).convert("RGBA")
-        icon.thumbnail((560, 560), Image.LANCZOS)
-        alpha = icon.getchannel("A").point(lambda value: int(value * 0.14))
+        icon_size = max(380, int(min(width, height) * 0.68))
+        scale = icon_size / max(icon.size)
+        icon = icon.resize(
+            (int(icon.width * scale), int(icon.height * scale)), Image.LANCZOS
+        )
+        alpha = icon.getchannel("A").point(lambda value: int(value * 0.10))
         tint = Image.new("RGBA", icon.size, (190, 38, 22, 255))
         tint.putalpha(alpha)
         canvas.alpha_composite(
             tint,
-            (width - icon.width - 24, max(120, (height - icon.height) // 2)),
+            ((width - icon.width) // 2, (height - icon.height) // 2),
         )
     except Exception:
         pass
@@ -980,7 +985,7 @@ def render_emission_alert_card(
     *,
     font_path: str | None = None,
     width: int = 1200,
-    height: int = 660,
+    height: int = 700,
 ) -> Path | None:
     """Render the proactive "emission started" alert in the same poster style."""
     if (
@@ -1007,6 +1012,8 @@ def render_emission_alert_card(
         small_font = ImageFont.truetype(str(path), 16)
         chip_font = ImageFont.truetype(str(path), 18)
         action_font = ImageFont.truetype(str(path), 27)
+        artifact_font = ImageFont.truetype(str(path), 20)
+        tip_font = ImageFont.truetype(str(path), 14)
     except Exception:
         return None
 
@@ -1059,29 +1066,52 @@ def render_emission_alert_card(
     )
     draw.text(
         (centre, 390),
-        f"开始于 {view.get('start_date', '')}  ·  {view.get('region', '')}",
+        f"实际开始于 {view.get('start_date', '')}  ·  {view.get('region', '')}",
         font=sub_font, fill=bone, anchor="mm",
     )
     draw.text(
         (centre, 424),
-        f"检测时已持续 {view.get('elapsed_text', '—')}",
+        f"已持续 {view.get('elapsed_text', '—')}",
         font=small_font, fill=muted, anchor="mm",
     )
-    draw.text((centre, 480), "请尽快上线", font=action_font, fill=ember, anchor="mm")
-
-    draw.line((pad, 530, width - pad, 530), fill=(150, 45, 30, 130), width=1)
     draw.text(
-        (pad, 546),
-        f"检测时间：{view.get('detected_time', '')}",
+        (centre, 466),
+        str(view.get("artifact_notice") or "风暴结束后 30 分钟内将伴随神器爆发"),
+        font=artifact_font, fill="#ffb27a", anchor="mm",
+    )
+    draw.text((centre, 506), "请尽快上线", font=action_font, fill=ember, anchor="mm")
+
+    draw.line((pad, 546, width - pad, 546), fill=(150, 45, 30, 130), width=1)
+    draw.text(
+        (pad, 562),
+        f"实际开始：{view.get('start_time', '')}",
         font=small_font, fill=muted,
     )
     draw.text(
-        (width - pad, 546),
+        (width - pad, 562),
         "自动检测 · 官方 API · UTC+8",
         font=small_font, fill=muted, anchor="ra",
     )
+    draw.text(
+        (pad, height - 70),
+        str(view.get("more_tip") or "更多功能：sz help 获取菜单"),
+        font=tip_font,
+        fill=muted,
+    )
+    draw.text(
+        (pad, height - 42),
+        str(view.get("artifact_tip") or "Tip：神器会在大世界的各处异常点中生成"),
+        font=tip_font,
+        fill=muted,
+    )
     _draw_signature(
-        draw, width, height - 48, path, small_font, max_bottom=height,
+        draw,
+        width,
+        height - 58,
+        path,
+        small_font,
+        max_bottom=height,
+        more_tip=False,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
@@ -1291,6 +1321,8 @@ def render_emission_card(
         small_font,
         right_margin=62,
         max_bottom=height,
+        tip_color=muted,
+        tip_x=pad,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
@@ -1502,6 +1534,7 @@ def render_help_card(
         small_font,
         right_margin=60,
         max_bottom=height,
+        more_tip=False,
     )
 
     if output is not None:
@@ -1552,6 +1585,9 @@ def _draw_signature(
     *,
     right_margin: int = PAD,
     max_bottom: int | None = None,
+    more_tip: bool = True,
+    tip_color: str = MUTED,
+    tip_x: int = PAD,
 ) -> int:
     """Draw the bottom-right artistic signature with a shared text baseline."""
     if ImageFont is None:
@@ -1586,6 +1622,22 @@ def _draw_signature(
     baseline = y + max(art_ascent, name_ascent)
     art_top = baseline - art_ascent
     name_top = baseline - name_ascent
+    if more_tip:
+        tip_font = None
+        for size in (12, 11):
+            try:
+                tip_font = ImageFont.truetype(str(name_path or art_path), size)
+                break
+            except Exception:
+                continue
+        if tip_font is not None:
+            bottom = int(max_bottom) if max_bottom is not None else int(y + 44)
+            draw.text(
+                (tip_x, bottom - 42),
+                MORE_FEATURES_TIP,
+                font=tip_font,
+                fill=tip_color,
+            )
     # Soft drop shadow + gold script text; both parts share one baseline.
     draw.text(
         (x + 1, art_top + 2),
@@ -1978,7 +2030,13 @@ def render_profile_card(
         font=small_font, fill=MUTED,
     )
     _draw_signature(
-        draw, width, footer_y + 62, path, small_font, max_bottom=height,
+        draw,
+        width,
+        footer_y + 62,
+        path,
+        small_font,
+        max_bottom=height,
+        tip_x=60,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
@@ -2404,7 +2462,9 @@ def render_pass_card(
         (PAD, footer_y + 12), str(view.get("footer") or ""),
         font=small_font, fill=MUTED,
     )
-    _draw_signature(draw, W, height - 58, path, small_font, max_bottom=height)
+    _draw_signature(
+        draw, W, height - 58, path, small_font, max_bottom=height, tip_x=PAD
+    )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2647,6 +2707,7 @@ def render_candidate_card(
         footer_font,
         right_margin=58,
         max_bottom=height,
+        tip_x=pad,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"

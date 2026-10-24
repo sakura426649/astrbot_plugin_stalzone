@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.35 - 2026-10-24
+
+### Changed
+
+- Moved the radiation trefoil watermark from the right edge to the card centre, enlarged it moderately and faded it behind the content on both emission cards.
+- The automatic alert now uses the official `currentStart` as the displayed storm start, even when detection happens a minute later, and its elapsed line no longer says "检测时".
+- Added the post-storm artifact notice above the "请尽快上线" prompt and a small spawn-location tip at the bottom of the automatic alert.
+- Added a subtle, card-matched "更多功能：sz help 获取菜单" line in the bottom-left corner of every generated card except the help menu.
+
+### Tests
+
+- Added an actual-start-time regression; 166 tests pass.
+
 ## 1.0.34 - 2026-10-24
 
 ### Fixed
