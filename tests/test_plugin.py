@@ -770,6 +770,36 @@ class FormatterTests(unittest.TestCase):
         self.assertTrue(path.exists())
         path.unlink(missing_ok=True)
 
+    def test_hq_current_formula_and_fight_stats(self):
+        stats = [
+            {"id": "kil", "value": 42083},
+            {"id": "kills-bf", "value": 11053},
+            {"id": "ast", "value": 16434},
+            {"id": "dea", "value": 60286},
+            {"id": "bul-dea", "value": 30000},
+            {"id": "col-dea", "value": 20000},
+            {"id": "exp-dea", "value": 5000},
+            {"id": "ble-to-dea", "value": 878},
+            {"id": "deaths-bf", "value": 19695},
+            {"id": "ano-dea", "value": 627},
+            {"id": "won-fights-personal", "value": 1347},
+            {"id": "won-fights-equal", "value": 149},
+            {"id": "fights-part", "value": 2516},
+            {"id": "won-bf", "value": 533},
+            {"id": "lost-bf", "value": 634},
+            {"id": "part-bf", "value": 1167},
+        ]
+        hq = calculate_hq_pvp_score(stats)
+        self.assertIsNotNone(hq)
+        self.assertEqual(hq["kills"], 31030)
+        self.assertEqual(hq["deaths"], 36183)
+        self.assertEqual(hq["score"], 3286)
+        self.assertEqual(hq["wins"], 1496)
+        self.assertEqual(hq["losses"], 1020)
+        self.assertEqual(hq["win_rate"], 1496 * 100 / 2516)
+        self.assertEqual(hq["kd"], 31030 / 36183)
+        self.assertEqual(hq["kd_total"], 42083 / 60286)
+
     def test_profile_hq_section(self):
         payload = {
             "username": "Sakura_Akira",
@@ -791,7 +821,7 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertIn("开放世界 PvP", text)
         self.assertIn("PvP Score：4,158", text)
-        self.assertIn("估算死亡：11,430", text)
+        self.assertIn("PvP 死亡估计：11,430", text)
         self.assertIn("StalzoneHQ", text)
 
     def test_profile_lunar_section(self):

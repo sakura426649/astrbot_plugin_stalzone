@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.27 - 2026-10-23
+
+### Changed
+
+- Updated Open World PvP scoring to the current STALZONEHQ formula: subtract `kills-bf` from `kil`, subtract `deaths-bf` from the bullet/melee/explosion/bleeding deaths, and floor the result.
+- Added full PvP breakdown to the player card/text: total kills/deaths, battlefield kills/deaths, anomaly deaths, total and PvP K/D, duel wins (personal/equal), win rate, and battlefield win/loss record.
+- Restored the `kil` spelling in the official-stat label; only the PvP/duel fields use the new labels.
+
+### Tests
+
+- Added the user-provided HQ example (score 3,286) and field checks; 153 tests pass.
+
 ## 1.0.26 - 2026-10-23
 
 ### Fixed

@@ -38,7 +38,7 @@ STAT_LABELS = {
     "level": "等级",
     "character_level": "角色等级",
     "playtime": "游戏时长",
-    "kil": "击杀（kill）",
+    "kil": "击杀（kil）",
     "ast": "助攻",
     "dea": "总死亡",
     "bul-dea": "子弹死亡",
@@ -1302,21 +1302,18 @@ def _profile_stat_rows(stats: Any) -> list[str]:
 
 HQ_PVP_DEATH_KEYS = (
     "bul-dea",
+    "col-dea",
     "exp-dea",
     "ble-to-dea",
-    "col-dea",
-    "mel-dea",
-    "melee-dea",
-    "kni-dea",
 )
 
 
 def calculate_hq_pvp_score(stats: Any) -> dict[str, Any] | None:
-    """Apply StalzoneHQ's documented Open World PvP estimate formula.
+    """Apply the current StalzoneHQ Open World PvP formula.
 
-    Formula: ((kills + assists * 0.5) / (deaths * 0.33)) * 1000
-    Deaths are the sum of bullet/explosion/bleeding/melee death counters.
-    This is a third-party estimate, not an official combat rating.
+    Kills exclude battlefield (争锋) kills; PvP deaths exclude battlefield
+    deaths and use only bullet/melee/explosion/bleeding deaths.  The score is
+    floored to an integer, matching the public HQ player page.
     """
     if not isinstance(stats, list):
         return None
@@ -1325,22 +1322,94 @@ def calculate_hq_pvp_score(stats: Any) -> dict[str, Any] | None:
         for stat in stats
         if isinstance(stat, dict)
     }
-    kills = _safe_int(values.get("kil", values.get("kills")))
+    kills_total = _safe_int(values.get("kil", values.get("kills")))
+    kills_bf = _safe_int(values.get("kills-bf")) or 0
     assists = _safe_int(values.get("ast", values.get("assists")))
-    deaths = sum(
+    deaths_bf = _safe_int(values.get("deaths-bf")) or 0
+    deaths_components = sum(
         _safe_int(values.get(key)) or 0
         for key in HQ_PVP_DEATH_KEYS
     )
-    if kills is None or assists is None or deaths <= 0:
+    deaths_pvp = max(0, deaths_components - deaths_bf)
+    if kills_total is None or assists is None or deaths_pvp <= 0:
         return None
-    score = ((kills + assists * 0.5) / (deaths * 0.33)) * 1000
+    kills_pvp = max(0, kills_total - kills_bf)
+    score = ((kills_pvp + assists * 0.5) / (deaths_pvp * 0.33)) * 1000
+
+    deaths_total = _safe_int(values.get("dea")) or 0
+    anomaly_deaths = _safe_int(values.get("ano-dea")) or 0
+    wins_personal = _safe_int(values.get("won-fights-personal")) or 0
+    wins_equal = _safe_int(values.get("won-fights-equal")) or 0
+    wins = wins_personal + wins_equal
+    fights_total = _safe_int(values.get("fights-part")) or 0
+    losses = 0
+    for key in ("lost-fights", "lost-fights-personal", "lost-fights-equal"):
+        losses += _safe_int(values.get(key)) or 0
+    if fights_total <= 0:
+        fights_total = wins + losses
+    if losses <= 0 and fights_total >= wins:
+        losses = fights_total - wins
+    if fights_total <= 0:
+        fights_total = wins + losses
+    win_rate = (wins * 100.0 / fights_total) if fights_total > 0 else None
+
+    bf_wins = _safe_int(values.get("won-bf")) or 0
+    bf_losses = _safe_int(values.get("lost-bf")) or 0
+    bf_total = _safe_int(values.get("part-bf")) or (bf_wins + bf_losses)
     return {
         "score": int(score),
-        "kills": kills,
+        "kills": kills_pvp,
+        "kills_total": kills_total,
+        "kills_bf": kills_bf,
         "assists": assists,
-        "deaths": deaths,
-        "kd": kills / deaths,
+        "deaths": deaths_pvp,
+        "deaths_total": deaths_total,
+        "deaths_bf": deaths_bf,
+        "anomaly_deaths": anomaly_deaths,
+        "kd": kills_pvp / deaths_pvp,
+        "kd_total": (kills_total / deaths_total) if deaths_total > 0 else None,
+        "pvp_kd": kills_pvp / deaths_pvp,
+        "wins": wins,
+        "wins_personal": wins_personal,
+        "wins_equal": wins_equal,
+        "losses": losses,
+        "fights_total": fights_total,
+        "win_rate": win_rate,
+        "bf_wins": bf_wins,
+        "bf_losses": bf_losses,
+        "bf_total": bf_total,
+        "bf_kills": kills_bf,
+        "bf_deaths": deaths_bf,
     }
+
+def _hq_detail_lines(hq: dict[str, Any]) -> list[str]:
+    def rate(value: Any) -> str:
+        return f"{float(value):.1f}%" if value is not None else "—"
+
+    kd_total = f"{hq['kd_total']:.2f}" if hq.get("kd_total") is not None else "—"
+    return [
+        (
+            f"击杀总数：{hq['kills_total']:,}（争锋 {hq['kills_bf']:,}）"
+            f"｜总死亡：{hq['deaths_total']:,}（含 PvE）"
+        ),
+        (
+            f"异常死亡：{hq['anomaly_deaths']:,}"
+            f"｜K/D：{kd_total}"
+            f"｜PvP K/D：{hq['pvp_kd']:.2f}"
+        ),
+        (
+            f"对决胜场：{hq['wins']:,}（个人 {hq['wins_personal']:,} / "
+            f"平等 {hq['wins_equal']:,}）"
+        ),
+        (
+            f"胜率：{rate(hq.get('win_rate'))}"
+            f"（{hq['losses']:,} 负 / {hq['fights_total']:,} 场）"
+        ),
+        (
+            f"争锋：胜 {hq['bf_wins']:,} / 负 {hq['bf_losses']:,}"
+            f"｜击杀 {hq['bf_kills']:,} / 死亡 {hq['bf_deaths']:,}"
+        ),
+    ]
 
 
 def build_profile_view(
@@ -1401,6 +1470,8 @@ def build_profile_view(
         clan_rows.append("无 / API 未返回")
 
     hq = calculate_hq_pvp_score(payload.get("stats"))
+    if hq:
+        hq["detail_lines"] = _hq_detail_lines(hq)
     stat_rows = _profile_stat_rows(payload.get("stats"))
 
     lunar_rows: list[str] = []
@@ -1520,9 +1591,9 @@ def format_profile(
                 "开放世界 PvP（StalzoneHQ 公式）",
                 [
                     f"PvP Score：{hq['score']:,}",
-                    f"击杀：{hq['kills']:,}｜助攻：{hq['assists']:,}｜估算死亡：{hq['deaths']:,}",
-                    f"K/D（估算）：{hq['kd']:.2f}",
-                    "公式：((击杀 + 助攻×0.5) / (估算死亡×0.33)) × 1000",
+                    f"开放世界击杀：{hq['kills']:,}｜助攻：{hq['assists']:,}｜PvP 死亡估计：{hq['deaths']:,}",
+                    *list(hq.get("detail_lines") or []),
+                    "公式：((开放世界击杀 + 助攻×0.5) ÷ (PvP 死亡估计×0.33)) × 1000，向下取整",
                     "注：HQ 页面显示的是其缓存分，可能与此实时统计值不同",
                 ],
             )
