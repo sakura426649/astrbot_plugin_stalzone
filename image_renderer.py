@@ -2625,29 +2625,36 @@ def render_auction_card(
                 fill=MUTED,
             )
             y += 36
-        prefix = "未查到关于「"
-        suffix = "」的成交记录"
-        name = str(view.get("empty_name") or view.get("short") or "物品")
-        prefix_w = draw.textlength(prefix, font=empty_font)
-        suffix_w = draw.textlength(suffix, font=empty_font)
-        name = _fit_text(
-            draw,
-            name,
-            empty_font,
-            width - 2 * PAD - prefix_w - suffix_w - 16,
-        )
-        total_w = prefix_w + draw.textlength(name, font=empty_font) + suffix_w
-        x = max(PAD, int((width - total_w) / 2))
-        draw.text((x, y), prefix, font=empty_font, fill=TEXT)
-        x += prefix_w
-        draw.text(
-            (x, y),
-            name,
-            font=empty_font,
-            fill=str(view.get("empty_color") or TEXT),
-        )
-        x += draw.textlength(name, font=empty_font)
-        draw.text((x, y), suffix, font=empty_font, fill=TEXT)
+        if view.get("unsupported"):
+            notice = "该物品暂不支持拍卖查询"
+            draw.text(
+                ((width - draw.textlength(notice, font=empty_font)) / 2, y),
+                notice, font=empty_font, fill=TEXT,
+            )
+        else:
+            prefix = "未查到关于「"
+            suffix = "」的成交记录"
+            name = str(view.get("empty_name") or view.get("short") or "物品")
+            prefix_w = draw.textlength(prefix, font=empty_font)
+            suffix_w = draw.textlength(suffix, font=empty_font)
+            name = _fit_text(
+                draw,
+                name,
+                empty_font,
+                width - 2 * PAD - prefix_w - suffix_w - 16,
+            )
+            total_w = prefix_w + draw.textlength(name, font=empty_font) + suffix_w
+            x = max(PAD, int((width - total_w) / 2))
+            draw.text((x, y), prefix, font=empty_font, fill=TEXT)
+            x += prefix_w
+            draw.text(
+                (x, y),
+                name,
+                font=empty_font,
+                fill=str(view.get("empty_color") or TEXT),
+            )
+            x += draw.textlength(name, font=empty_font)
+            draw.text((x, y), suffix, font=empty_font, fill=TEXT)
         note_y = y + 60
         for line in note_lines:
             draw.text((PAD, note_y), line, font=small_font, fill=MUTED)

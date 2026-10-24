@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.26 - 2026-10-23
+
+### Fixed
+
+- Reverted auction item IDs to the official catalog casing; no lowercase rewriting.
+- Live API verification showed `rz6ZNaDw` (and its lowercase form) is rejected by the auction endpoints with `Invalid item id`, while a marketable item such as `gdj6` returns lots and history. The plugin now labels such items as “暂不支持拍卖查询”, not as “没有成交记录” or a generic parameter error.
+- The unsupported state is carried into both the direct auction card and candidate replay; no misleading empty-history text is shown.
+
+### Tests
+
+- Updated mixed-case ID and unsupported-auction regressions; 152 tests pass.
+
 ## 1.0.25 - 2026-10-23
 
 ### Fixed

@@ -964,6 +964,7 @@ def build_empty_auction_view(
     quality_filter: int | None = None,
     before: datetime | None = None,
     note: str = "",
+    unsupported: bool = False,
 ) -> dict[str, Any]:
     """Minimal view used to render a friendly empty auction card."""
     now = (now or datetime.now(timezone.utc)).astimezone(CST)
@@ -993,6 +994,7 @@ def build_empty_auction_view(
         "empty_name": short,
         "empty_color": _quality_color(quality_filter) if quality_filter is not None else "#E7EDF5",
         "empty_note": note,
+        "unsupported": unsupported,
     }
 
 
@@ -1010,9 +1012,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
         lines.append("")
         if view.get("before"):
             lines.append(f"截至 {view['before']}")
-        lines.append(
-            f"未查到关于「{view.get('empty_name') or view.get('short')}」的成交记录。"
-        )
+        if view.get("unsupported"):
+            lines.append("该物品暂不支持拍卖查询。")
+        else:
+            lines.append(
+                f"未查到关于「{view.get('empty_name') or view.get('short')}」的成交记录。"
+            )
         if view.get("empty_note"):
             lines.append(view["empty_note"])
         lines.extend([SEP, "数据来自官方 API｜价格为卢布｜时间为 UTC+8（北京时间）"])

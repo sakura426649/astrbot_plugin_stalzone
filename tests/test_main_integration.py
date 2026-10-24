@@ -352,7 +352,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
-    async def test_auction_uses_lowercase_market_id(self):
+    async def test_auction_uses_catalog_id_case(self):
         class RecordingClient(FakeClient):
             calls = []
 
@@ -369,7 +369,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         result = await plugin._handle_auction("rz6znadw")
         self.assertIsInstance(result, PluginReply)
         self.assertTrue(RecordingClient.calls)
-        self.assertTrue(all(item_id == "rz6znadw" for item_id in RecordingClient.calls))
+        self.assertTrue(all(item_id == "rz6ZNaDw" for item_id in RecordingClient.calls))
 
     async def test_non_marketable_auction_item_is_friendly(self):
         from api_client import BadRequestError
@@ -388,7 +388,8 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         direct = await plugin._handle_auction("rz6znadw")
         self.assertIsInstance(direct, PluginReply)
         self.assertIsNotNone(direct.auction_view)
-        self.assertIn("不可交易", direct.text)
+        self.assertIn("暂不支持拍卖查询", direct.text)
+        self.assertTrue(direct.auction_view["unsupported"])
 
         item = plugin.item_index.get("rz6ZNaDw")
         self.assertIsNotNone(item)
@@ -403,7 +404,8 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(replayed, PluginReply)
         self.assertEqual(replayed.sub, "auction")
         self.assertIsNotNone(replayed.auction_view)
-        self.assertIn("不可交易", replayed.text)
+        self.assertIn("暂不支持拍卖查询", replayed.text)
+        self.assertTrue(replayed.auction_view["unsupported"])
 
     async def test_season_pass_calculator(self):
         text = await collect(self.make_plugin(), "/sz 通行证 15 15+2 20")

@@ -180,7 +180,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.25"
+PLUGIN_VERSION = "1.0.26"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -1152,9 +1152,6 @@ class StalzonePlugin(Star):
         if non_artifact:
             quality_filter = None
         short_label = (label or item_id).split(" / ", 1)[0].strip()
-        # Auction/market IDs are lowercase; catalog IDs can contain uppercase
-        # letters (for example rz6ZNaDw), which the auction API rejects.
-        request_item_id = item_id.lower()
 
         async with self._make_client() as client:
             errors: list[Exception] = []
@@ -1171,7 +1168,7 @@ class StalzonePlugin(Star):
                     fetch_limit = 5
                 history_payload, page_errors = await self._fetch_dated_history(
                     client,
-                    request_item_id,
+                    item_id,
                     before=before,
                     quality_filter=quality_filter,
                     limit=fetch_limit,
@@ -1188,7 +1185,7 @@ class StalzonePlugin(Star):
                     and (history_payload.get("window_exhausted") or not official_prices)
                 ):
                     sc_payload, sc_errors = await self._fetch_sc_core_history(
-                        request_item_id,
+                        item_id,
                         client.region,
                         before=before,
                         quality_filter=quality_filter,
@@ -1226,7 +1223,7 @@ class StalzonePlugin(Star):
                         errors.extend(sc_errors)
                 lots_payload: dict[str, Any] = {}
             else:
-                cache_key = f"auction:{client.region}:{request_item_id}"
+                cache_key = f"auction:{client.region}:{item_id}"
                 cached = self._cache_get(cache_key)
                 if isinstance(cached, tuple) and len(cached) == 2:
                     lots_payload, history_payload = cached
@@ -1234,8 +1231,8 @@ class StalzonePlugin(Star):
                 else:
                     # Fetch concurrently; one failed side should not hide the other.
                     results = await asyncio.gather(
-                        client.get_auction_lots(request_item_id, limit=100),
-                        client.get_auction_history(request_item_id, limit=100),
+                        client.get_auction_lots(item_id, limit=100),
+                        client.get_auction_history(item_id, limit=100),
                         return_exceptions=True,
                     )
                     lots, history = results
@@ -1280,7 +1277,7 @@ class StalzonePlugin(Star):
             empty_view = None
             if view is None:
                 note = (
-                    "该物品没有可查询的拍卖数据，可能不可交易或当前区服未开放拍卖。"
+                    "该物品当前无法通过官方拍卖接口查询，可能不支持拍卖查询或不可交易。"
                     if unavailable
                     else ""
                 )
@@ -1309,11 +1306,10 @@ class StalzonePlugin(Star):
                                 note += f"；SC CORE 存档覆盖自 {coverage[:10]}"
                         text += "\n" + note
                 else:
-                    text = (
-                        f"「{short_label}」没有可查询的拍卖数据，可能不可交易。"
-                        if unavailable
-                        else f"未查到关于「{short_label}」的成交记录。"
-                    )
+                    text = f"未查到关于「{short_label}」的成交记录。"
+                if unavailable:
+                    note = "该物品当前无法通过官方拍卖接口查询，可能不支持拍卖查询或不可交易。"
+                    text = f"「{short_label}」暂不支持拍卖查询（可能不可交易）。"
                 empty_view = build_empty_auction_view(
                     item_id,
                     label,
@@ -1321,6 +1317,7 @@ class StalzonePlugin(Star):
                     quality_filter=quality_filter,
                     before=before,
                     note=note,
+                    unsupported=unavailable,
                 )
             if errors:
                 text += "\n（注：在售或成交的部分数据获取失败，以上为可用部分。）"
