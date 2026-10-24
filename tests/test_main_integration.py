@@ -46,8 +46,10 @@ class Star:
 
 
 api.logger = types.SimpleNamespace(
+    debug=lambda *args, **kwargs: None,
     info=lambda *args, **kwargs: None,
     warning=lambda *args, **kwargs: None,
+    error=lambda *args, **kwargs: None,
     exception=lambda *args, **kwargs: None,
 )
 event_mod.filter = _Filter()

@@ -13,9 +13,24 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+if "astrbot" not in sys.modules:
+    _astrbot = types.ModuleType("astrbot")
+    _astrbot_api = types.ModuleType("astrbot.api")
+    _astrbot_api.logger = types.SimpleNamespace(
+        debug=lambda *args, **kwargs: None,
+        info=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        exception=lambda *args, **kwargs: None,
+    )
+    _astrbot.api = _astrbot_api
+    sys.modules["astrbot"] = _astrbot
+    sys.modules["astrbot.api"] = _astrbot_api
 
 from api_client import DEMO_BASE_URL, StalzoneAPIClient  # noqa: E402
 from formatters import format_auction, format_emission  # noqa: E402

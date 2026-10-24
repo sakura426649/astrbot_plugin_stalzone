@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.28 - 2026-10-24
+
+### Fixed
+
+- `api_client.py` now imports `logger` only from `astrbot.api` (matching `main.py`) and no longer uses the Python stdlib `logging` module. Tests and the manual demo smoke script provide a minimal AstrBot logger stub when run outside AstrBot.
+
+### Tests
+
+- 187 tests and 12 visual signatures pass.
+
 ## 1.1.27 - 2026-10-24
 
 ### Changed

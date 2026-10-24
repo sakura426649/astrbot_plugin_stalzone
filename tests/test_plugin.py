@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import Mock
 from pathlib import Path
@@ -12,6 +13,22 @@ import httpx
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT))
+
+# api_client imports the AstrBot logger; provide a minimal stub when tests run
+# outside an AstrBot installation.
+if "astrbot" not in sys.modules:
+    _astrbot = types.ModuleType("astrbot")
+    _astrbot_api = types.ModuleType("astrbot.api")
+    _astrbot_api.logger = types.SimpleNamespace(
+        debug=lambda *args, **kwargs: None,
+        info=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        exception=lambda *args, **kwargs: None,
+    )
+    _astrbot.api = _astrbot_api
+    sys.modules["astrbot"] = _astrbot
+    sys.modules["astrbot.api"] = _astrbot_api
 
 from api_client import (  # noqa: E402
     ApiHealth,

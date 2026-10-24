@@ -15,7 +15,6 @@ Design notes
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 import re
 import time
@@ -24,6 +23,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from astrbot.api import logger
 
 PRODUCTION_BASE_URL = "https://eapi.stalzone.com"
 DEMO_BASE_URL = "https://dapi.stalzone.com"
@@ -32,9 +32,7 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 0.5
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/1.1.27"
-
-logger = logging.getLogger("astrbot_plugin_stalzone")
+USER_AGENT = "astrbot-plugin-stalzone/1.1.28"
 
 _ITEM_ID_RE = re.compile(r"^[^\x00-\x1f/\\]{1,128}$")
 
