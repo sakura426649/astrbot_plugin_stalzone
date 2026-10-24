@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.2-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -64,7 +64,7 @@
 
 | 模块 | 能力 |
 | --- | --- |
-| **拍卖行** | 当前在售、最近成交与按日期查询；神器按品质从高到低分组，非神器按 `物品×数量` 展示起拍、买断、单价和剩余时间，并标出最低单价；在售过多时神器按 +等级保留每级最低价，其他物品最多展示 30 条，均注明总数 |
+| **拍卖行** | 当前在售、最近成交与按日期查询；神器按品质从高到低分组，非神器按 `物品×数量` 展示起拍、买断、单价和剩余时间，并标出最低单价；在售过多时神器按 +等级保留每级最低价；单一品质/非神器显示前 15 条和后 15 条，中间用省略号标出省略数量，并保留最低单价 |
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **自动风暴提醒** | 白名单非空时才工作；只在上一场结束后的 2–4 小时窗口内每分钟查询，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询 |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |

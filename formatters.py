@@ -842,16 +842,23 @@ def build_auction_view(
     active_note = ""
     if active_truncated:
         if non_artifact:
-            shown = active[:MAX_AUCTION_ACTIVE_ROWS]
+            head = active[:15]
+            tail = active[-15:]
             lowest = next((row for row in active if row.get("lowest")), None)
-            if lowest is not None and lowest not in shown:
-                shown[-1] = lowest
-            active = sorted(
-                shown, key=lambda row: row["sort_price"], reverse=True
-            )
+            if lowest is not None and lowest not in head and lowest not in tail:
+                tail[-1] = lowest
+            omitted = max(0, active_total - len(head) - len(tail))
+            active = [
+                *head,
+                {
+                    "ellipsis": True,
+                    "name": f"…… 中间省略 {omitted:,} 条 ……",
+                },
+                *tail,
+            ]
             active_note = (
-                f"仅显示 {len(active)} / {active_total:,} 条在售；"
-                "可用品质或日期缩小范围"
+                f"在售共 {active_total:,} 条；显示前 15 条和后 15 条，"
+                f"中间省略 {omitted:,} 条"
             )
         else:
             # Artifacts have upgrade levels (+0/+N). Keep the cheapest lot
@@ -1095,23 +1102,28 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 )
             else:
                 active_heading += (
-                    f"｜共 {view['active_total']:,} 条，显示前 {len(view['active'])} 条"
+                    f"｜共 {view['active_total']:,} 条，显示前 15 条和后 15 条"
                 )
         lines.extend(["", active_heading])
         if view["active"]:
             if is_non_artifact:
                 lines.append("  名称  起拍  买断  单价  剩余时间")
-            for index, row in enumerate(view["active"], 1):
+            display_index = 0
+            for row in view["active"]:
+                if row.get("ellipsis"):
+                    lines.append(f"  {row['name']}")
+                    continue
+                display_index += 1
                 if is_non_artifact:
                     marker_text = row.get("lowest_label") or "最低单价"
                     marker = f" [{marker_text}]" if row.get("lowest") else ""
                     lines.append(
-                        f"{index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
+                        f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
                         f"{row['unit_price']}  {row['remaining']}"
                     )
                 else:
                     lines.append(
-                        f"{index}. {row['name']}  {row['start']}  {row['buyout']}  {row['remaining']}"
+                        f"{display_index}. {row['name']}  {row['start']}  {row['buyout']}  {row['remaining']}"
                     )
         else:
             lines.append("当前无在售")

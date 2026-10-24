@@ -704,10 +704,11 @@ class FormatterTests(unittest.TestCase):
         self.assertIsNotNone(view)
         self.assertEqual(view["active_total"], 40)
         self.assertTrue(view["active_truncated"])
-        self.assertEqual(len(view["active"]), 30)
+        self.assertEqual(len(view["active"]), 31)
+        self.assertTrue(view["active"][15].get("ellipsis"))
         text = format_auction_text(view)
-        self.assertIn("共 40 条，显示前 30 条", text)
-        self.assertIn("仅显示 30 / 40 条在售", text)
+        self.assertIn("共 40 条，显示前 15 条和后 15 条", text)
+        self.assertIn("中间省略 10 条", text)
 
     def test_artifact_cap_keeps_cheapest_row_per_level(self):
         lots = {

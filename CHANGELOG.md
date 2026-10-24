@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.2 - 2026-10-24
+
+### Changed
+
+- High-volume single-quality/non-artifact auction lists now show the first 15 rows, an ellipsis row with the omitted count, and the last 15 rows. The lowest unit-price row is kept in the tail.
+- Artifact auctions still preserve the cheapest lot per +0/+N level.
+
+### Tests
+
+- Updated the high-volume auction assertions; 181 tests and 10 visual signatures pass.
+
 ## 1.1.1 - 2026-10-24
 
 ### Fixed

@@ -3138,6 +3138,16 @@ def render_auction_card(
 
         if active:
             for row in active:
+                if row.get("ellipsis"):
+                    draw.text(
+                        (width / 2, y),
+                        str(row.get("name", "")),
+                        font=small_font,
+                        fill=MUTED,
+                        anchor="ma",
+                    )
+                    y += line_h
+                    continue
                 name = _fit_text(draw, str(row.get("name", "")), body_font, name_right - left - 12)
                 color = str(row.get("color") or TEXT)
                 draw.text((left, y), name, font=body_font, fill=color)
