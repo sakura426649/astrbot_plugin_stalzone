@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.37 - 2026-10-24
+
+### Changed
+
+- A non-empty group allow-list is now the recipient list: the alert is rendered once and sent to every allow-listed QQ group, with the deny-list taking priority. An empty allow-list keeps the previous single-target fallback.
+- Delivery is tracked per group in `emission_auto_state.json`. If one group fails, the next check retries only that group and does not duplicate alerts in groups that already succeeded.
+
+### Tests
+
+- Added broadcast, render-once, per-group retry and fallback coverage; 171 tests pass.
+
 ## 1.0.36 - 2026-10-24
 
 ### Added

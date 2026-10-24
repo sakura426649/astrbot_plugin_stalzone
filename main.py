@@ -192,7 +192,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.36"
+PLUGIN_VERSION = "1.0.37"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
@@ -418,6 +418,14 @@ class StalzonePlugin(Star):
         match = QQ_GROUP_TARGET_RE.search(str(value or "").strip())
         return match.group(1) if match else ""
 
+    @staticmethod
+    def _platform_from_target(value: Any) -> str:
+        match = re.match(
+            r"(?i)^([^:]+):(?:GroupMessage|FriendMessage|PrivateMessage):",
+            str(value or "").strip(),
+        )
+        return match.group(1) if match else ""
+
     @classmethod
     def _group_number(cls, value: Any) -> str:
         """Accept either a QQ group number or a full group UMO."""
@@ -428,42 +436,83 @@ class StalzonePlugin(Star):
             return text
         return cls._group_id_from_target(text)
 
-    def _group_filter(self, key: str) -> set[str]:
+    def _group_values(self, key: str) -> list[str]:
         raw = self._cfg(key, [])
         if isinstance(raw, str):
             values: list[Any] = [part for part in re.split(r"[,，;；\s]+", raw) if part]
         elif isinstance(raw, (list, tuple, set)):
             values = list(raw)
         else:
-            return set()
-        return {group for value in values if (group := self._group_number(value))}
+            return []
+        return [str(value).strip() for value in values if str(value).strip()]
+
+    def _group_ids(self, key: str) -> set[str]:
+        return {group for value in self._group_values(key) if (group := self._group_number(value))}
+
+    def _platform_prefix(self) -> str:
+        for value in (
+            self._auto_state.get("platform"),
+            self._cfg("emission_notify_target", ""),
+            self._auto_state.get("target"),
+        ):
+            prefix = self._platform_from_target(value)
+            if prefix:
+                return prefix
+        for value in self._group_values("emission_group_whitelist"):
+            prefix = self._platform_from_target(value)
+            if prefix:
+                return prefix
+        return ""
+
+    def _notify_targets(self) -> list[str]:
+        """Return every allowed QQ group target; the image is rendered once."""
+        blacklist = self._group_ids("emission_group_blacklist")
+        whitelist = self._group_values("emission_group_whitelist")
+        if whitelist:
+            prefix = self._platform_prefix()
+            targets: list[str] = []
+            seen: set[str] = set()
+            for value in whitelist:
+                group = self._group_number(value)
+                if not group or group in blacklist or group in seen:
+                    continue
+                seen.add(group)
+                explicit = self._group_id_from_target(value)
+                if explicit:
+                    targets.append(str(value).strip())
+                elif prefix:
+                    targets.append(f"{prefix}:GroupMessage:{group}")
+            return targets
+        configured = str(self._cfg("emission_notify_target", "") or "").strip()
+        if configured and self._group_id_from_target(configured):
+            return [configured] if self._auto_target_allowed(configured) else []
+        remembered = str(self._auto_state.get("target", "") or "").strip()
+        if not self._group_id_from_target(remembered):
+            return []
+        return [remembered] if self._auto_target_allowed(remembered) else []
 
     def _auto_target_allowed(self, target: str) -> bool:
         group = self._group_id_from_target(target)
         if not group:
             return False
-        if group in self._group_filter("emission_group_blacklist"):
+        if group in self._group_ids("emission_group_blacklist"):
             return False
-        whitelist = self._group_filter("emission_group_whitelist")
+        whitelist = self._group_ids("emission_group_whitelist")
         return not whitelist or group in whitelist
-
-    def _notify_target(self) -> str:
-        configured = str(self._cfg("emission_notify_target", "") or "").strip()
-        if configured and self._group_id_from_target(configured):
-            return configured if self._auto_target_allowed(configured) else ""
-        remembered = str(self._auto_state.get("target", "") or "").strip()
-        if not self._group_id_from_target(remembered):
-            return ""
-        return remembered if self._auto_target_allowed(remembered) else ""
 
     def _remember_notify_target(self, event: AstrMessageEvent) -> None:
         target = str(getattr(event, "unified_msg_origin", "") or "").strip()
-        if not target or self._auto_state.get("target") == target:
-            return
-        if not self._auto_target_allowed(target):
-            return
-        self._auto_state["target"] = target
-        self._save_auto_state()
+        changed = False
+        platform = self._platform_from_target(target)
+        if platform and self._auto_state.get("platform") != platform:
+            self._auto_state["platform"] = platform
+            changed = True
+        if target and self._auto_state.get("target") != target:
+            if self._auto_target_allowed(target):
+                self._auto_state["target"] = target
+                changed = True
+        if changed:
+            self._save_auto_state()
 
     async def _emission_auto_loop(self) -> None:
         force = True
@@ -529,40 +578,85 @@ class StalzonePlugin(Star):
         state["active"] = True
         start_key = current_start.isoformat()
         if start_key != str(state.get("last_notified_start", "")):
-            sent = await self._send_emission_alert(payload, region)
+            state["last_notified_start"] = start_key
+            state["notified_targets"] = []
+        elif "notified_targets" not in state:
+            legacy = str(state.get("target", "") or "").strip()
+            state["notified_targets"] = (
+                [legacy] if self._group_id_from_target(legacy) else []
+            )
+        targets = self._notify_targets()
+        raw_notified = state.get("notified_targets")
+        already = (
+            {str(target) for target in raw_notified}
+            if isinstance(raw_notified, list)
+            else set()
+        )
+        pending = [target for target in targets if target not in already]
+        if pending:
+            sent, failed = await self._send_emission_alert(payload, region, pending)
             if sent:
-                state["last_notified_start"] = start_key
+                state["notified_targets"] = list(
+                    dict.fromkeys([*already, *sent])
+                )
+            if failed:
+                logger.warning(
+                    "STALZONE automatic emission alert failed for %d target(s)",
+                    len(failed),
+                )
         self._save_auto_state()
         return True
 
-    async def _send_emission_alert(self, payload: dict[str, Any], region: str) -> bool:
-        target = self._notify_target()
-        if not target:
-            return False
+    async def _send_emission_alert(
+        self,
+        payload: dict[str, Any],
+        region: str,
+        targets: list[str],
+    ) -> tuple[list[str], list[str]]:
+        """Render the alert once, then send it to every pending group."""
+        targets = list(
+            dict.fromkeys(str(target).strip() for target in targets if str(target).strip())
+        )
+        if not targets:
+            return [], []
         if MessageChain is None:
             logger.warning("STALZONE automatic emission alert needs MessageChain support")
-            return False
-        view = build_emission_alert_view(payload, region)
+            return [], targets
+        try:
+            view = build_emission_alert_view(payload, region)
+        except Exception:
+            logger.exception("STALZONE automatic emission alert view failed")
+            return [], targets
+        text = str(view.get("text", "风暴已开始"))
         image_path: Path | None = None
         try:
-            image_path = await asyncio.to_thread(
-                render_emission_alert_card,
-                view,
-                font_path=str(self._cfg("font_path", "") or "") or None,
-            )
-            text = str(view.get("text", "风暴已开始"))
             try:
-                if image_path is not None:
-                    chain = MessageChain().file_image(str(image_path))
-                else:
-                    chain = MessageChain().message(text)
+                image_path = await asyncio.to_thread(
+                    render_emission_alert_card,
+                    view,
+                    font_path=str(self._cfg("font_path", "") or "") or None,
+                )
             except Exception:
-                chain = MessageChain().message(text)
-            await self.context.send_message(target, chain)
-            return True
-        except Exception:
-            logger.exception("STALZONE automatic emission alert send failed")
-            return False
+                logger.exception("STALZONE automatic emission alert render failed")
+            sent: list[str] = []
+            failed: list[str] = []
+            for target in targets:
+                try:
+                    if image_path is not None:
+                        try:
+                            chain = MessageChain().file_image(str(image_path))
+                        except Exception:
+                            chain = MessageChain().message(text)
+                    else:
+                        chain = MessageChain().message(text)
+                    await self.context.send_message(target, chain)
+                    sent.append(target)
+                except Exception:
+                    failed.append(target)
+                    logger.exception(
+                        "STALZONE automatic emission alert failed for %s", target
+                    )
+            return sent, failed
         finally:
             if image_path is not None:
                 try:

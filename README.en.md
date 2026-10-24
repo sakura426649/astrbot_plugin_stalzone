@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.36-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.37-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,7 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stacked items with unit price and lowest-price marker |
 | Emission | Time since the last emission, current status and region selection |
-| Auto emission alert | Enabled by default; polls once a minute only in the 2–4h window and pushes a distinct group alert with the artifact window; supports allow/deny lists |
+| Auto emission alert | Enabled by default; polls once a minute only in the 2–4h window and pushes one distinct group alert to every allow-listed group; deny-list wins |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
 | Item | 2,615 bilingual entries, 1,338 detail records, 2,600 bundled icons, semantic stat colors |
@@ -92,7 +92,7 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `command_cooldown` | `1.0` | Minimum seconds between queries in the same group; `0` disables |
 | `emission_auto_notify` | `true` | Automatic emission alert; polls once a minute only during the 2–4h window |
 | `emission_notify_target` | empty | Fixed QQ group `unified_msg_origin`; when empty, the latest group `/sz` session is remembered |
-| `emission_group_whitelist` | empty | QQ group allow-list; add one group number per entry. Empty allows all groups |
+| `emission_group_whitelist` | empty | QQ group allow-list; add one group number per entry. Every listed group gets the alert; empty uses the single fallback target |
 | `emission_group_blacklist` | empty | QQ group deny-list; add one group number per entry. Takes priority over the allow-list |
 
 ### Automatic emission alerts
@@ -100,12 +100,14 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 The game does not start a new emission in the first 2 hours after one ends; the next one is random within 2–4 hours. The plugin uses that rule instead of polling all day:
 
 - On startup it probes the official emission endpoint once to restore the previous end time. It then polls once a minute only between `previousEnd + 2h` and `previousEnd + 4h`; idle time outside that window is not polled.
-- A new `currentStart` triggers one "emission started" image for the configured target. The same start time is never alerted twice.
+- A new `currentStart` triggers one "emission started" image for each recipient group. The same storm is never alerted twice to the same group.
 - While the storm is active the plugin keeps confirming its end once a minute; the saved end time is then refreshed and the next 2–4h window begins.
-- State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start and latest target, so a restart neither loses the window nor repeats an alert.
-- Only QQ group chats are accepted: private sessions are never remembered and never receive automatic alerts. Target precedence: a valid group `emission_notify_target` → the latest group `/sz` session.
-- Group filters: an empty allow-list permits all QQ groups; otherwise only listed groups are allowed. The deny-list always wins. Both lists support adding more entries in the WebUI; groups outside the allow-list are not remembered.
-- If no group target exists yet, configure a group `unified_msg_origin` or run one query in an allowed group first.
+- State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start, successfully notified groups and latest session, so a restart neither loses the window nor repeats an alert.
+- Only QQ group chats are accepted: private sessions are never remembered and never receive automatic alerts.
+- When the allow-list is not empty, it defines the recipients: every listed group receives the alert, excluding deny-listed groups. The image is rendered once and sent to each group; per-group delivery is tracked, so only failed groups are retried.
+- When the allow-list is empty, the single fallback target is the configured group `unified_msg_origin` or the latest eligible group session.
+- The deny-list always wins. Both lists support adding more group numbers in the WebUI; groups outside the allow-list are not remembered.
+- Numeric allow-list entries reuse the platform prefix from a configured target or a remembered group. If the plugin has never seen a group command, run `/sz` once in a group or use a full group UMO entry.
 
 The automatic card shares the doomsday emission style but leads with "风暴已开始" and the official start time (not the detection time). It also shows the 30-minute artifact window and where artifacts spawn. If image rendering is unavailable it falls back to text.
 

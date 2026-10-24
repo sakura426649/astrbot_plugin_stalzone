@@ -1031,21 +1031,53 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         }
         sent = []
 
-        async def fake_send(payload, region):
-            sent.append((payload, region))
-            return True
+        async def fake_send(payload, region, targets):
+            sent.append((payload, region, list(targets)))
+            return list(targets), []
 
         plugin._send_emission_alert = fake_send  # type: ignore[assignment]
         await plugin._emission_auto_tick()
         self.assertEqual(client.calls, 1)
         self.assertEqual(len(sent), 1)
         self.assertEqual(sent[0][1], "eu")
+        self.assertEqual(sent[0][2], [self.GROUP_TARGET])
         self.assertTrue(plugin._auto_state["active"])
         self.assertEqual(plugin._auto_state["last_notified_start"], start.isoformat())
 
         await plugin._emission_auto_tick()
         self.assertEqual(client.calls, 2)
         self.assertEqual(len(sent), 1)
+
+    async def test_partial_delivery_retries_only_failed_groups(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = ["111111", "222222"]
+        now = datetime.now(timezone.utc)
+        client = self.Client(
+            {
+                "currentStart": now.isoformat(),
+                "previousEnd": (now - timedelta(hours=3)).isoformat(),
+            }
+        )
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        calls = []
+
+        async def fake_send(payload, region, targets):
+            calls.append(list(targets))
+            if len(calls) == 1:
+                return [targets[0]], [targets[1]]
+            return list(targets), []
+
+        plugin._send_emission_alert = fake_send  # type: ignore[assignment]
+        await plugin._emission_auto_tick(force=True)
+        first = "aiocqhttp:GroupMessage:111111"
+        second = "aiocqhttp:GroupMessage:222222"
+        self.assertEqual(calls[0], [first, second])
+        self.assertEqual(plugin._auto_state["notified_targets"], [first])
+        await plugin._emission_auto_tick(force=True)
+        self.assertEqual(calls[1], [second])
+        self.assertEqual(
+            plugin._auto_state["notified_targets"], [first, second]
+        )
 
     async def test_alert_send_uses_proactive_message_chain(self):
         class RecordingContext(Context):
@@ -1083,8 +1115,11 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             "render_emission_alert_card",
             lambda view, font_path=None: None,
         ):
-            sent = await plugin._send_emission_alert(payload, "eu")
-        self.assertTrue(sent)
+            sent, failed = await plugin._send_emission_alert(
+                payload, "eu", [self.GROUP_TARGET]
+            )
+        self.assertEqual(sent, [self.GROUP_TARGET])
+        self.assertEqual(failed, [])
         self.assertEqual(len(context.sent), 1)
         target, chain = context.sent[0]
         self.assertEqual(target, self.GROUP_TARGET)
@@ -1155,17 +1190,28 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as temp:
             image = Path(temp) / "alert.png"
             image.write_bytes(b"not-a-real-png")
+            renders = []
+
+            def fake_render(view, font_path=None):
+                renders.append(1)
+                return image
+
             with patch.object(main_module, "MessageChain", FakeChain), patch.object(
                 main_module,
                 "render_emission_alert_card",
-                lambda view, font_path=None: image,
+                fake_render,
             ):
-                sent = await plugin._send_emission_alert(payload, "eu")
-            self.assertTrue(sent)
+                sent, failed = await plugin._send_emission_alert(
+                    payload, "eu", [self.GROUP_TARGET, self.OTHER_GROUP_TARGET]
+                )
+            self.assertEqual(sent, [self.GROUP_TARGET, self.OTHER_GROUP_TARGET])
+            self.assertEqual(failed, [])
+            self.assertEqual(len(renders), 1)
             self.assertFalse(image.exists())
             expected_path = str(image)
-        self.assertEqual(len(context.sent), 1)
+        self.assertEqual(len(context.sent), 2)
         self.assertEqual(context.sent[0][1].image_path, expected_path)
+        self.assertEqual(context.sent[1][1].image_path, expected_path)
 
     def test_private_chat_is_not_remembered(self):
         plugin = self.make_plugin()
@@ -1175,27 +1221,34 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             self.TargetEvent("/sz 风暴", self.PRIVATE_TARGET)
         )
         self.assertNotIn("target", plugin._auto_state)
-        self.assertEqual(plugin._notify_target(), "")
+        self.assertEqual(plugin._notify_targets(), [])
 
-    def test_whitelist_and_blacklist_priority(self):
+    def test_whitelist_broadcasts_every_allowed_group(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [
+            "111111",
+            "aiocqhttp:GroupMessage:222222",
+            "333333",
+            "222222",
+        ]
+        plugin.config["emission_group_blacklist"] = ["333333"]
+        self.assertEqual(
+            plugin._notify_targets(),
+            [
+                "aiocqhttp:GroupMessage:111111",
+                "aiocqhttp:GroupMessage:222222",
+            ],
+        )
+
+    def test_whitelist_empty_falls_back_to_blacklist_filtered_target(self):
         plugin = self.make_plugin()
         plugin.config["emission_notify_target"] = ""
-        plugin.config["emission_group_whitelist"] = ["123456", "654321"]
-        plugin.config["emission_group_blacklist"] = ["654321"]
-        plugin._auto_state = {"target": self.GROUP_TARGET}
-        self.assertEqual(plugin._notify_target(), self.GROUP_TARGET)
-        plugin._auto_state = {"target": self.OTHER_GROUP_TARGET}
-        self.assertEqual(plugin._notify_target(), "")
-        plugin._auto_state = {
-            "target": "aiocqhttp:GroupMessage:999999"
-        }
-        self.assertEqual(plugin._notify_target(), "")
-        plugin.config["emission_group_whitelist"] = []
         plugin.config["emission_group_blacklist"] = ["999999"]
-        self.assertEqual(plugin._notify_target(), "")
+        plugin._auto_state = {"target": "aiocqhttp:GroupMessage:999999"}
+        self.assertEqual(plugin._notify_targets(), [])
         plugin.config["emission_group_blacklist"] = []
         self.assertEqual(
-            plugin._notify_target(), "aiocqhttp:GroupMessage:999999"
+            plugin._notify_targets(), ["aiocqhttp:GroupMessage:999999"]
         )
 
     def test_remember_ignores_groups_outside_whitelist(self):
@@ -1211,7 +1264,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             self.TargetEvent("/sz 风暴", self.GROUP_TARGET)
         )
         self.assertEqual(plugin._auto_state["target"], self.GROUP_TARGET)
-        self.assertEqual(plugin._notify_target(), self.GROUP_TARGET)
+        self.assertEqual(plugin._notify_targets(), [self.GROUP_TARGET])
 
     async def test_force_probe_updates_window_after_restart(self):
         plugin = self.make_plugin()
@@ -1242,7 +1295,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 )
                 first._save_auto_state()
                 second = StalzonePlugin(Context(), {"region": "eu"})
-                self.assertEqual(second._notify_target(), self.GROUP_TARGET)
+                self.assertEqual(second._notify_targets(), [self.GROUP_TARGET])
                 self.assertTrue(second._auto_state["active"])
                 self.assertEqual(second._auto_state["last_notified_start"], start)
                 client = self.Client(
@@ -1256,9 +1309,9 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 second._make_client = lambda: client  # type: ignore[assignment]
                 sent = []
 
-                async def fake_send(payload, region):
-                    sent.append((payload, region))
-                    return True
+                async def fake_send(payload, region, targets):
+                    sent.append((payload, region, list(targets)))
+                    return list(targets), []
 
                 second._send_emission_alert = fake_send  # type: ignore[assignment]
                 await second._emission_auto_tick(force=True)
