@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.5-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.6-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -19,7 +19,7 @@
 
 <br>
 
-<img src="docs/images/help.png" alt="STALZONE 查询菜单" width="92%">
+<img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/help.png" alt="STALZONE 查询菜单" width="92%">
 
 </div>
 
@@ -48,17 +48,17 @@
 
 | 玩家档案 | 辐射风暴 |
 | :---: | :---: |
-| <img src="docs/images/player.png" alt="玩家档案" width="100%"> | <img src="docs/images/emission.png" alt="辐射风暴" width="100%"> |
+| <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/player.png" alt="玩家档案" width="100%"> | <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/emission.png" alt="辐射风暴" width="100%"> |
 | **候选卡** | **拍卖行** |
-| <img src="docs/images/candidates.png" alt="候选卡" width="100%"> | <img src="docs/images/auction.png" alt="拍卖行" width="100%"> |
+| <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/candidates.png" alt="候选卡" width="100%"> | <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/auction.png" alt="拍卖行" width="100%"> |
 | **物品详情** | **战队候选** |
-| <img src="docs/images/item.png" alt="物品详情" width="100%"> | <img src="docs/images/clan.png" alt="战队候选" width="100%"> |
+| <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/item.png" alt="物品详情" width="100%"> | <img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/clan.png" alt="战队候选" width="100%"> |
 
 > 图片在 QQ 缩略图和点开查看时颜色一致；所有卡片均为不透明 RGB PNG，不依赖外部图床。
 
 **自动风暴提醒**（后台检测到爆发时主动发送，与手动查询的计时卡区分）：
 
-<img src="docs/images/emission_alert.png" alt="自动风暴提醒" width="82%">
+<img src="https://raw.githubusercontent.com/sakura426649/astrbot_plugin_stalzone/icons-full/docs/images/emission_alert.png" alt="自动风暴提醒" width="82%">
 
 ## 功能亮点
 
@@ -215,10 +215,10 @@ pip install -r requirements.txt
 
 ### 图标扩展（可选）
 
-发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**保留在 GitHub 仓库的 [`item_icons/` 文件夹](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/master/item_icons)，直接去仓库下载即可：
+发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**放在独立的 [`icons-full` 分支](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/icons-full/item_icons)：
 
-1. 打开 GitHub 仓库，点 **Code → Download ZIP**；
-2. 解压后只取 `astrbot_plugin_stalzone/item_icons/` 文件夹（也可以只下载需要的单个 `.png`）；
+1. 打开 [`item_icons/` 文件夹](https://github.com/sakura426649/astrbot_plugin_stalzone/tree/icons-full/item_icons)，或直接下载 [icons-full 分支 ZIP](https://github.com/sakura426649/astrbot_plugin_stalzone/archive/refs/heads/icons-full.zip)；
+2. 解压后只取 `astrbot_plugin_stalzone-icons-full/item_icons/`；
 3. 把整个 `item_icons/` 放到 AstrBot 插件数据目录：
 
 ```text
@@ -229,7 +229,7 @@ data/plugin_data/astrbot_plugin_stalzone/item_icons/<物品ID>.png
 
 Windows 下同样放在 `AstrBot/data/plugin_data/astrbot_plugin_stalzone/item_icons/`。未安装完整图标时，缺失图标会尝试 CDN 懒加载；若仍无图会显示「暂无图标」。
 
-> 发布到插件市场时请使用 Release 中的 `astrbot_plugin_stalzone.zip`，不要用 GitHub 源码仓库 ZIP；源码仓库保留完整图标，体积会超过 16 MiB。源码 ZIP 只用于取 `item_icons/`。
+`icons-full` 分支包含完整图标和预览图；`master` 只保留 826 个常用图标，保证插件市场能从源码归档正常构建。
 
 Linux 容器如果缺少中文字体，安装 Noto CJK：
 
@@ -291,7 +291,7 @@ astrbot_plugin_stalzone/
 ├── lunar_client.py          # Lunar 第三方战报（可选）
 ├── sc_core_client.py        # SC CORE 第三方历史补全（可选）
 ├── assets/                  # 壁纸、署名字体、阵营徽记
-├── docs/images/             # README 预览图
+├── docs/                    # 文档（预览图在 icons-full 分支）
 ├── tools/build_package.py   # 16 MiB 插件包构建（可选图标扩展包）
 ├── tests/                   # 单元测试与集成测试
 ├── _conf_schema.json
@@ -322,7 +322,7 @@ python tests/demo_smoke.py
 - 只使用 `httpx` / `aiohttp` 等异步 HTTP 客户端，不使用 `requests`。
 - 图片渲染、搜索和编码等 CPU 操作放入线程池，避免阻塞 AstrBot 事件循环。
 - 凭证只从配置读取，不写死、不打印、不提交。
-- 修改图片布局后请同时更新 `docs/images/` 中的预览图与测试。
+- 修改图片布局后同时更新 `tests/snapshots/`；README 预览图从 `icons-full` 分支读取。
 
 默认分支为 **master**，Pull Request 也请提交到 `master`。
 

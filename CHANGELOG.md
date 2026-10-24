@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.6 - 2026-10-24
+
+### Changed
+
+- Slimmed the `master` tree to 826 common icons and moved the complete 2,600-icon set plus README preview images to the `icons-full` branch. This keeps GitHub source archives/plugin-market builds below 16 MiB while the runtime package still ships common icons.
+- Added `.gitattributes` export-ignore rules for `.github`, `tests`, `tools` and development requirements.
+- README preview images now load from the `icons-full` branch; full-icon installation instructions point to that branch.
+
+### Tests
+
+- No runtime behavior changes; 181 tests and 10 visual signatures pass.
+
 ## 1.1.5 - 2026-10-24
 
 ### Changed

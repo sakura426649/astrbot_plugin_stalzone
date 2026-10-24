@@ -813,9 +813,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.notice_view["region"], "NEA")
         self.assertIn("NEA 区服", result.notice_view["note"])
 
-    def test_icon_library_covers_catalog(self):
+    def test_base_icon_package_is_slim(self):
         icons = list((PLUGIN_ROOT / "item_icons").glob("*.png"))
-        self.assertGreaterEqual(len(icons), 2600)
+        self.assertGreaterEqual(len(icons), 800)
+        self.assertLessEqual(len(icons), 900)
 
     def test_notice_card_renders_query(self):
         from image_renderer import find_cjk_font, render_notice_card

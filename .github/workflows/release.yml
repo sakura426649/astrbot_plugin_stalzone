@@ -55,4 +55,4 @@ jobs:
 
             完整变更见仓库中的 CHANGELOG.md；插件包已控制在 16 MiB 内，内置常用物品图标。
 
-            完整图标保留在 GitHub 仓库的 `item_icons/` 文件夹：下载仓库 ZIP 后，只把 `astrbot_plugin_stalzone/item_icons/` 解压到 AstrBot 插件数据目录 `data/plugin_data/astrbot_plugin_stalzone/`，然后在 WebUI 重载插件。基础包未覆盖的图标会先尝试 CDN；离线或需要完整图标时请安装完整图标文件夹。
+            完整图标在 `icons-full` 分支：下载 `https://github.com/sakura426649/astrbot_plugin_stalzone/archive/refs/heads/icons-full.zip`，只把其中的 `item_icons/` 解压到 AstrBot 插件数据目录 `data/plugin_data/astrbot_plugin_stalzone/`，然后在 WebUI 重载插件。

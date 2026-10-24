@@ -1,0 +1,5 @@
+# Keep GitHub source archives under the plugin marketplace's 16 MiB limit.
+/.github export-ignore
+/tests export-ignore
+/tools export-ignore
+/requirements-dev.txt export-ignore
