@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.40 - 2026-10-24
+
+### Changed
+
+- Split the release package: it now includes 826 common icons and stays under the plugin marketplace's 16 MiB limit. The full 2,600-icon set is published as the separate `stalzone_icons_full.zip` release asset.
+- Added support for reading user-installed icons from the plugin data directory at `data/plugin_data/astrbot_plugin_stalzone/item_icons/`, after bundled icons and before the CDN cache.
+- Added `tools/build_package.py`, which builds the size-checked plugin zip, the full icon pack and SHA256SUMS. The release workflow now uploads all three assets.
+
+### Tests
+
+- Added an extension-icon-directory lookup regression; 177 tests pass.
+
 ## 1.0.39 - 2026-10-24
 
 ### Added

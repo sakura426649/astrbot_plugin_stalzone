@@ -952,6 +952,30 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Sakura", text)
         self.assertIn("角色资料", text)
 
+    async def test_icon_extension_directory_is_used(self):
+        from shutil import copyfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            old = os.environ.get("ASTRBOT_DATA_DIR")
+            os.environ["ASTRBOT_DATA_DIR"] = temp
+            try:
+                plugin = StalzonePlugin(Context(), {"region": "eu"})
+                extension = (
+                    Path(temp) / "astrbot_plugin_stalzone" / "item_icons"
+                )
+                extension.mkdir(parents=True, exist_ok=True)
+                target = extension / "extensiontest.png"
+                copyfile(PLUGIN_ROOT / "logo.png", target)
+                found = await plugin._fetch_icon(
+                    "https://example.test/extensiontest.png"
+                )
+                self.assertEqual(found, target)
+            finally:
+                if old is None:
+                    os.environ.pop("ASTRBOT_DATA_DIR", None)
+                else:
+                    os.environ["ASTRBOT_DATA_DIR"] = old
+
     async def test_item_atom_details(self):
         text = await collect(self.make_plugin(), "/sz item 原子")
         self.assertIn("原子", text)

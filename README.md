@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.39-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.40-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -69,7 +69,7 @@
 | **自动风暴提醒** | 白名单非空时才工作；只在上一场结束后的 2–4 小时窗口内每分钟查询，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询 |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；4 个英文字母的标签精确匹配，不区分大小写；支持战队列表 |
-| **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情与 2,600 个离线图标；属性按语义红绿着色 |
+| **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情；基础包内置 826 个常用图标，完整 2,600 图标通过扩展包安装 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 168 份 2023–2026 官方补丁公告，按物品列出全部改动，支持武器、神器与配件 |
 | **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；预测等级置顶大字展示，等级变化用颜色区分，不请求游戏 API |
@@ -78,8 +78,8 @@
 ## 快速开始
 
 1. 在 AstrBot WebUI 的插件页安装本插件：
-   - 直接把仓库克隆到 `data/plugins/`；
-   - 或下载仓库 ZIP，解压后将 `astrbot_plugin_stalzone/` 目录放到 `data/plugins/`（也可自行打包成插件 ZIP 后导入）。
+   - 从 [最新 Release](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest) 下载 `astrbot_plugin_stalzone.zip`（16 MiB 内，含常用图标），在插件页导入；
+   - 或把 `astrbot_plugin_stalzone/` 目录放到 `data/plugins/`（开发/源码安装）。
 2. 在 [STALZONE API 应用管理](https://eapi.stalzone.com/registration.html) 获取 `Client-Id` 与 `Client-Secret`。
 3. 进入插件配置，填写凭证，并把 `region` 设为你的群所在区服（EU 群填 `eu`）。
 4. 保存并重启/重载 AstrBot，在群里发送：
@@ -140,7 +140,7 @@
 
 图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。卡片使用官方壁纸暗色背景、品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：sz help 获取菜单」提示。
 
-候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。物品图标优先使用离线图标；2,600 件已随包分发，缺失时再批量从 CDN 补齐并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
+候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 826 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 
 ## 配置
 
@@ -204,12 +204,30 @@
 
 ### 安装插件
 
+推荐在插件市场或 [最新 Release](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest) 导入 `astrbot_plugin_stalzone.zip`；发布包已控制在 16 MiB 内。开发时可克隆仓库：
+
 ```bash
 # 在 AstrBot 的 data/plugins 目录下
 git clone git@github.com:sakura426649/astrbot_plugin_stalzone.git
 cd astrbot_plugin_stalzone
 pip install -r requirements.txt
 ```
+
+### 图标扩展包（可选）
+
+发布包只内置 **826 个常用物品图标**，避免超过插件市场的 16 MiB 限制。完整 **2,600 个图标**单独提供：
+
+**[下载 stalzone_icons_full.zip](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/stalzone_icons_full.zip)**
+
+解压后把里面的 `item_icons/` 文件夹放到 AstrBot 插件数据目录：
+
+```text
+data/plugin_data/astrbot_plugin_stalzone/item_icons/<物品ID>.png
+```
+
+然后在 WebUI 重载插件。Windows 下同样放在 `AstrBot/data/plugin_data/astrbot_plugin_stalzone/item_icons/`。未安装扩展包时，缺失图标会尝试 CDN 懒加载；若仍无图会显示「暂无图标」。需要离线完整图标时请安装扩展包。
+
+> 发布到插件市场时请使用 Release 中的 `astrbot_plugin_stalzone.zip`，不要用 GitHub 源码仓库 ZIP；源码仓库保留完整图标用于生成扩展包，体积会超过 16 MiB。
 
 Linux 容器如果缺少中文字体，安装 Noto CJK：
 
@@ -244,7 +262,7 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ## 数据与缓存
 
 - **实时数据**：拍卖、风暴、玩家、战队、行动记录、区服全部来自官方 API，不写入知识库。
-- **静态数据**：物品索引、物品详情、图标和 2023–2026 平衡公告随插件打包，离线可查。
+- **静态数据**：物品索引、物品详情、常用图标和 2023–2026 平衡公告随插件打包；完整 2,600 图标作为独立扩展包下载，离线可查。
 - **第三方数据**：Lunar 只用于玩家资料的 K/D/KDA 补充；SC CORE 只用于官方历史翻页失效时的旧成交补全；两者都会在输出中标注来源。
 - **性能**：物品搜索使用别名缓存和模糊匹配预筛；搜索、图片渲染和 base64 编码在线程池执行；官方 API 复用同一个 `httpx.AsyncClient` 连接池。
 - **API 缓存、重试与并发**：普通拍卖在售/成交缓存 20 秒，风暴状态缓存 10 秒；429/5xx/超时最多重试 2 次并指数退避；同一时刻最多 6 个查询进入 API 处理；同一群默认 1 秒查询冷却。带日期的历史查询不缓存，保证翻页结果准确。
@@ -264,7 +282,7 @@ astrbot_plugin_stalzone/
 ├── item_index.py            # 中/英/俄物品名 → item_id
 ├── item_index.json          # 2,615 件物品双语索引
 ├── item_details.json        # 1,338 件物品属性/描述
-├── item_icons/              # 2,600 个离线图标
+├── item_icons/              # 826 个随包常用图标（完整扩展包单独下载）
 ├── balance_history.py       # 官方平衡公告索引
 ├── season_pass.py           # 通行证计算
 ├── pda_format.py            # PDA §颜色/渐变解析
@@ -272,6 +290,7 @@ astrbot_plugin_stalzone/
 ├── sc_core_client.py        # SC CORE 第三方历史补全（可选）
 ├── assets/                  # 壁纸、署名字体、阵营徽记
 ├── docs/images/             # README 预览图
+├── tools/build_package.py   # 16 MiB 插件包与完整图标扩展包构建
 ├── tests/                   # 单元测试与集成测试
 ├── _conf_schema.json
 ├── metadata.yaml
@@ -286,7 +305,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **176 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 79%，门槛 75%）。
+当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **177 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 79%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

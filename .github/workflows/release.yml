@@ -39,21 +39,21 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Run tests
         run: python -m unittest discover -s tests -v
-      - name: Build plugin zip and checksum
+      - name: Build plugin zip, icon pack and checksums
         run: |
-          rm -rf package astrbot_plugin_stalzone.zip SHA256SUMS
-          mkdir -p package/astrbot_plugin_stalzone
-          git archive HEAD | tar -x -C package/astrbot_plugin_stalzone
-          (cd package && zip -r ../astrbot_plugin_stalzone.zip astrbot_plugin_stalzone)
-          sha256sum astrbot_plugin_stalzone.zip > SHA256SUMS
+          rm -f astrbot_plugin_stalzone.zip stalzone_icons_full.zip SHA256SUMS
+          python tools/build_package.py --output-dir .
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             astrbot_plugin_stalzone.zip
+            stalzone_icons_full.zip
             SHA256SUMS
           generate_release_notes: true
           body: |
             STALZONE 数据查询安装包。
 
-            完整变更见仓库中的 CHANGELOG.md；安装包内包含插件源码、物品索引、离线图标、预览图和许可证。
+            完整变更见仓库中的 CHANGELOG.md；插件包已控制在 16 MiB 内，内置常用物品图标。
+
+            完整图标扩展包：下载 `stalzone_icons_full.zip`，把其中的 `item_icons/` 解压到 AstrBot 插件数据目录 `data/plugin_data/astrbot_plugin_stalzone/`，然后在 WebUI 重载插件。基础包未覆盖的图标会先尝试 CDN；离线或需要完整图标时请安装扩展包。

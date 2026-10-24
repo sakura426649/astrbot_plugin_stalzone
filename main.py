@@ -194,7 +194,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.39"
+PLUGIN_VERSION = "1.0.40"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
@@ -848,14 +848,20 @@ class StalzonePlugin(Star):
         except OSError:
             pass
 
+    def _local_icon_paths(self, item_id: str) -> tuple[Path, Path]:
+        return (
+            Path(__file__).with_name("item_icons") / f"{item_id}.png",
+            self._cache_dir() / "item_icons" / f"{item_id}.png",
+        )
+
     async def _fetch_icon(self, url: str | None) -> Path | None:
         if not url:
             return None
         await asyncio.to_thread(self._prune_icon_cache)
         item_id = url.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-        local = Path(__file__).with_name("item_icons") / f"{item_id}.png"
-        if local.is_file() and _is_image_file(local):
-            return local
+        for local in self._local_icon_paths(item_id):
+            if local.is_file() and _is_image_file(local):
+                return local
         cache_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone" / "icons"
         cached = cache_dir / f"{item_id}.png"
         if cached.is_file():
@@ -895,10 +901,17 @@ class StalzonePlugin(Star):
             if not url:
                 continue
             item_id = url.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-            local = Path(__file__).with_name("item_icons") / f"{item_id}.png"
             cached = cache_dir / f"{item_id}.png"
-            if local.is_file() and _is_image_file(local):
-                entry["icon_path"] = str(local)
+            local_icon = next(
+                (
+                    local
+                    for local in self._local_icon_paths(item_id)
+                    if local.is_file() and _is_image_file(local)
+                ),
+                None,
+            )
+            if local_icon is not None:
+                entry["icon_path"] = str(local_icon)
             elif cached.is_file() and _is_image_file(cached):
                 entry["icon_path"] = str(cached)
             else:
@@ -2227,7 +2240,12 @@ class StalzonePlugin(Star):
         icon_files, icon_bytes = self._dir_stats(temp_root / "icons", "*.png")
         temp_files, temp_bytes = self._dir_stats(temp_root, "sz_*.png")
         icon_dir = Path(__file__).with_name("item_icons")
-        item_icon_files, item_icon_bytes = self._dir_stats(icon_dir, "*.png")
+        bundled_icon_files, bundled_icon_bytes = self._dir_stats(icon_dir, "*.png")
+        extra_icon_files, extra_icon_bytes = self._dir_stats(
+            data_dir / "item_icons", "*.png"
+        )
+        item_icon_files = bundled_icon_files + extra_icon_files
+        item_icon_bytes = bundled_icon_bytes + extra_icon_bytes
         faction_dir = Path(__file__).with_name("assets") / "factions"
         faction_files, _faction_bytes = self._dir_stats(faction_dir, "*.png")
         configured_font = str(self._cfg("font_path", "") or "").strip()
