@@ -2761,9 +2761,9 @@ def _render_quantity_auction_card(
         body_font = ImageFont.truetype(str(path), 18)
         small_font = ImageFont.truetype(str(path), 15)
         section_font = ImageFont.truetype(str(path), 21)
-        recent_body_font = ImageFont.truetype(str(path), 19)
-        recent_head_font = ImageFont.truetype(str(path), 16)
-        recent_time_font = ImageFont.truetype(str(path), 16)
+        recent_body_font = ImageFont.truetype(str(path), 20)
+        recent_head_font = ImageFont.truetype(str(path), 17)
+        recent_time_font = ImageFont.truetype(str(path), 17)
     except Exception:
         return None
 
@@ -2796,7 +2796,7 @@ def _render_quantity_auction_card(
         if isinstance(row, dict)
     ]
     recent_h = 42 + (24 if recent_groups else 0) + sum(
-        26 + len(group.get("rows") or []) * 28
+        30 + len(group.get("rows") or []) * 32
         for group in recent_groups
     )
     if not recent_groups:
@@ -2908,6 +2908,16 @@ def _render_quantity_auction_card(
         recent_min_w,
         pad * 2 + int(_measure(recent_heading, head_font)),
     )
+    recent_full_w = (
+        pad * 2
+        + recent_name_max
+        + 18
+        + recent_price_w
+        + 16
+        + recent_unit_w
+        + 16
+        + recent_time_w
+    )
 
     icon_space = 148 if icon_path else 0
     header_w = (
@@ -2933,6 +2943,7 @@ def _render_quantity_auction_card(
             520,
             header_w,
             recent_min_w,
+            recent_full_w,
             pad * 2 + name_max + 8 + 18 + cluster,
         )
         width = min(width, 960)
@@ -3091,13 +3102,7 @@ def _render_quantity_auction_card(
     ry = table_top + table_h + 18
     draw.line((pad, ry, width - pad, ry), fill=BORDER, width=1)
     ry += 18
-    if columns == 2 and recent_groups:
-        heading_x = int(
-            (width - draw.textlength(recent_heading, font=head_font)) / 2
-        )
-    else:
-        heading_x = pad
-    draw.text((heading_x, ry), recent_heading, font=head_font, fill=ACCENT)
+    draw.text((pad, ry), recent_heading, font=head_font, fill=ACCENT)
     ry += 28
     if recent_groups:
         recent_content = width - pad * 2
@@ -3113,8 +3118,6 @@ def _render_quantity_auction_card(
         if recent_block_w <= recent_content:
             recent_name_w = recent_name_max
             recent_x = pad
-            if columns == 2:
-                recent_x += (recent_content - recent_block_w) // 2
         else:
             recent_name_w = max(
                 80,
@@ -3150,7 +3153,7 @@ def _render_quantity_auction_card(
             fill=MUTED,
             anchor="ra",
         )
-        ry += 26
+        ry += 30
         for group in recent_groups:
             label = str(group.get("label") or "").split("（", 1)[0]
             if label:
@@ -3160,7 +3163,7 @@ def _render_quantity_auction_card(
                     font=recent_head_font,
                     fill=str(group.get("color") or ACCENT),
                 )
-                ry += 24
+                ry += 26
             for row in group.get("rows") or []:
                 display_name = str(row.get("name", ""))
                 amount = int(row.get("amount") or 0)
@@ -3230,12 +3233,12 @@ def _render_quantity_auction_card(
                     fill=MUTED,
                     anchor="ra",
                 )
-                ry += 28
+                ry += 32
     else:
         draw.text(
             (pad, ry), "暂无成交记录", font=recent_body_font, fill=MUTED
         )
-        ry += 28
+        ry += 32
 
     note_y = height - 74
     draw.text(

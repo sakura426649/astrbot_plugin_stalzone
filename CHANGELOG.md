@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.22 - 2026-10-24
+
+### Changed
+
+- Recent trades are left-aligned again; the section now uses its own larger 20px body / 17px headers and 32px rows, so it can grow downward independently of the two-column quantity table.
+- Single-column quantity cards widen when needed to fit full recent-trade names instead of truncating them.
+
+### Tests
+
+- Regenerated the 12 Windows visual signatures; 187 tests pass.
+
 ## 1.1.21 - 2026-10-24
 
 ### Changed
