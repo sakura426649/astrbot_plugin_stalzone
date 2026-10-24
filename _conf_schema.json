@@ -87,5 +87,17 @@
     "type": "float",
     "default": 1.0,
     "hint": "同一群/会话两次查询的最小间隔，防止刷屏触发官方 API 限流；0 为关闭。"
+  },
+  "emission_auto_notify": {
+    "description": "自动辐射风暴提醒",
+    "type": "bool",
+    "default": true,
+    "hint": "默认开启。只在上一场风暴结束后的 2–4 小时窗口内每分钟查询；检测到新风暴后向提醒目标发送“风暴已开始”图片。重启后继续使用已保存的窗口与提醒记录。"
+  },
+  "emission_notify_target": {
+    "description": "自动提醒发送目标（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "填写 AstrBot 会话的 unified_msg_origin，例如群聊会话标识。留空则自动记住最近一次使用 /sz 指令的会话；重启后仍保留。"
   }
 }

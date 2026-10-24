@@ -975,6 +975,126 @@ def _emission_canvas(width: int, height: int) -> Any:
     return canvas
 
 
+def render_emission_alert_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    width: int = 1200,
+    height: int = 660,
+) -> Path | None:
+    """Render the proactive "emission started" alert in the same poster style."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+        or not view.get("headline")
+    ):
+        return None
+    path = _find_display_font(font_path)
+    if path is None:
+        return None
+    canvas = _emission_canvas(width, height)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+    try:
+        header_font = ImageFont.truetype(str(path), 32)
+        kicker_font = ImageFont.truetype(str(path), 15)
+        headline_font = ImageFont.truetype(str(path), 66)
+        clock_font = ImageFont.truetype(str(path), 118)
+        sub_font = ImageFont.truetype(str(path), 21)
+        small_font = ImageFont.truetype(str(path), 16)
+        chip_font = ImageFont.truetype(str(path), 18)
+        action_font = ImageFont.truetype(str(path), 27)
+    except Exception:
+        return None
+
+    red = "#ff4b32"
+    ember = "#ff9b5c"
+    bone = "#f2e6d0"
+    muted = "#b49a83"
+    pad = 60
+    centre = width / 2
+    draw.rectangle((pad, 46, pad + 6, 90), fill=red)
+    draw.text((pad + 22, 38), "STALZONE · 辐射风暴警报", font=header_font, fill=bone)
+    draw.text(
+        (width - pad, 44), f"{view.get('region', '')} · 自动监测",
+        font=small_font, fill=muted, anchor="ra",
+    )
+    chip_text = "风暴进行中"
+    chip_w = int(draw.textlength(chip_text, font=chip_font)) + 50
+    chip_x = width - pad - chip_w
+    draw.rounded_rectangle(
+        (chip_x, 78, chip_x + chip_w, 116), radius=19,
+        fill=(35, 8, 6, 220), outline=red, width=2,
+    )
+    draw.ellipse((chip_x + 14, 91, chip_x + 24, 101), fill=red)
+    draw.text((chip_x + 32, 84), chip_text, font=chip_font, fill=red)
+
+    draw.text(
+        (centre, 154), "E M I S S I O N   D E T E C T E D",
+        font=kicker_font, fill="#b34735", anchor="mm",
+    )
+    draw.text((centre, 204), "风暴已开始", font=headline_font, fill=bone, anchor="mm")
+
+    clock = str(view.get("start_clock") or "--:--")
+    clock_x = centre
+    if ImageFilter is not None:
+        halo_mask = Image.new("L", (width, height), 0)
+        ImageDraw.Draw(halo_mask).text(
+            (clock_x, 310), clock, font=clock_font, fill=255, anchor="mm"
+        )
+        halo_mask = halo_mask.filter(ImageFilter.GaussianBlur(25))
+        halo = Image.new("RGBA", (width, height), (255, 55, 30, 255))
+        halo.putalpha(halo_mask.point(lambda value: int(value * 0.5)))
+        canvas.alpha_composite(halo)
+    draw.text(
+        (clock_x + 4, 316), clock, font=clock_font,
+        fill=(0, 0, 0, 160), anchor="mm",
+    )
+    draw.text(
+        (clock_x, 310), clock, font=clock_font, fill=red, anchor="mm",
+        stroke_width=2, stroke_fill=(60, 5, 2, 255),
+    )
+    draw.text(
+        (centre, 390),
+        f"开始于 {view.get('start_date', '')}  ·  {view.get('region', '')}",
+        font=sub_font, fill=bone, anchor="mm",
+    )
+    draw.text(
+        (centre, 424),
+        f"检测时已持续 {view.get('elapsed_text', '—')}",
+        font=small_font, fill=muted, anchor="mm",
+    )
+    draw.text((centre, 480), "请尽快上线", font=action_font, fill=ember, anchor="mm")
+
+    draw.line((pad, 530, width - pad, 530), fill=(150, 45, 30, 130), width=1)
+    draw.text(
+        (pad, 546),
+        f"检测时间：{view.get('detected_time', '')}",
+        font=small_font, fill=muted,
+    )
+    draw.text(
+        (width - pad, 546),
+        "自动检测 · 官方 API · UTC+8",
+        font=small_font, fill=muted, anchor="ra",
+    )
+    _draw_signature(
+        draw, width, height - 48, path, small_font, max_bottom=height,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    output = out_dir / f"sz_emission_alert_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(output, "PNG", optimize=True)
+    except OSError:
+        return None
+    return output
+
+
 def render_emission_card(
     view: dict[str, Any] | None,
     *,

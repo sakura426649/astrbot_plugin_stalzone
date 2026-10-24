@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
+import tempfile
 import types
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -59,6 +62,7 @@ astrbot.api = api
 astrbot.api.event = event_mod
 astrbot.api.star = star_mod
 
+import main as main_module  # noqa: E402
 from main import (  # noqa: E402
     PluginReply,
     SZ_BARE_RE,
@@ -957,6 +961,269 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_command(self):
         text = await collect(self.make_plugin(), "/sz nope")
         self.assertIn("未知指令", text)
+
+
+class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
+    class Client(FakeClient):
+        def __init__(self, payload):
+            self.payload = payload
+            self.calls = 0
+
+        async def get_emission(self):
+            self.calls += 1
+            return self.payload
+
+    class TargetEvent(FakeEvent):
+        def __init__(self, text: str, target: str):
+            super().__init__(text)
+            self.unified_msg_origin = target
+
+    def make_plugin(self):
+        return StalzonePlugin(
+            Context(),
+            {
+                "region": "eu",
+                "api_base": "https://dapi.stalzone.com",
+                "render_mode": "text",
+                "lunar_enrich": False,
+                "sc_core_fallback": False,
+                "command_cooldown": 0,
+                "emission_notify_target": "group:test",
+            },
+        )
+
+    def test_enabled_by_default_and_config_flag(self):
+        plugin = StalzonePlugin(Context(), {})
+        self.assertTrue(plugin._auto_notify_enabled())
+        plugin.config["emission_auto_notify"] = False
+        self.assertFalse(plugin._auto_notify_enabled())
+
+    async def test_outside_window_does_not_query_api(self):
+        plugin = self.make_plugin()
+        client = self.Client({"previousEnd": "2026-10-22T03:30:00Z"})
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        plugin._auto_state = {
+            "last_previous_end": (
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            ).isoformat()
+        }
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 0)
+
+    async def test_window_detects_once_and_deduplicates(self):
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(minutes=8)
+        client = self.Client(
+            {
+                "currentStart": start.isoformat(),
+                "previousStart": (now - timedelta(hours=4)).isoformat(),
+                "previousEnd": (now - timedelta(hours=3)).isoformat(),
+            }
+        )
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        plugin._auto_state = {
+            "last_previous_end": (now - timedelta(hours=2, minutes=30)).isoformat()
+        }
+        sent = []
+
+        async def fake_send(payload, region):
+            sent.append((payload, region))
+            return True
+
+        plugin._send_emission_alert = fake_send  # type: ignore[assignment]
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 1)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][1], "eu")
+        self.assertTrue(plugin._auto_state["active"])
+        self.assertEqual(plugin._auto_state["last_notified_start"], start.isoformat())
+
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 2)
+        self.assertEqual(len(sent), 1)
+
+    async def test_alert_send_uses_proactive_message_chain(self):
+        class RecordingContext(Context):
+            def __init__(self):
+                self.sent = []
+
+            async def send_message(self, target, chain):
+                self.sent.append((target, chain))
+
+        class FakePlain:
+            def __init__(self, text):
+                self.text = text
+
+        class FakeChain:
+            def __init__(self, components=None):
+                self.components = list(components or [])
+
+            def message(self, text):
+                self.components.append(FakePlain(text))
+                return self
+
+        context = RecordingContext()
+        plugin = StalzonePlugin(
+            context,
+            {"region": "eu", "emission_notify_target": "group:test"},
+        )
+        payload = {
+            "currentStart": datetime.now(timezone.utc).isoformat(),
+            "previousEnd": (
+                datetime.now(timezone.utc) - timedelta(hours=3)
+            ).isoformat(),
+        }
+        with patch.object(main_module, "MessageChain", FakeChain), patch.object(
+            main_module, "AstrImage", None
+        ), patch.object(main_module, "AstrPlain", FakePlain), patch.object(
+            main_module,
+            "render_emission_alert_card",
+            lambda view, font_path=None: None,
+        ):
+            sent = await plugin._send_emission_alert(payload, "eu")
+        self.assertTrue(sent)
+        self.assertEqual(len(context.sent), 1)
+        target, chain = context.sent[0]
+        self.assertEqual(target, "group:test")
+        self.assertIn("辐射风暴已开始", chain.components[0].text)
+
+    async def test_active_end_anchors_window_if_api_lags(self):
+        from formatters import parse_auction_time
+
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        old_end = (now - timedelta(hours=4, minutes=40)).isoformat()
+        client = self.Client({"previousEnd": old_end})
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        plugin._auto_state = {
+            "active": True,
+            "last_previous_end": old_end,
+            "last_notified_start": (now - timedelta(minutes=8)).isoformat(),
+        }
+        await plugin._emission_auto_tick()
+        self.assertFalse(plugin._auto_state["active"])
+        anchored = parse_auction_time(plugin._auto_state["last_previous_end"])
+        self.assertIsNotNone(anchored)
+        self.assertLess(abs((anchored - now).total_seconds()), 10)
+
+    async def test_terminate_cancels_reminder_and_closes_http(self):
+        class FakeHTTP:
+            closed = False
+
+            async def aclose(self):
+                self.closed = True
+
+        plugin = self.make_plugin()
+        http = FakeHTTP()
+        plugin._http_client = http  # type: ignore[assignment]
+        plugin._auto_task = __import__("asyncio").create_task(
+            __import__("asyncio").sleep(60)
+        )
+        task = plugin._auto_task
+        await plugin.terminate()
+        self.assertTrue(task.cancelled())
+        self.assertTrue(http.closed)
+
+    async def test_alert_send_uses_image_and_cleans_temp_file(self):
+        class RecordingContext(Context):
+            def __init__(self):
+                self.sent = []
+
+            async def send_message(self, target, chain):
+                self.sent.append((target, chain))
+
+        class FakeImage:
+            @staticmethod
+            def fromBase64(encoded):
+                return ("image", encoded)
+
+        class FakeChain:
+            def __init__(self, components=None):
+                self.components = list(components or [])
+
+        context = RecordingContext()
+        plugin = StalzonePlugin(
+            context,
+            {"region": "eu", "emission_notify_target": "group:test"},
+        )
+        payload = {
+            "currentStart": datetime.now(timezone.utc).isoformat(),
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            image = Path(temp) / "alert.png"
+            image.write_bytes(b"not-a-real-png")
+            with patch.object(main_module, "MessageChain", FakeChain), patch.object(
+                main_module, "AstrImage", FakeImage
+            ), patch.object(
+                main_module,
+                "render_emission_alert_card",
+                lambda view, font_path=None: image,
+            ):
+                sent = await plugin._send_emission_alert(payload, "eu")
+            self.assertTrue(sent)
+            self.assertFalse(image.exists())
+        self.assertEqual(len(context.sent), 1)
+        kind, encoded = context.sent[0][1].components[0]
+        self.assertEqual(kind, "image")
+        self.assertTrue(encoded)
+
+    async def test_force_probe_updates_window_after_restart(self):
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        previous_end = now - timedelta(hours=5)
+        client = self.Client({"previousEnd": previous_end.isoformat()})
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        plugin._auto_state = {}
+        await plugin._emission_auto_tick(force=True)
+        self.assertEqual(client.calls, 1)
+        self.assertFalse(plugin._auto_state["active"])
+        self.assertEqual(
+            plugin._auto_state["last_previous_end"], previous_end.isoformat()
+        )
+
+    async def test_target_and_active_state_survive_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            old = os.environ.get("ASTRBOT_DATA_DIR")
+            os.environ["ASTRBOT_DATA_DIR"] = temp
+            try:
+                first = StalzonePlugin(Context(), {"region": "eu"})
+                first._remember_notify_target(
+                    self.TargetEvent("/sz 风暴", "group:survive")
+                )
+                start = datetime.now(timezone.utc).isoformat()
+                first._auto_state.update(
+                    {"active": True, "last_notified_start": start}
+                )
+                first._save_auto_state()
+                second = StalzonePlugin(Context(), {"region": "eu"})
+                self.assertEqual(second._notify_target(), "group:survive")
+                self.assertTrue(second._auto_state["active"])
+                self.assertEqual(second._auto_state["last_notified_start"], start)
+                client = self.Client(
+                    {
+                        "currentStart": start,
+                        "previousEnd": (
+                            datetime.now(timezone.utc) - timedelta(hours=3)
+                        ).isoformat(),
+                    }
+                )
+                second._make_client = lambda: client  # type: ignore[assignment]
+                sent = []
+
+                async def fake_send(payload, region):
+                    sent.append((payload, region))
+                    return True
+
+                second._send_emission_alert = fake_send  # type: ignore[assignment]
+                await second._emission_auto_tick(force=True)
+                self.assertEqual(len(sent), 0)
+                self.assertEqual(client.calls, 1)
+            finally:
+                if old is None:
+                    os.environ.pop("ASTRBOT_DATA_DIR", None)
+                else:
+                    os.environ["ASTRBOT_DATA_DIR"] = old
 
 
 if __name__ == "__main__":

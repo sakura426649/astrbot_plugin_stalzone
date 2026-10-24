@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.32-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.33-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -56,12 +56,17 @@
 
 > 图片在 QQ 缩略图和点开查看时颜色一致；所有卡片均为不透明 RGB PNG，不依赖外部图床。
 
+**自动风暴提醒**（后台检测到爆发时主动发送，与手动查询的计时卡区分）：
+
+<img src="docs/images/emission_alert.png" alt="自动风暴提醒" width="82%">
+
 ## 功能亮点
 
 | 模块 | 能力 |
 | --- | --- |
 | **拍卖行** | 当前在售、最近成交与按日期查询；神器按品质从高到低分组，非神器按 `物品×数量` 展示起拍、买断、单价和剩余时间，并标出最低单价 |
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
+| **自动风暴提醒** | 默认开启；只在上一场结束后的 2–4 小时窗口内每分钟查询，检测到新风暴后主动发送「风暴已开始」警报图 |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；4 个英文字母的标签精确匹配，不区分大小写；支持战队列表 |
 | **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情与 2,600 个离线图标；属性按语义红绿着色 |
@@ -93,6 +98,8 @@
 
 > [!TIP]
 > `/sz` 的斜杠可以省略，但 `sz` 后必须加一个空格才会触发：`sz 拍卖 原子` 等价于 `/sz 拍卖 原子`。单独发 `sz` 不会触发。
+>
+> **自动风暴提醒**默认开启。插件会记住最近一次使用 `/sz` 的群会话并主动发送警报；也可以在配置中用 `emission_notify_target` 固定发送目标。窗口、目标与去重状态保存在插件数据目录，重启 Bot 不会丢失。
 
 ## 常用指令
 
@@ -150,6 +157,20 @@
 | `lunar_enrich` | `true` | 玩家资料追加 Lunar 第三方 K/D、KDA、战斗分；关闭后不请求第三方 |
 | `sc_core_fallback` | `true` | 官方成交历史翻页失效时用 SC CORE 第三方存档补全旧成交；结果会标注来源 |
 | `command_cooldown` | `1.0` | 同一群两次查询的最小间隔（秒）；`0` 为关闭 |
+| `emission_auto_notify` | `true` | 自动风暴提醒开关；只在上次风暴结束后的 2–4 小时窗口内每分钟查询 |
+| `emission_notify_target` | 空 | 固定提醒目标（AstrBot `unified_msg_origin`）；留空时自动记住最近一次 `/sz` 的会话 |
+
+### 自动风暴提醒
+
+游戏规则是风暴结束后的 0–2 小时不会再次爆发，2–4 小时内随机爆发。插件默认开启 `emission_auto_notify`，因此不会全天轮询：
+
+- 启动时先探测一次官方风暴接口，恢复上次结束时间；之后只有进入「上次结束 + 2 小时」到「上次结束 + 4 小时」的窗口才每分钟查询一次；窗口外的空闲时段不轮询。
+- 检测到 `currentStart` 后立即向提醒目标发送自动警报图，图中突出「风暴已开始」和开始时间；同一场风暴只提醒一次。
+- 风暴进行中按分钟确认结束状态；结束后更新保存的结束时间，再进入下一轮 2–4 小时窗口。
+- `emission_auto_state.json` 保存在 AstrBot 插件数据目录，记录上次结束时间、是否进行中、已提醒的开始时间和最近会话；重启后据此恢复，不会因重启丢失窗口或重复提醒。
+- 目标优先级：配置中的 `emission_notify_target` → 最近一次使用 `/sz` 的会话。首次安装后若还没有任何群指令记录，先配置目标或在群里发一次查询。
+
+自动警报使用与 `/sz 风暴` 相同的末日风卡片，但主视觉是「风暴已开始」+ 大字开始时间，而不是持续时长，便于直接提醒群友上线。图片渲染不可用时会退回文字提醒。
 
 ### 自定义物品别名（无需重建索引）
 
@@ -257,7 +278,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **140 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 76%，门槛 75%）。
+当前测试覆盖 API 客户端、格式化、物品索引、PDA 富文本、图片渲染、候选卡、区服参数、缓存与主流程，共 **165 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 79%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

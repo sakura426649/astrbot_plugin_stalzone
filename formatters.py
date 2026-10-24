@@ -1223,6 +1223,52 @@ def build_emission_view(
     }
 
 
+def build_emission_alert_view(
+    payload: dict[str, Any] | None,
+    region: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the proactive emission-start alert shown by the background task."""
+    if not isinstance(payload, dict):
+        return {}
+    current = parse_auction_time(payload.get("currentStart"))
+    if current is None:
+        return {}
+    now_utc = now or datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    now_utc = now_utc.astimezone(timezone.utc)
+    start = current.astimezone(CST)
+    detected = now_utc.astimezone(CST)
+    elapsed = max(0, int((now_utc - current).total_seconds()))
+    if elapsed >= 3600:
+        elapsed_text = format_elapsed_hms(elapsed)
+    elif elapsed >= 60:
+        elapsed_text = f"{elapsed // 60}分{elapsed % 60:02d}秒"
+    else:
+        elapsed_text = f"{elapsed}秒"
+    return {
+        "region": str(region).upper(),
+        "headline": "风暴已开始",
+        "start_time": start.strftime("%Y-%m-%d %H:%M:%S") + " UTC+8",
+        "start_clock": start.strftime("%H:%M"),
+        "start_date": start.strftime("%Y-%m-%d"),
+        "detected_time": detected.strftime("%Y-%m-%d %H:%M:%S") + " UTC+8",
+        "elapsed_text": elapsed_text,
+        "state_label": "风暴进行中",
+        "footer": "自动检测 · 官方 API · UTC+8",
+        "text": chr(10).join(
+            [
+                f"辐射风暴已开始｜{str(region).upper()}",
+                f"开始时间：{start.strftime('%Y-%m-%d %H:%M:%S')} UTC+8",
+                f"当前已持续：{elapsed_text}",
+                "请尽快上线。",
+            ]
+        ),
+    }
+
+
 def format_emission(
     payload: dict[str, Any] | None,
     region: str,

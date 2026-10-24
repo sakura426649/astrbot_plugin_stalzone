@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import copy
+import json
 import hashlib
 import os
 import platform
@@ -18,7 +19,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -32,6 +33,18 @@ try:
     from astrbot.api.message_components import Image as AstrImage
 except ImportError:  # older/newer layout fallback
     AstrImage = None  # type: ignore[assignment]
+try:
+    from astrbot.api.message_components import Plain as AstrPlain
+except ImportError:
+    AstrPlain = None  # type: ignore[assignment]
+
+try:
+    from astrbot.core.message.message_event_result import MessageChain
+except ImportError:
+    try:
+        from astrbot.api.event import MessageChain
+    except ImportError:
+        MessageChain = None  # type: ignore[assignment]
 
 try:  # Package import (normal AstrBot plugin loading).
     from .api_client import (
@@ -55,6 +68,7 @@ try:  # Package import (normal AstrBot plugin loading).
         build_auction_view,
         build_clan_candidate_view,
         build_diag_view,
+        build_emission_alert_view,
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
@@ -87,6 +101,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_diag_card,
         faction_icon_path,
         render_candidate_card,
+        render_emission_alert_card,
         render_emission_card,
         render_help_card,
         render_notice_card,
@@ -126,6 +141,7 @@ except ImportError:  # Direct execution / flat import fallback.
         build_auction_view,
         build_clan_candidate_view,
         build_diag_view,
+        build_emission_alert_view,
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
@@ -158,6 +174,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_auction_card,
         render_candidate_card,
         render_diag_card,
+        render_emission_alert_card,
         render_emission_card,
         render_help_card,
         render_notice_card,
@@ -180,7 +197,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.32"
+PLUGIN_VERSION = "1.0.33"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 
 
@@ -310,6 +327,9 @@ class StalzonePlugin(Star):
             aliases_path=data_dir / "item_aliases.json",
         )
         self.balance_history = BalanceHistory()
+        self._auto_state_path = data_dir / "emission_auto_state.json"
+        self._auto_state = self._load_auto_state()
+        self._auto_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------ config
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -349,11 +369,6 @@ class StalzonePlugin(Star):
                     pass
         return self._http_client
 
-    async def terminate(self) -> None:
-        if self._http_client is not None:
-            await self._http_client.aclose()
-            self._http_client = None
-
     def _make_client(self, region: str | None = None) -> StalzoneAPIClient:
         return StalzoneAPIClient(
             client_id=str(self._cfg("client_id", "") or ""),
@@ -371,6 +386,171 @@ class StalzonePlugin(Star):
         if self._api_semaphore is None:
             self._api_semaphore = asyncio.Semaphore(6)
         return self._api_semaphore
+
+    # ---------------------------------------------------- automatic emission
+    def _load_auto_state(self) -> dict[str, Any]:
+        try:
+            payload = json.loads(self._auto_state_path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _save_auto_state(self) -> None:
+        try:
+            self._auto_state_path.parent.mkdir(parents=True, exist_ok=True)
+            temp = self._auto_state_path.with_suffix(".tmp")
+            temp.write_text(
+                json.dumps(self._auto_state, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            temp.replace(self._auto_state_path)
+        except OSError:
+            logger.warning("STALZONE automatic emission state could not be saved")
+
+    def _auto_notify_enabled(self) -> bool:
+        value = self._cfg("emission_auto_notify", True)
+        if value is None:
+            return True
+        if isinstance(value, str):
+            text = value.strip().lower()
+            return not text or text not in {"0", "false", "no", "off"}
+        return bool(value)
+
+    def _notify_target(self) -> str:
+        configured = str(self._cfg("emission_notify_target", "") or "").strip()
+        if configured:
+            return configured
+        return str(self._auto_state.get("target", "") or "").strip()
+
+    def _remember_notify_target(self, event: AstrMessageEvent) -> None:
+        target = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        if not target or self._auto_state.get("target") == target:
+            return
+        self._auto_state["target"] = target
+        self._save_auto_state()
+
+    async def _emission_auto_loop(self) -> None:
+        force = True
+        while True:
+            try:
+                if await self._emission_auto_tick(force=force):
+                    force = False
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("STALZONE automatic emission check failed")
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                raise
+
+    async def _emission_auto_tick(self, *, force: bool = False) -> bool:
+        """Poll the official emission API only in the 2–4h after-storm window."""
+        state = self._auto_state
+        now = datetime.now(timezone.utc)
+        previous_end = parse_auction_time(state.get("last_previous_end"))
+        active = bool(state.get("active"))
+        if not force and not active:
+            if previous_end is None:
+                return False
+            elapsed = (now - previous_end).total_seconds()
+            # One grace minute catches a storm starting at the very end of 4h.
+            if elapsed < 2 * 3600 or elapsed >= 4 * 3600 + 90:
+                return False
+        async with self._api_gate():
+            async with self._make_client() as client:
+                payload = await client.get_emission()
+                region = client.region
+        if not isinstance(payload, dict):
+            return False
+        current_start = parse_auction_time(payload.get("currentStart"))
+        payload_previous_end = parse_auction_time(payload.get("previousEnd"))
+        if (
+            current_start is None
+            and payload_previous_end is None
+            and previous_end is None
+        ):
+            return False
+        if payload_previous_end is not None:
+            state["last_previous_end"] = payload_previous_end.isoformat()
+        state["region"] = region.lower()
+        if current_start is None:
+            if active:
+                # If the API has not published the finished storm's end yet,
+                # anchor the next window to this detection instead of an old
+                # timestamp that would stall the 2–4h gate forever.
+                if (
+                    payload_previous_end is None
+                    or previous_end is None
+                    or payload_previous_end <= previous_end
+                ):
+                    state["last_previous_end"] = now.isoformat()
+                state["active"] = False
+            elif force:
+                state["active"] = False
+            self._save_auto_state()
+            return True
+        state["active"] = True
+        start_key = current_start.isoformat()
+        if start_key != str(state.get("last_notified_start", "")):
+            sent = await self._send_emission_alert(payload, region)
+            if sent:
+                state["last_notified_start"] = start_key
+        self._save_auto_state()
+        return True
+
+    async def _send_emission_alert(self, payload: dict[str, Any], region: str) -> bool:
+        target = self._notify_target()
+        if not target:
+            return False
+        if MessageChain is None:
+            logger.warning("STALZONE automatic emission alert needs MessageChain support")
+            return False
+        view = build_emission_alert_view(payload, region)
+        image_path: Path | None = None
+        try:
+            image_path = await asyncio.to_thread(
+                render_emission_alert_card,
+                view,
+                font_path=str(self._cfg("font_path", "") or "") or None,
+            )
+            if image_path is not None and AstrImage is not None:
+                encoded = await asyncio.to_thread(self._image_base64, image_path)
+                chain = MessageChain([AstrImage.fromBase64(encoded)])
+            else:
+                text = str(view.get("text", "风暴已开始"))
+                if AstrPlain is not None:
+                    chain = MessageChain([AstrPlain(text)])
+                else:
+                    chain = MessageChain().message(text)
+            await self.context.send_message(target, chain)
+            return True
+        except Exception:
+            logger.exception("STALZONE automatic emission alert send failed")
+            return False
+        finally:
+            if image_path is not None:
+                try:
+                    image_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    async def initialize(self) -> None:
+        if not self._auto_notify_enabled():
+            return
+        if not str(self._cfg("client_id", "") or "").strip():
+            logger.warning("STALZONE automatic emission disabled: missing client_id")
+            return
+        if not str(self._cfg("client_secret", "") or "").strip():
+            logger.warning("STALZONE automatic emission disabled: missing client_secret")
+            return
+        if self._auto_task is not None and not self._auto_task.done():
+            return
+        self._auto_task = asyncio.create_task(self._emission_auto_loop())
+        logger.info(
+            "STALZONE automatic emission enabled for region %s",
+            self._region().upper(),
+        )
 
     def _cache_get(self, key: str) -> Any:
         item = self._api_cache.get(key)
@@ -908,6 +1088,8 @@ class StalzonePlugin(Star):
         except Exception:
             pass
         sub, arg = parse_command(event.message_str)
+        if sub:
+            self._remember_notify_target(event)
         if sub and sub != "candidate":
             self._pending_choices.pop(self._choice_scope(event), None)
         if sub in {
@@ -1988,4 +2170,18 @@ class StalzonePlugin(Star):
             return format_operations(payload, map_name)
 
     async def terminate(self):
-        """Plugin unload hook; per-request clients close themselves."""
+        """Plugin unload hook: stop the reminder task and close shared HTTP."""
+        task = self._auto_task
+        self._auto_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("STALZONE automatic emission task shutdown failed")
+        self._save_auto_state()
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None

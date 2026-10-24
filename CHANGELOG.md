@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.33 - 2026-10-24
+
+### Added
+
+- Automatic default-region emission alerts, enabled by default. The plugin probes once on startup, then polls the official emission endpoint at most once a minute only during the 2–4 hour window after the previous emission. Outside that window it does not poll every minute.
+- A dedicated "风暴已开始" alert card: same doomsday emission style as `/sz 风暴`, but focused on the start time and immediate action instead of elapsed time.
+- `emission_auto_notify` and `emission_notify_target` configuration keys. If no target is configured, the latest `/sz` session is remembered automatically.
+- Persistent `emission_auto_state.json`: previous end time, active state, last alerted start and target survive plugin reloads and bot restarts; the same storm is never alerted twice.
+
+### Fixed
+
+- Consolidated the duplicated `terminate()` hook so shared HTTP cleanup runs and the background reminder task stops cleanly on unload.
+- The automatic reminder handles API/window boundaries, a missing target and image-rendering failures without stopping the task.
+
+### Tests
+
+- Added alert view/renderer tests and window, deduplication, startup-probe and restart-persistence tests; 165 tests pass.
+
 ## 1.0.32 - 2026-10-23
 
 ### Fixed

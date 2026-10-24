@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.32-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.33-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,6 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stacked items with unit price and lowest-price marker |
 | Emission | Time since the last emission, current status and region selection |
+| Auto emission alert | Enabled by default; polls once a minute only in the 2–4h window after the previous emission and pushes a distinct "emission started" alert image |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
 | Item | 2,615 bilingual entries, 1,338 detail records, 2,600 bundled icons, semantic stat colors |
@@ -89,6 +90,20 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `lunar_enrich` | `true` | Add Lunar third-party K/D and battle score |
 | `sc_core_fallback` | `true` | Use SC CORE for older auction history when official pagination fails |
 | `command_cooldown` | `1.0` | Minimum seconds between queries in the same group; `0` disables |
+| `emission_auto_notify` | `true` | Automatic emission alert; polls once a minute only during the 2–4h window |
+| `emission_notify_target` | empty | Fixed `unified_msg_origin`; when empty, the latest `/sz` session is remembered |
+
+### Automatic emission alerts
+
+The game does not start a new emission in the first 2 hours after one ends; the next one is random within 2–4 hours. The plugin uses that rule instead of polling all day:
+
+- On startup it probes the official emission endpoint once to restore the previous end time. It then polls once a minute only between `previousEnd + 2h` and `previousEnd + 4h`; idle time outside that window is not polled.
+- A new `currentStart` triggers one "emission started" image for the configured target. The same start time is never alerted twice.
+- While the storm is active the plugin keeps confirming its end once a minute; the saved end time is then refreshed and the next 2–4h window begins.
+- State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start and latest target, so a restart neither loses the window nor repeats an alert.
+- Target precedence: `emission_notify_target` → the latest `/sz` session. If no target exists yet, set the config value or run one query in the group first.
+
+The automatic card shares the doomsday emission style but leads with "风暴已开始" and the large start time instead of the elapsed duration. If image rendering is unavailable it falls back to text.
 
 ## Data notes
 

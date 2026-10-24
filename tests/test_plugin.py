@@ -39,6 +39,7 @@ from formatters import (  # noqa: E402
     auction_day_cutoff,
     build_auction_view,
     build_clan_candidate_view,
+    build_emission_alert_view,
     build_emission_view,
     build_empty_auction_view,
     build_item_candidate_view,
@@ -74,6 +75,7 @@ from image_renderer import (  # noqa: E402
     rank_color,
     render_auction_card,
     render_candidate_card,
+    render_emission_alert_card,
     render_emission_card,
     render_profile_card,
     render_text_card,
@@ -713,6 +715,27 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(active["elapsed_text"], "1小时00分00秒")
         self.assertEqual(active["state_label"], "风暴进行中")
         self.assertEqual(active["state_key"], "active")
+
+    def test_emission_alert_view(self):
+        view = build_emission_alert_view(
+            {
+                "currentStart": "2026-10-22T05:00:00Z",
+                "previousStart": "2026-10-22T03:00:00Z",
+                "previousEnd": "2026-10-22T03:30:00Z",
+            },
+            "eu",
+            now=__import__("datetime").datetime(
+                2026, 10, 22, 5, 17, tzinfo=__import__("datetime").timezone.utc
+            ),
+        )
+        self.assertEqual(view["headline"], "风暴已开始")
+        self.assertEqual(view["region"], "EU")
+        self.assertEqual(view["start_clock"], "13:00")
+        self.assertEqual(view["start_date"], "2026-10-22")
+        self.assertEqual(view["elapsed_text"], "17分00秒")
+        self.assertIn("辐射风暴已开始", view["text"])
+        self.assertIn("请尽快上线", view["text"])
+        self.assertEqual(build_emission_alert_view({}, "eu"), {})
 
     def test_profile_fields(self):
         payload = {
@@ -1627,6 +1650,27 @@ class ImageRendererTests(unittest.TestCase):
         self.assertIsNotNone(path)
         with Image.open(path) as image:
             self.assertEqual(image.size, (1200, 780))
+        path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
+    def test_emission_alert_card(self):
+        from PIL import Image
+
+        view = build_emission_alert_view(
+            {
+                "currentStart": "2026-10-22T05:00:00Z",
+                "previousStart": "2026-10-22T03:00:00Z",
+                "previousEnd": "2026-10-22T03:30:00Z",
+            },
+            "ru",
+            now=__import__("datetime").datetime(
+                2026, 10, 22, 5, 17, tzinfo=__import__("datetime").timezone.utc
+            ),
+        )
+        path = render_emission_alert_card(view)
+        self.assertIsNotNone(path)
+        with Image.open(path) as image:
+            self.assertEqual(image.size, (1200, 660))
         path.unlink(missing_ok=True)
 
     @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
