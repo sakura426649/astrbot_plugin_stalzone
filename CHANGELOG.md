@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.18 - 2026-10-24
+
+### Fixed
+
+- The two-column quantity table no longer overlaps unit price, total and `竞拍 · x` for long item names or 7-digit prices; column widths now follow the actual text, and two-column mode drops the remaining-time column.
+- Quantity rows keep their `×N` suffix visible even when the item name is truncated.
+- The `更多功能` hint now shares the signature baseline instead of dropping below the watermark.
+
+### Tests
+
+- Added the `auction_quantity_many` stress signature (12 visual signatures total); 185 tests pass.
+
 ## 1.1.17 - 2026-10-24
 
 ### Changed

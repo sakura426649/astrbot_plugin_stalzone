@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.17-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.18-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -303,7 +303,7 @@ astrbot_plugin_stalzone/
 
 ## 开发与测试
 
-测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 11 张主要卡片的视觉快照（Linux 自动跳过）：
+测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 12 张主要卡片的视觉快照（Linux 自动跳过）：
 
 ```bash
 python -m unittest discover -s tests -v

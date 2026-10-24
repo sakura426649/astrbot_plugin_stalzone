@@ -142,6 +142,41 @@ def _auction_quantity() -> Path | None:
     return render_auction_card(view) if view else None
 
 
+def _auction_quantity_many() -> Path | None:
+    """Two-column stress case: long names, 7-digit prices, 100+ offer rows."""
+    lots = []
+    for amount in range(1, 32):
+        lots.append(
+            {
+                "amount": amount,
+                "startPrice": amount * 1_000_000 + 500,
+                "buyoutPrice": amount * 1_234_567 + 500,
+                "endTime": "2027-01-25T06:00:00Z",
+                "additional": {},
+            }
+        )
+        if amount % 2 == 0:
+            lots.append(
+                {
+                    "amount": amount,
+                    "startPrice": amount * 900_000,
+                    "buyoutPrice": amount * 2_000_000,
+                    "endTime": "2027-01-25T06:00:00Z",
+                    "additional": {},
+                }
+            )
+    view = build_auction_view(
+        "y1q9",
+        {"total": len(lots), "lots": lots},
+        {"total": 0, "prices": []},
+        "ru",
+        now=NOW,
+        item_label="7.62毫米穿甲燃烧弹 / AP Incendiary Ammo",
+        non_artifact=True,
+    )
+    return render_auction_card(view) if view else None
+
+
 def _candidate() -> Path | None:
     view = build_item_candidate_view(
         "原子",
@@ -296,6 +331,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "profile": _profile,
     "auction": _auction,
     "auction_quantity": _auction_quantity,
+    "auction_quantity_many": _auction_quantity_many,
     "candidate": _candidate,
     "notice": _notice,
     "diag": _diag,

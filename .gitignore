@@ -14,5 +14,7 @@ Thumbs.db
 htmlcov/
 coverage.xml
 astrbot_plugin_stalzone.zip
+astrbot_plugin_stalzone_full.zip
 stalzone_icons_full.zip
 SHA256SUMS
+dist/

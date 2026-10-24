@@ -1605,26 +1605,6 @@ def _draw_signature(
         y = max(0, min(y, int(max_bottom) - SIGNATURE_HEIGHT - 4))
     art_path = _find_artist_font(font_path)
     name_path = find_cjk_font(str(font_path) if font_path else None)
-    if more_tip:
-        tip_font = None
-        for size in (12, 11):
-            try:
-                tip_font = ImageFont.truetype(str(name_path or art_path), size)
-                break
-            except Exception:
-                continue
-        if tip_font is None and fallback_font is not None:
-            tip_font = fallback_font
-        if tip_font is not None:
-            bottom = int(max_bottom) if max_bottom is not None else int(y + 44)
-            draw.text(
-                (tip_x, bottom - 42),
-                MORE_FEATURES_TIP,
-                font=tip_font,
-                fill=tip_color,
-            )
-    if CREATOR_WATERMARK_HIDDEN:
-        return y
     if art_path is None and name_path is None:
         return y
     try:
@@ -1641,14 +1621,34 @@ def _draw_signature(
         name_font = fallback_font
     if name_font is None:
         name_font = art_font
+    art_ascent, art_descent = art_font.getmetrics()
+    name_ascent, name_descent = name_font.getmetrics()
+    baseline = y + max(art_ascent, name_ascent)
+    if more_tip:
+        tip_font = None
+        for size in (12, 11):
+            try:
+                tip_font = ImageFont.truetype(str(name_path or art_path), size)
+                break
+            except Exception:
+                continue
+        if tip_font is None and fallback_font is not None:
+            tip_font = fallback_font
+        if tip_font is not None:
+            tip_ascent, _ = tip_font.getmetrics()
+            draw.text(
+                (tip_x, baseline - tip_ascent),
+                MORE_FEATURES_TIP,
+                font=tip_font,
+                fill=tip_color,
+            )
+    if CREATOR_WATERMARK_HIDDEN:
+        return y
     prefix_w = draw.textlength(SIGNATURE_PREFIX, font=art_font)
     gap = 9
     name_w = draw.textlength(SIGNATURE_NAME, font=name_font)
     total_w = prefix_w + gap + name_w
     x = max(16, width - right_margin - int(total_w))
-    art_ascent, art_descent = art_font.getmetrics()
-    name_ascent, name_descent = name_font.getmetrics()
-    baseline = y + max(art_ascent, name_ascent)
     art_top = baseline - art_ascent
     name_top = baseline - name_ascent
     # Soft drop shadow + gold script text; both parts share one baseline.
@@ -2832,26 +2832,61 @@ def _render_quantity_auction_card(
         font=small_font,
         fill=MUTED,
     )
+    # Two-column mode drops the remaining-time column so long prices and
+    # 竞拍 annotations keep their own right-aligned slots instead of colliding.
+    show_remaining = columns == 1
+    unit_texts = [str(row.get("unit_price") or "\\") for row in rows]
+    total_texts = [
+        str(row.get("offer_total_display") or row.get("buyout") or "\\")
+        for row in rows
+    ]
+    remaining_texts = [str(row.get("remaining") or "—") for row in rows]
+    unit_w = (
+        max(
+            int(draw.textlength("单价", font=head_font)),
+            *(int(draw.textlength(text, font=body_font)) for text in unit_texts),
+        )
+        + 12
+    )
+    total_w = (
+        max(
+            int(draw.textlength("总价", font=head_font)),
+            *(int(draw.textlength(text, font=small_font)) for text in total_texts),
+        )
+        + 10
+    )
+    remaining_w = (
+        max(
+            int(draw.textlength("剩余", font=head_font)),
+            *(
+                int(draw.textlength(text, font=small_font))
+                for text in remaining_texts
+            ),
+        )
+        + 12
+        if show_remaining
+        else 0
+    )
     y = table_top
     for column in range(columns):
         x = pad + column * (col_w + gap)
+        right = x + col_w
+        if show_remaining:
+            remaining_x = right
+            right -= remaining_w + 18
+        total_x = right
+        unit_x = total_x - total_w - 14
+        name_w = max(48, unit_x - unit_w - 12 - x)
         draw.text((x, y), "名称", font=head_font, fill="#7F93A8")
+        if show_remaining:
+            draw.text(
+                (remaining_x, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
+            )
         draw.text(
-            (x + col_w, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
+            (total_x, y), "总价", font=head_font, fill=MUTED, anchor="ra"
         )
         draw.text(
-            (x + int(col_w * 0.90), y),
-            "总价",
-            font=head_font,
-            fill=MUTED,
-            anchor="ra",
-        )
-        draw.text(
-            (x + int(col_w * 0.64), y),
-            "单价",
-            font=head_font,
-            fill=MUTED,
-            anchor="ra",
+            (unit_x, y), "单价", font=head_font, fill=MUTED, anchor="ra"
         )
         ry = y + table_head_h
         for index in range(per_col):
@@ -2859,21 +2894,36 @@ def _render_quantity_auction_card(
             if row_index >= len(rows):
                 break
             row = rows[row_index]
+            name_color = str(row.get("color") or TEXT)
             display_name = str(row.get("name", ""))
-            name = _fit_text(
-                draw,
-                display_name,
-                body_font,
-                int(col_w * 0.42) - 10,
+            amount = int(row.get("amount") or 0)
+            suffix = ""
+            marker = f"×{amount}"
+            if amount > 0 and display_name.endswith(marker):
+                display_name = display_name[: -len(marker)].rstrip()
+                suffix = marker
+            suffix_w = (
+                int(draw.textlength(suffix, font=body_font)) if suffix else 0
             )
+            if suffix and name_w > suffix_w + 16:
+                base = _fit_text(
+                    draw, display_name, body_font, name_w - suffix_w - 6
+                )
+                name_x = x
+                draw.text(
+                    (name_x, ry), base, font=body_font, fill=name_color
+                )
+                name_x += int(draw.textlength(base, font=body_font)) + 2
+                draw.text(
+                    (name_x, ry), suffix, font=body_font, fill=name_color
+                )
+            else:
+                name = suffix or _fit_text(
+                    draw, display_name, body_font, name_w
+                )
+                draw.text((x, ry), name, font=body_font, fill=name_color)
             draw.text(
-                (x, ry),
-                name,
-                font=body_font,
-                fill=str(row.get("color") or TEXT),
-            )
-            draw.text(
-                (x + int(col_w * 0.64), ry),
+                (unit_x, ry),
                 str(row.get("unit_price") or "\\"),
                 font=body_font,
                 fill=TEXT,
@@ -2882,28 +2932,21 @@ def _render_quantity_auction_card(
             total_text = str(
                 row.get("offer_total_display") or row.get("buyout") or "\\"
             )
-            if row.get("offer_kind") == "auction":
-                draw.text(
-                    (x + int(col_w * 0.64) + 8, ry),
-                    _fit_text(draw, total_text, small_font, int(col_w * 0.26)),
-                    font=small_font,
-                    fill=TEXT,
-                )
-            else:
-                draw.text(
-                    (x + int(col_w * 0.90), ry),
-                    _fit_text(draw, total_text, small_font, int(col_w * 0.32)),
-                    font=small_font,
-                    fill=TEXT,
-                    anchor="ra",
-                )
             draw.text(
-                (x + col_w, ry),
-                str(row.get("remaining") or ""),
+                (total_x, ry),
+                total_text,
                 font=small_font,
-                fill=MUTED,
+                fill=TEXT,
                 anchor="ra",
             )
+            if show_remaining:
+                draw.text(
+                    (remaining_x, ry),
+                    str(row.get("remaining") or "—"),
+                    font=small_font,
+                    fill=MUTED,
+                    anchor="ra",
+                )
             ry += row_h
 
     ry = table_top + table_h + 18
