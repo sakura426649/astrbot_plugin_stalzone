@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.29 - 2026-10-23
+
+### Changed
+
+- Unified the achievement list and PvP-detail panel with the dark slate palette used by the combat/stat panels; removed the brown/gold borders and gold achievement dots.
+
 ## 1.0.28 - 2026-10-23
 
 ### Changed

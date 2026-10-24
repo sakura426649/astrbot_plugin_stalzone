@@ -1770,19 +1770,19 @@ def render_profile_card(
         container_top = ach_y + 30
         draw.rounded_rectangle(
             (left_x + 24, container_top, left_x + left_w - 24, container_top + ach_container_h),
-            radius=12, fill=(10, 16, 24, 135), outline=(100, 112, 120, 80), width=1,
+            radius=12, fill=(10, 16, 24, 145), outline=(78, 100, 120, 65), width=1,
         )
         cy = container_top + 8
         for item in achievements:
             draw.rounded_rectangle(
                 (left_x + 32, cy, left_x + left_w - 32, cy + ach_chip_h),
-                radius=9, fill=(22, 28, 34, 230), outline=(126, 112, 72, 90), width=1,
+                radius=9, fill=(17, 25, 34, 230), outline=(82, 104, 124, 85), width=1,
             )
-            draw.ellipse((left_x + 45, cy + 15, left_x + 51, cy + 21), fill="#FFD166")
+            draw.ellipse((left_x + 45, cy + 15, left_x + 51, cy + 21), fill="#9DB8CC")
             draw.text(
                 (left_x + 60, cy + 8),
                 _fit_text(draw, item, achievement_font, left_w - 100),
-                font=achievement_font, fill="#D9D5C8",
+                font=achievement_font, fill="#DCE6EF",
             )
             cy += ach_chip_h + ach_gap
 
@@ -1845,14 +1845,14 @@ def render_profile_card(
         detail_top = ry + 34
         draw.rounded_rectangle(
             (right_x, detail_top, right_x + right_w, detail_top + pvp_detail_h),
-            radius=12, fill=(18, 20, 18, 195), outline=(126, 112, 72, 90), width=1,
+            radius=12, fill=(12, 19, 28, 195), outline=(78, 98, 118, 70), width=1,
         )
         dy = detail_top + 12
         for line in pvp_detail_lines:
             draw.text(
                 (right_x + 16, dy),
                 _fit_text(draw, line, small_font, right_w - 32),
-                font=small_font, fill="#D7E3EC",
+                font=small_font, fill="#C9D8E4",
             )
             dy += 24
         ry = detail_top + pvp_detail_h + 24
