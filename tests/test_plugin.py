@@ -502,15 +502,15 @@ class FormatterTests(unittest.TestCase):
             item_color="#E7EDF5",
         )
         active = view["active"]
+        self.assertTrue(view["quantity_mode"])
         self.assertEqual(
-            [row["buyout"] for row in active], ["10,000", "6,000", "4,000"]
+            [row["buyout"] for row in active], ["4,000", "6,000", "10,000"]
         )
         self.assertEqual(
-            [row["unit_price"] for row in active], ["500", "600", "800"]
+            [row["unit_price"] for row in active], ["800", "600", "500"]
         )
-        self.assertEqual(active[0]["name"], "香烟×20")
-        self.assertTrue(active[0]["lowest"])
-        self.assertEqual(active[0]["lowest_label"], "最低单价")
+        self.assertEqual(active[0]["name"], "香烟×5")
+        self.assertNotIn("lowest", active[0])
         rows = view["recent_groups"][0]["rows"]
         self.assertEqual([row["unit_price"] for row in rows], ["1,200", "800", "550"])
         self.assertTrue(rows[-1]["lowest"])
@@ -832,6 +832,52 @@ class FormatterTests(unittest.TestCase):
             row["name"] for row in view["active"] if row.get("quality_header")
         ]
         self.assertTrue(any("全部显示" in name for name in headers))
+
+    def test_stackable_auction_uses_cheapest_row_per_amount(self):
+        lots = []
+        for amount in (1, 2, 5, 10, 100):
+            for offset in (0, 10, 20):
+                lots.append(
+                    {
+                        "amount": amount,
+                        "startPrice": amount * 1000 + offset,
+                        "buyoutPrice": amount * 1200 + offset,
+                        "endTime": "2026-10-25T06:00:00Z",
+                        "additional": {},
+                    }
+                )
+        view = build_auction_view(
+            "y1q9",
+            {"total": len(lots), "lots": lots},
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="弹药 / Ammo",
+            non_artifact=True,
+        )
+        self.assertIsNotNone(view)
+        self.assertTrue(view["quantity_mode"])
+        self.assertEqual(view["quantity_count"], 5)
+        self.assertEqual(view["active_total"], 15)
+        self.assertEqual(
+            [row["amount"] for row in view["active"]],
+            [1, 2, 5, 10, 100],
+        )
+        self.assertTrue(
+            all(
+                row["unit_value"]
+                == min(
+                    (item.get("buyoutPrice") or item.get("startPrice") or 0)
+                    / max(1, item["amount"])
+                    for item in lots
+                    if item["amount"] == row["amount"]
+                )
+                for row in view["active"]
+            )
+        )
+        text = format_auction_text(view)
+        self.assertIn("按数量最低单价", text)
+        self.assertIn("5 种数量 / 15 条在售", text)
 
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.11 - 2026-10-24
+
+### Added
+
+- Stackable non-artifact auctions are now grouped by the actual stack amounts. Each distinct quantity shows only its cheapest-unit listing, computed with one O(n) dictionary pass over the returned lots (no 1..max loop). More than 30 distinct quantities use a compact two-column table.
+- The auction card and text output show the number of distinct quantities and total listings.
+
+### Tests
+
+- Added quantity aggregation coverage and an `auction_quantity` visual signature; 184 tests and 11 visual signatures pass.
+
 ## 1.1.10 - 2026-10-24
 
 ### Changed

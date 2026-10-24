@@ -117,6 +117,31 @@ def _auction() -> Path | None:
     return render_auction_card(view) if view else None
 
 
+def _auction_quantity() -> Path | None:
+    lots = []
+    for amount in (1, 2, 5, 10, 20, 50):
+        for offset in (0, 100):
+            lots.append(
+                {
+                    "amount": amount,
+                    "startPrice": amount * 1000 + offset,
+                    "buyoutPrice": amount * 1200 + offset,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                }
+            )
+    view = build_auction_view(
+        "y1q9",
+        {"total": len(lots), "lots": lots},
+        {"total": 0, "prices": []},
+        "ru",
+        now=NOW,
+        item_label="弹药 / Ammo",
+        non_artifact=True,
+    )
+    return render_auction_card(view) if view else None
+
+
 def _candidate() -> Path | None:
     view = build_item_candidate_view(
         "原子",
@@ -270,6 +295,7 @@ def _help() -> Path | None:
 CASES: dict[str, Callable[[], Path | None]] = {
     "profile": _profile,
     "auction": _auction,
+    "auction_quantity": _auction_quantity,
     "candidate": _candidate,
     "notice": _notice,
     "diag": _diag,

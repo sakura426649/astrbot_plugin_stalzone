@@ -854,7 +854,45 @@ def build_auction_view(
         active_truncated = artifact_limited_count > MAX_AUCTION_ACTIVE_ROWS
     active_grouped = False
     active_note = ""
-    if non_artifact:
+    quantity_mode = False
+    quantity_count = 0
+    distinct_amounts = {
+        int(row.get("amount") or 1)
+        for row in active
+    }
+    if non_artifact and len(distinct_amounts) > 1:
+        best_by_amount: dict[int, dict[str, Any]] = {}
+        for row in active:
+            amount = int(row.get("amount") or 1)
+            current = best_by_amount.get(amount)
+            if current is None or (
+                row.get("unit_value", 0),
+                row.get("sort_price", 0),
+            ) < (
+                current.get("unit_value", 0),
+                current.get("sort_price", 0),
+            ):
+                best_by_amount[amount] = row
+        active = sorted(
+            best_by_amount.values(),
+            key=lambda row: (
+                int(row.get("amount") or 1),
+                row.get("unit_value", 0),
+                row.get("sort_price", 0),
+            ),
+        )
+        for row in active:
+            row.pop("lowest", None)
+            row.pop("lowest_label", None)
+            row.pop("badges", None)
+        quantity_mode = True
+        quantity_count = len(active)
+        active_truncated = False
+        active_note = (
+            f"按数量聚合：共 {quantity_count} 种数量 / {active_total:,} 条在售，"
+            "每种数量显示最低单价"
+        )
+    elif non_artifact:
         if active_truncated:
             head = active[:15]
             tail = active[-15:]
@@ -1047,6 +1085,8 @@ def build_auction_view(
         "active_total": active_total,
         "active_truncated": active_truncated,
         "active_grouped": active_grouped,
+        "quantity_mode": quantity_mode,
+        "quantity_count": quantity_count,
         "active_note": active_note,
         "recent_groups": groups,
         "recent_limit": limit,
@@ -1143,43 +1183,58 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
         if is_non_artifact:
             lines.append("  名称  成交价  单价  时间")
     else:
-        active_heading = "在售（按买断价从高到低）"
-        if view.get("active_grouped"):
-            active_heading += (
-                f"｜共 {view['active_total']:,} 条，按品质分组显示每级最低价"
-            )
-        elif view.get("active_truncated"):
-            active_heading += (
-                f"｜共 {view['active_total']:,} 条，显示前 15 条和后 15 条"
-            )
-        lines.extend(["", active_heading])
-        if view["active"]:
-            if is_non_artifact:
-                lines.append("  名称  起拍  买断  单价  剩余时间")
-            display_index = 0
+        if view.get("quantity_mode"):
+            lines.extend([
+                "",
+                f"在售（按数量最低单价｜{view['quantity_count']} 种数量 / "
+                f"{view['active_total']:,} 条在售）",
+                "  名称  单价  买断  剩余时间",
+            ])
             for row in view["active"]:
-                if row.get("quality_header"):
-                    lines.append(f"【{row['name']}】")
-                    continue
-                if row.get("ellipsis"):
-                    lines.append(f"  {row['name']}")
-                    continue
-                display_index += 1
-                badges = _auction_badges(row)
-                marker = f" [{'/'.join(badges)}]" if badges else ""
-                if is_non_artifact:
-                    lines.append(
-                        f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
-                        f"{row['unit_price']}  {row['remaining']}"
-                    )
-                else:
-                    lines.append(
-                        f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  {row['remaining']}"
-                    )
+                lines.append(
+                    f"  {row['name']}  {row['unit_price']}  "
+                    f"{row['buyout']}  {row['remaining']}"
+                )
+            if view.get("active_note"):
+                lines.append(str(view["active_note"]))
         else:
-            lines.append("当前无在售")
-        if view.get("active_note"):
-            lines.append(str(view["active_note"]))
+            active_heading = "在售（按买断价从高到低）"
+            if view.get("active_grouped"):
+                active_heading += (
+                    f"｜共 {view['active_total']:,} 条，按品质分组显示每级最低价"
+                )
+            elif view.get("active_truncated"):
+                active_heading += (
+                    f"｜共 {view['active_total']:,} 条，显示前 15 条和后 15 条"
+                )
+            lines.extend(["", active_heading])
+            if view["active"]:
+                if is_non_artifact:
+                    lines.append("  名称  起拍  买断  单价  剩余时间")
+                display_index = 0
+                for row in view["active"]:
+                    if row.get("quality_header"):
+                        lines.append(f"【{row['name']}】")
+                        continue
+                    if row.get("ellipsis"):
+                        lines.append(f"  {row['name']}")
+                        continue
+                    display_index += 1
+                    badges = _auction_badges(row)
+                    marker = f" [{'/'.join(badges)}]" if badges else ""
+                    if is_non_artifact:
+                        lines.append(
+                            f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
+                            f"{row['unit_price']}  {row['remaining']}"
+                        )
+                    else:
+                        lines.append(
+                            f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  {row['remaining']}"
+                        )
+            else:
+                lines.append("当前无在售")
+            if view.get("active_note"):
+                lines.append(str(view["active_note"]))
         if view.get("recent_total_limit") is not None:
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"

@@ -2741,6 +2741,241 @@ def render_candidate_card(
     return output
 
 
+def _render_quantity_auction_card(
+    view: dict[str, Any],
+    *,
+    font_path: str | None = None,
+) -> Path | None:
+    """Compact per-quantity price table for stackable non-artifact lots."""
+    if Image is None or ImageDraw is None or ImageFont is None:
+        return None
+    path = find_cjk_font(font_path)
+    if path is None:
+        return None
+    display_path = _find_display_font(font_path) or path
+    try:
+        title_font = ImageFont.truetype(str(display_path), 34)
+        subtitle_font = ImageFont.truetype(str(path), 19)
+        head_font = ImageFont.truetype(str(path), 17)
+        body_font = ImageFont.truetype(str(path), 18)
+        small_font = ImageFont.truetype(str(path), 15)
+        section_font = ImageFont.truetype(str(path), 21)
+    except Exception:
+        return None
+
+    rows = [row for row in (view.get("active") or []) if isinstance(row, dict)]
+    columns = 2 if len(rows) > 30 else 1
+    per_col = max(1, (len(rows) + columns - 1) // columns)
+    width = 960
+    pad = 44
+    gap = 24
+    col_w = (width - pad * 2 - gap * (columns - 1)) // columns
+    header_h = 170
+    section_y = header_h
+    table_head_h = 30
+    row_h = 32
+    table_h = table_head_h + per_col * row_h
+    recent_groups = [
+        group
+        for group in (view.get("recent_groups") or [])
+        if isinstance(group, dict)
+    ]
+    recent_h = 42 + sum(
+        24 + len(group.get("rows") or []) * 26
+        for group in recent_groups
+    )
+    if not recent_groups:
+        recent_h = 62
+    footer_h = 112
+    height = section_y + table_h + 28 + recent_h + footer_h
+    canvas = _card_canvas(width, height, alpha=228)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+    draw.rounded_rectangle(
+        (pad, pad + 4, pad + 7, pad + 44), radius=3, fill=ACCENT
+    )
+    draw.text((pad + 26, pad), "STALZONE · 拍卖行", font=title_font, fill=TEXT)
+    draw.text(
+        (pad, pad + 48),
+        _fit_text(
+            draw, str(view.get("title", "")), subtitle_font, width - pad - 150
+        ),
+        font=subtitle_font,
+        fill=MUTED,
+    )
+    draw.text(
+        (pad, pad + 74),
+        f"{view.get('region', '')}｜查询时间：{view.get('now', '')} UTC+8",
+        font=subtitle_font,
+        fill=MUTED,
+    )
+    draw.line(
+        (pad, header_h - 18, width - pad, header_h - 18), fill=BORDER, width=1
+    )
+
+    draw.text(
+        (pad, section_y), "按数量最低单价", font=section_font, fill=ACCENT
+    )
+    draw.text(
+        (width - pad, section_y + 3),
+        f"{int(view.get('quantity_count') or 0)} 种数量 / "
+        f"{int(view.get('active_total') or 0):,} 条在售",
+        font=small_font,
+        fill=MUTED,
+        anchor="ra",
+    )
+    y = section_y + 36
+    for column in range(columns):
+        x = pad + column * (col_w + gap)
+        draw.text((x, y), "名称", font=head_font, fill="#7F93A8")
+        draw.text(
+            (x + col_w, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
+        )
+        draw.text(
+            (x + int(col_w * 0.78), y),
+            "买断",
+            font=head_font,
+            fill=MUTED,
+            anchor="ra",
+        )
+        draw.text(
+            (x + int(col_w * 0.54), y),
+            "单价",
+            font=head_font,
+            fill=MUTED,
+            anchor="ra",
+        )
+        ry = y + table_head_h
+        for index in range(per_col):
+            row_index = column * per_col + index
+            if row_index >= len(rows):
+                break
+            row = rows[row_index]
+            name = _fit_text(
+                draw,
+                str(row.get("name", "")),
+                body_font,
+                int(col_w * 0.50) - 10,
+            )
+            draw.text((x, ry), name, font=body_font, fill=TEXT)
+            draw.text(
+                (x + int(col_w * 0.54), ry),
+                str(row.get("unit_price") or "\\"),
+                font=body_font,
+                fill=TEXT,
+                anchor="ra",
+            )
+            draw.text(
+                (x + int(col_w * 0.78), ry),
+                str(row.get("buyout") or "\\"),
+                font=body_font,
+                fill=TEXT,
+                anchor="ra",
+            )
+            draw.text(
+                (x + col_w, ry),
+                str(row.get("remaining") or ""),
+                font=small_font,
+                fill=MUTED,
+                anchor="ra",
+            )
+            ry += row_h
+
+    ry = section_y + table_h + 20
+    draw.line((pad, ry, width - pad, ry), fill=BORDER, width=1)
+    ry += 18
+    if view.get("recent_total_limit") is not None:
+        recent_heading = (
+            f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"
+        )
+    else:
+        recent_heading = (
+            f"最近成交（每品质最多 {view.get('recent_limit', 3)} 条，按时间倒序）"
+        )
+    draw.text((pad, ry), recent_heading, font=head_font, fill=ACCENT)
+    ry += 28
+    if recent_groups:
+        for group in recent_groups:
+            label = str(group.get("label") or "").split("（", 1)[0]
+            if label:
+                draw.text(
+                    (pad, ry),
+                    f"【{label}】",
+                    font=small_font,
+                    fill=str(group.get("color") or ACCENT),
+                )
+                ry += 24
+            for row in group.get("rows") or []:
+                name = _fit_text(
+                    draw,
+                    str(row.get("name", "")),
+                    body_font,
+                    int(width * 0.42),
+                )
+                draw.text((pad + 8, ry), name, font=body_font, fill=TEXT)
+                draw.text(
+                    (pad + int(width * 0.58), ry),
+                    str(row.get("price", "")),
+                    font=body_font,
+                    fill=TEXT,
+                    anchor="ra",
+                )
+                draw.text(
+                    (pad + int(width * 0.76), ry),
+                    str(row.get("unit_price", "")),
+                    font=body_font,
+                    fill=TEXT,
+                    anchor="ra",
+                )
+                draw.text(
+                    (width - pad, ry),
+                    str(row.get("time", "")),
+                    font=small_font,
+                    fill=MUTED,
+                    anchor="ra",
+                )
+                ry += 26
+    else:
+        draw.text((pad, ry), "暂无成交记录", font=body_font, fill=MUTED)
+        ry += 26
+
+    note_y = height - 74
+    draw.text(
+        (pad, note_y),
+        _fit_text(
+            draw,
+            str(view.get("data_note") or ""),
+            small_font,
+            width - pad * 2 - 300,
+        ),
+        font=small_font,
+        fill=MUTED,
+    )
+    _draw_signature(
+        draw,
+        width,
+        height - 58,
+        path,
+        small_font,
+        right_margin=pad,
+        max_bottom=height,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    output = (
+        out_dir
+        / f"sz_auction_quantity_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    )
+    try:
+        canvas.convert("RGB").save(output, "PNG", optimize=True)
+    except OSError:
+        return None
+    return output
+
+
 def render_auction_card(
     view: dict[str, Any],
     *,
@@ -2755,6 +2990,8 @@ def render_auction_card(
     """
     if Image is None or ImageDraw is None or ImageFont is None:
         return None
+    if view.get("quantity_mode"):
+        return _render_quantity_auction_card(view, font_path=font_path)
     path = find_cjk_font(font_path)
     if path is None:
         return None

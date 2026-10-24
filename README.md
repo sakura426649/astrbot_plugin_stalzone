@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.1.10-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.11-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -64,7 +64,7 @@
 
 | 模块 | 能力 |
 | --- | --- |
-| **拍卖行** | 当前在售、最近成交与按日期查询；神器按品质从高到低分组，非神器按 `物品×数量` 展示起拍、买断、单价和剩余时间，并标出最低单价；在售不超过 30 条时全部显示；超过 30 条时，神器只对非红/金品质应用 30 条限制：红/金全部显示；触发限制时按品质分组，其他品质每个 +0/+N 等级显示最低价，且组内按价格倒序；非神器显示前 15 条和后 15 条并保留最低单价行 |
+| **拍卖行** | 当前在售、最近成交与按日期查询；神器只对非红/金品质应用 30 条限制，红/金全部显示，触发时按品质分组、其他品质每个 +0/+N 等级显示最低价且组内价格倒序；可堆叠非神器按实际数量聚合，每个数量显示最低单价（超过 30 种数量用两列）；非堆叠非神器超过 30 条显示前 15 条和后 15 条并保留最低单价行 |
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **自动风暴提醒** | 白名单非空时才工作；只在上一场结束后的 2–4 小时窗口内每分钟查询，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询 |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
@@ -303,13 +303,13 @@ astrbot_plugin_stalzone/
 
 ## 开发与测试
 
-测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 10 张主要卡片的视觉快照（Linux 自动跳过）：
+测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 11 张主要卡片的视觉快照（Linux 自动跳过）：
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **183 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **184 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 
