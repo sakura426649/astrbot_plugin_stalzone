@@ -39,6 +39,7 @@ EXCLUDED_TOP_LEVEL = {
     "__pycache__",
     "dist",
     "package",
+    "full_icons",
     "tests",
     "tools",
     "item_icons",

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.9 - 2026-10-24
+
+### Fixed
+
+- Excluded the CI-only `full_icons/` staging directory from the marketplace package. The v1.1.8 release build copied the full icon source into the small zip, pushed it over 16 MiB and failed at the package-size check.
+- Both release assets are now generated successfully: the marketplace zip (826 icons) and the GitHub full zip (2,600 icons).
+
+### Tests
+
+- No runtime changes; 181 tests and 10 visual signatures pass.
+
 ## 1.1.8 - 2026-10-24
 
 ### Added
