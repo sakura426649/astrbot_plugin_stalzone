@@ -1626,7 +1626,7 @@ def _draw_signature(
     baseline = y + max(art_ascent, name_ascent)
     if more_tip:
         tip_font = None
-        for size in (12, 11):
+        for size in (15, 14):
             try:
                 tip_font = ImageFont.truetype(str(name_path or art_path), size)
                 break
@@ -2932,7 +2932,7 @@ def render_auction_card(
         start_w = max(
             56.0,
             _text_width("起拍", head_font),
-            _text_width("\\", body_font),
+            _text_width("—", body_font),
         ) + 18
         buyout_w = max(
             56.0,
@@ -3064,9 +3064,9 @@ def render_auction_card(
         # The renderer prints a 32px "暂无成交记录" placeholder.
         groups_h = 32
     history_header_h = 28 if non_artifact else 0
-    # Leave room for the footer note, the signature and a small bottom margin;
-    # the old 50+26 tail clipped the signature when the last group ended low.
-    tail_h = SIGNATURE_HEIGHT + 84
+    # Keep the footer tight: the old 84px tail left a visible empty strip
+    # below the signature.
+    tail_h = SIGNATURE_HEIGHT + (80 if history_only else 59)
     if history_only:
         height = header_h + 32 + history_header_h + groups_h + tail_h
     else:
@@ -3076,7 +3076,7 @@ def render_auction_card(
         )
         if view.get("active_note"):
             active_h += 24
-        recent_h = 36 + history_header_h + groups_h
+        recent_h = 32 + history_header_h + groups_h
         height = header_h + active_h + 35 + recent_h + tail_h
     max_height = (
         12000
@@ -3195,11 +3195,11 @@ def render_auction_card(
                 color = str(row.get("color") or TEXT)
                 draw.text((left, y), name, font=body_font, fill=color)
                 values = [
-                    (row.get("start", "\\"), start_right),
-                    (row.get("buyout", "\\"), buyout_right),
+                    (row.get("start", "—"), start_right),
+                    (row.get("buyout", "—"), buyout_right),
                 ]
                 if show_unit:
-                    values.append((row.get("unit_price", "\\"), unit_right))
+                    values.append((row.get("unit_price", "—"), unit_right))
                 for value, x in values:
                     text = str(value)
                     draw.text((x - draw.textlength(text, font=body_font), y), text, font=body_font, fill=TEXT)
@@ -3277,7 +3277,7 @@ def render_auction_card(
                     fill=TEXT,
                 )
                 if non_artifact:
-                    unit = str(row.get("unit_price", "\\"))
+                    unit = str(row.get("unit_price", "—"))
                     draw.text(
                         (history_unit_right - draw.textlength(unit, font=body_font), y),
                         unit,

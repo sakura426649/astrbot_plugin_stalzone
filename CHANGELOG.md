@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.24 - 2026-10-24
+
+### Changed
+
+- Missing or zero start/buyout prices now render as `—` everywhere instead of `\`.
+- The `更多功能：sz help 获取菜单` footer hint is larger (15px instead of 12px).
+- Auction card heights now match their content, removing the extra empty strip below the signature while keeping a small bottom margin.
+
+### Tests
+
+- Added missing-price coverage; regenerated the 12 Windows visual signatures; 187 tests pass.
+
 ## 1.1.23 - 2026-10-24
 
 ### Changed

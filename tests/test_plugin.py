@@ -39,6 +39,7 @@ from formatters import (  # noqa: E402
     ARTEFACT_STAT_CN,
     ITEM_STAT_CN,
     QUALITY_COLORS,
+    _display_price,
     auction_day_cutoff,
     build_auction_view,
     build_clan_candidate_view,
@@ -290,6 +291,12 @@ class FormatterTests(unittest.TestCase):
     NOW = __import__("datetime").datetime(
         2026, 10, 22, 6, 0, tzinfo=__import__("datetime").timezone.utc
     )
+
+    def test_missing_price_uses_dash(self):
+        self.assertEqual(_display_price(None), "—")
+        self.assertEqual(_display_price(0), "—")
+        self.assertEqual(_display_price(-10), "—")
+        self.assertEqual(_display_price(1200), "1,200")
 
     def test_auction_sorts_lots_by_effective_price(self):
         lots = {

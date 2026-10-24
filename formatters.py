@@ -745,7 +745,7 @@ def _auction_level_name(short: str, lot: dict[str, Any]) -> str:
 
 def _display_price(value: Any) -> str:
     number = _safe_int(value)
-    return "\\" if number is None or number <= 0 else f"{number:,}"
+    return "—" if number is None or number <= 0 else f"{number:,}"
 
 
 def _auction_badges(row: dict[str, Any]) -> list[str]:
@@ -826,7 +826,7 @@ def build_auction_view(
                 "start_value": start or 0,
                 "buyout_value": buyout or 0,
                 "unit_price": (
-                    f"{unit_value:,}" if unit_value is not None else "\\"
+                    f"{unit_value:,}" if unit_value is not None else "—"
                 ),
                 "unit_value": unit_value or 0,
                 "amount": amount,
@@ -912,7 +912,7 @@ def build_auction_view(
                     row["offer_label"] = "竞拍"
                     row["offer_unit_value"] = start_value / amount
                     unit = _unit_price(start_value, amount)
-                    row["unit_price"] = f"{unit:,}" if unit is not None else "\\"
+                    row["unit_price"] = f"{unit:,}" if unit is not None else "—"
                     row["offer_total_display"] = f"竞拍 · {start_value:,}"
                     row["buyout"] = "—"
                     row.pop("lowest", None)
@@ -1037,7 +1037,7 @@ def build_auction_view(
                 "price": f"{price:,}" if price is not None else "未知",
                 "price_value": price or 0,
                 "unit_price": (
-                    f"{unit_value:,}" if unit_value is not None else "\\"
+                    f"{unit_value:,}" if unit_value is not None else "—"
                 ),
                 "unit_value": unit_value or 0,
                 "amount": amount,
