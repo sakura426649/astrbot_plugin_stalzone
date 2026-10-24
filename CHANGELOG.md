@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.28 - 2026-10-23
+
+### Changed
+
+- Moved showcase achievements from the right column into the empty lower-left rail, with a larger framed list and gold accents.
+- Achievement height is included in the card layout calculation so the source block cannot overlap; right-side statistics regain the freed space.
+
 ## 1.0.27 - 2026-10-23
 
 ### Changed

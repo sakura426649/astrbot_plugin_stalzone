@@ -1635,6 +1635,7 @@ def render_profile_card(
         combat_value_font = ImageFont.truetype(str(path), 20)
         stat_label_font = ImageFont.truetype(str(path), 18)
         stat_value_font = ImageFont.truetype(str(path), 19)
+        achievement_font = ImageFont.truetype(str(path), 14)
         mono_font = ImageFont.truetype(str(mono_path or path), 14)
     except Exception:
         return None
@@ -1662,16 +1663,11 @@ def render_profile_card(
     hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
     pvp_detail_lines = list(hq.get("detail_lines") or []) if hq else []
     pvp_detail_h = 16 + len(pvp_detail_lines) * 24 if pvp_detail_lines else 0
-    achievement_rows = 1
-    if achievements:
-        ax = 0
-        achievement_rows = 1
-        for item in achievements:
-            item_w = min(int(label_font.getlength(item)), 220) + 22
-            if ax + item_w > right_w:
-                achievement_rows += 1
-                ax = 0
-            ax += item_w + 8
+    ach_y = 692
+    ach_chip_h = 36
+    ach_gap = 9
+    ach_container_h = 16 + len(achievements) * ach_chip_h + max(0, len(achievements) - 1) * ach_gap if achievements else 0
+    ach_end = ach_y + 30 + ach_container_h if achievements else 0
 
     y = content_y
     if bio_height:
@@ -1680,10 +1676,8 @@ def render_profile_card(
     if pvp_detail_h:
         y += 42 + pvp_detail_h + 24
     y += 42 + stats_height + (24 if stat_note else 0) + 28
-    if achievements:
-        y += 42 + achievement_rows * 32 + 2 + 24
     right_end = y
-    height = max(1120, right_end + 110)
+    height = max(1120, right_end + 110, ach_end + 300 if achievements else 0)
 
     image = _card_canvas(width, height, alpha=232)
     if image is None:
@@ -1767,6 +1761,30 @@ def render_profile_card(
             fitted, font=meta_value_font, fill=TEXT,
         )
         my += 48
+
+    if achievements:
+        _draw_section_heading(
+            draw, left_x + 24, ach_y, "展示成就 / ACHIEVEMENTS",
+            ImageFont.truetype(str(path), 15), "#FFD166",
+        )
+        container_top = ach_y + 30
+        draw.rounded_rectangle(
+            (left_x + 24, container_top, left_x + left_w - 24, container_top + ach_container_h),
+            radius=12, fill=(10, 16, 24, 135), outline=(100, 112, 120, 80), width=1,
+        )
+        cy = container_top + 8
+        for item in achievements:
+            draw.rounded_rectangle(
+                (left_x + 32, cy, left_x + left_w - 32, cy + ach_chip_h),
+                radius=9, fill=(22, 28, 34, 230), outline=(126, 112, 72, 90), width=1,
+            )
+            draw.ellipse((left_x + 45, cy + 15, left_x + 51, cy + 21), fill="#FFD166")
+            draw.text(
+                (left_x + 60, cy + 8),
+                _fit_text(draw, item, achievement_font, left_w - 100),
+                font=achievement_font, fill="#D9D5C8",
+            )
+            cy += ach_chip_h + ach_gap
 
     source_y = max(rail_top + 680, rail_bottom - 220)
     draw.text((left_x + 28, source_y), "记录来源", font=label_font, fill=MUTED)
@@ -1858,24 +1876,6 @@ def render_profile_card(
     if stat_note:
         draw.text((right_x, stats_y + per_col * 36 + 4), stat_note, font=label_font, fill=MUTED)
     ry = stats_y + per_col * 36 + (24 if stat_note else 0) + 28
-
-    if achievements:
-        _draw_section_heading(
-            draw, right_x, ry, "展示成就 / ACHIEVEMENTS", section_font, "#FFD166"
-        )
-        ax, ay = right_x, ry + 38
-        for item in achievements:
-            item = _fit_text(draw, item, label_font, 220)
-            item_w = int(draw.textlength(item, font=label_font)) + 22
-            if ax + item_w > right_x + right_w:
-                ax, ay = right_x, ay + 32
-            draw.rounded_rectangle(
-                (ax, ay, ax + item_w, ay + 27), radius=13,
-                fill=(22, 31, 42, 210), outline=(90, 110, 130, 80), width=1,
-            )
-            draw.text((ax + 11, ay + 5), item, font=label_font, fill=MUTED)
-            ax += item_w + 8
-        ry = ay + 34 + 24
 
     footer_y = height - 100
     draw.line((right_x, footer_y, right_x + right_w, footer_y), fill=(90, 110, 130, 65), width=1)
