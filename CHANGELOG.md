@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.26 - 2026-10-24
+
+### Performance
+
+- Replaced the expensive PNG `optimize=True` encoder with `compress_level=1` for every rendered card. The image pixels are unchanged; only encoding is faster and files are slightly larger.
+- Local benchmark (render only, Windows): 4-lot artifact card 0.46s → 0.08s; 100-lot artifact reduced to 17 displayed rows 0.69s → 0.10s; 100-lot artifact with all rows 1.39s → 0.25s; 100-quantity/200-row quantity card 2.27s → 0.51s. View construction stays under 1ms.
+
+### Tests
+
+- 187 tests and 12 visual signatures pass; visual pixels are unchanged.
+
 ## 1.1.25 - 2026-10-24
 
 ### Fixed

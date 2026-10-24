@@ -723,7 +723,7 @@ def render_text_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        image.convert("RGB").save(output, "PNG", optimize=True)
+        image.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -861,7 +861,7 @@ def render_notice_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_notice_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -1128,7 +1128,7 @@ def render_emission_alert_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_emission_alert_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -1339,7 +1339,7 @@ def render_emission_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_emission_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -1552,7 +1552,7 @@ def render_help_card(
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             temporary = target.with_name(target.name + ".tmp")
-            canvas.convert("RGB").save(temporary, "PNG", optimize=True)
+            canvas.convert("RGB").save(temporary, "PNG", compress_level=1)
             temporary.replace(target)
             return target
         except OSError:
@@ -1567,7 +1567,7 @@ def render_help_card(
     _remove_old_files(out_dir)
     target = out_dir / f"sz_help_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(target, "PNG", optimize=True)
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
     except OSError:
         return None
     return target
@@ -2066,7 +2066,7 @@ def render_profile_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_profile_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        image.convert("RGB").save(output, "PNG", optimize=True)
+        image.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -2261,7 +2261,7 @@ def render_diag_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_diag_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -2493,7 +2493,7 @@ def render_pass_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_pass_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -2737,7 +2737,7 @@ def render_candidate_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_candidates_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
+        canvas.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
@@ -2864,7 +2864,7 @@ def render_auction_card(
         _remove_old_files(out_dir)
         output = out_dir / f"sz_auction_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
         try:
-            image.convert("RGB").save(output, "PNG", optimize=True)
+            image.convert("RGB").save(output, "PNG", compress_level=1)
         except OSError:
             return None
         return output
@@ -3324,7 +3324,7 @@ def render_auction_card(
     _remove_old_files(out_dir)
     output = out_dir / f"sz_auction_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
-        image.convert("RGB").save(output, "PNG", optimize=True)
+        image.convert("RGB").save(output, "PNG", compress_level=1)
     except OSError:
         return None
     return output
