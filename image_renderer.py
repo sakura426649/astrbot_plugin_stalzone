@@ -472,6 +472,45 @@ def _remove_old_files(directory: Path, max_age_seconds: int = 86400) -> None:
         pass
 
 
+def _normalize_icon(icon: Any, size: int) -> Any:
+    """Scale an RGBA icon to fill a square box without distorting it."""
+    icon = icon.convert("RGBA")
+    icon.thumbnail((size, size), Image.LANCZOS)
+    if icon.width < size or icon.height < size:
+        scale = min(size / icon.width, size / icon.height)
+        if scale > 1:
+            icon = icon.resize(
+                (
+                    max(1, round(icon.width * scale)),
+                    max(1, round(icon.height * scale)),
+                ),
+                Image.LANCZOS,
+            )
+    return icon
+
+
+def _paste_corner_icon(
+    image: Any,
+    icon_path: str | Path | None,
+    width: int,
+    size: int = 124,
+    *,
+    pad: int = PAD,
+    top: int = PAD - 4,
+) -> bool:
+    """Draw the top-right item icon in a consistent frame."""
+    if image is None or icon_path is None or Image is None:
+        return False
+    try:
+        icon = _normalize_icon(Image.open(icon_path), size)
+        left = width - pad - size + (size - icon.width) // 2
+        icon_top = top + (size - icon.height) // 2
+        image.paste(icon, (left, icon_top), icon)
+        return True
+    except Exception:
+        return False
+
+
 def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
     """Dark, wallpaper-backed canvas with a readable translucent card."""
     if Image is None or ImageDraw is None:
@@ -620,15 +659,7 @@ def render_text_card(
     # Accent bar next to the title.
     draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=ACCENT)
 
-    if icon_path:
-        try:
-            icon = Image.open(icon_path).convert("RGBA")
-            icon.thumbnail((132, 132))
-            icon_x = width - PAD - icon.width
-            icon_y = PAD - 4
-            image.paste(icon, (icon_x, icon_y), icon)
-        except Exception:
-            pass
+    _paste_corner_icon(image, icon_path, width, 124)
 
     y = PAD
     left = PAD + 26 if title else PAD
@@ -2793,16 +2824,10 @@ def render_auction_card(
         draw = ImageDraw.Draw(image)
         draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=ACCENT)
         draw.text((PAD + 26, PAD), "STALZONE · 拍卖行", font=title_font, fill=TEXT)
-        if icon_path:
-            try:
-                icon = Image.open(icon_path).convert("RGBA")
-                icon.thumbnail((100, 100))
-                image.paste(icon, (width - PAD - icon.width, PAD - 4), icon)
-            except Exception:
-                pass
+        _paste_corner_icon(image, icon_path, width, 124)
         draw.text(
             (PAD, PAD + 48),
-            _fit_text(draw, str(view.get("title", "")), subtitle_font, width - PAD - 150),
+            _fit_text(draw, str(view.get("title", "")), subtitle_font, width - PAD - 174),
             font=subtitle_font,
             fill=MUTED,
         )
@@ -3128,13 +3153,7 @@ def render_auction_card(
 
     draw.rounded_rectangle((PAD, PAD + 4, PAD + 7, PAD + 44), radius=3, fill=ACCENT)
     draw.text((PAD + 26, PAD), "STALZONE · 拍卖行", font=title_font, fill=TEXT)
-    if icon_path:
-        try:
-            icon = Image.open(icon_path).convert("RGBA")
-            icon.thumbnail((124, 124))
-            image.paste(icon, (width - PAD - icon.width, PAD - 4), icon)
-        except Exception:
-            pass
+    _paste_corner_icon(image, icon_path, width, 124)
     subtitle_width = max(120, width - PAD - 30 - (138 if icon_path else 0))
     subtitle = _fit_text(draw, str(view.get("title", "")), subtitle_font, subtitle_width)
     draw.text((PAD, PAD + 48), subtitle, font=subtitle_font, fill=MUTED)

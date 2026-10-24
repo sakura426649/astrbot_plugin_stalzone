@@ -2253,11 +2253,28 @@ class ImageRendererTests(unittest.TestCase):
             path = render_auction_card(view, icon_path=icon_path)
             self.assertIsNotNone(path)
             with Image.open(path) as image:
-                pixel = image.convert("RGB").getpixel(
-                    (image.width - 76, 72)
-                )
+                rgb = image.convert("RGB")
+                pixel = rgb.getpixel((image.width - 76, 72))
                 self.assertGreater(pixel[0], 200)
                 self.assertLess(pixel[1], 80)
+                # A 64px source icon must be upscaled to the 124px frame.
+                left = image.width - 44 - 129
+                crop = rgb.crop((left, 35, image.width - 39, 169))
+                points = [
+                    (x, y)
+                    for y in range(crop.height)
+                    for x in range(crop.width)
+                    if (
+                        (color := crop.getpixel((x, y)))[0] > 200
+                        and color[1] < 80
+                        and color[2] < 80
+                    )
+                ]
+                self.assertTrue(points)
+                xs = [point[0] for point in points]
+                ys = [point[1] for point in points]
+                self.assertGreaterEqual(max(xs) - min(xs) + 1, 118)
+                self.assertGreaterEqual(max(ys) - min(ys) + 1, 118)
         finally:
             icon_path.unlink(missing_ok=True)
             if path is not None:

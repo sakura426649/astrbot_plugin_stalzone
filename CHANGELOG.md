@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.27 - 2026-10-24
+
+### Changed
+
+- Top-right item icons now use one 124px frame, measured from Snake Eye: larger icons are downscaled, small 74×76 icons are upscaled with LANCZOS, and non-square artwork is centered without distortion.
+- Applied to auction, quantity auction, empty auction and item/text cards; the empty-auction title keeps extra clearance for the larger frame.
+
+### Tests
+
+- Extended icon coverage to assert a 64px source fills the 124px frame; 187 tests and 12 visual signatures pass.
+
 ## 1.1.26 - 2026-10-24
 
 ### Performance
