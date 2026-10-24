@@ -693,7 +693,13 @@ class FormatterTests(unittest.TestCase):
             ],
         }
         view = build_auction_view(
-            "wg53", lots, history, "ru", now=self.NOW, item_label="原子 / Atom"
+            "wg53",
+            lots,
+            history,
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+            non_artifact=True,
         )
         self.assertIsNotNone(view)
         self.assertEqual(view["active_total"], 40)
@@ -702,6 +708,44 @@ class FormatterTests(unittest.TestCase):
         text = format_auction_text(view)
         self.assertIn("共 40 条，显示前 30 条", text)
         self.assertIn("仅显示 30 / 40 条在售", text)
+
+    def test_artifact_cap_keeps_cheapest_row_per_level(self):
+        lots = {
+            "total": 40,
+            "lots": [
+                {
+                    "amount": 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 4, "ptn": i % 10},
+                }
+                for i in range(40)
+            ],
+        }
+        view = build_auction_view(
+            "wg53",
+            lots,
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertIsNotNone(view)
+        self.assertEqual(view["active_total"], 40)
+        self.assertTrue(view["active_truncated"])
+        self.assertTrue(view["active_grouped"])
+        self.assertEqual(len(view["active"]), 10)
+        self.assertEqual(
+            sorted(row["level"] for row in view["active"]), list(range(10))
+        )
+        self.assertEqual(
+            {row["level"] for row in view["active"] if row.get("level_count") == 4},
+            set(range(10)),
+        )
+        text = format_auction_text(view)
+        self.assertIn("按 +等级显示 10 个等级", text)
+        self.assertIn("按 +等级保留每级最低价", text)
 
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)

@@ -3161,10 +3161,15 @@ def render_auction_card(
         else:
             draw.text((left, y), "当前无在售", font=body_font, fill=MUTED)
             y += line_h
-        if view.get("active_truncated"):
+        if view.get("active_note"):
             draw.text(
                 (left, y),
-                f"仅显示 {len(active)} / {int(view.get('active_total') or 0):,} 条在售；可用品质或日期缩小范围",
+                _fit_text(
+                    draw,
+                    str(view.get("active_note")),
+                    small_font,
+                    width - 2 * PAD,
+                ),
                 font=small_font,
                 fill=MUTED,
             )

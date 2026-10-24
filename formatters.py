@@ -805,6 +805,7 @@ def build_auction_view(
         active.append(
             {
                 "name": name,
+                "level": _level_of(lot),
                 "quality": quality,
                 "color": (
                     (item_color or "#E7EDF5")
@@ -837,19 +838,46 @@ def build_auction_view(
 
     active_total = len(active)
     active_truncated = active_total > MAX_AUCTION_ACTIVE_ROWS
+    active_grouped = False
+    active_note = ""
     if active_truncated:
-        shown = active[:MAX_AUCTION_ACTIVE_ROWS]
         if non_artifact:
+            shown = active[:MAX_AUCTION_ACTIVE_ROWS]
             lowest = next((row for row in active if row.get("lowest")), None)
             if lowest is not None and lowest not in shown:
                 shown[-1] = lowest
+            active = sorted(
+                shown, key=lambda row: row["sort_price"], reverse=True
+            )
+            active_note = (
+                f"仅显示 {len(active)} / {active_total:,} 条在售；"
+                "可用品质或日期缩小范围"
+            )
         else:
-            cheapest = min(active, key=lambda row: row.get("sort_price") or 0)
-            if cheapest not in shown:
-                shown[-1] = cheapest
-        active = sorted(
-            shown, key=lambda row: row["sort_price"], reverse=True
-        )
+            # Artifacts have upgrade levels (+0/+N). Keep the cheapest lot
+            # for every level instead of taking an arbitrary slice.
+            by_level: dict[int, dict[str, Any]] = {}
+            level_counts: dict[int, int] = {}
+            for row in active:
+                level = int(row.get("level") or 0)
+                level_counts[level] = level_counts.get(level, 0) + 1
+                current = by_level.get(level)
+                if current is None or row["sort_price"] < current["sort_price"]:
+                    by_level[level] = row
+            selected = list(by_level.values())
+            if len(selected) > MAX_AUCTION_ACTIVE_ROWS:
+                selected = selected[:MAX_AUCTION_ACTIVE_ROWS]
+            for row in selected:
+                level = int(row.get("level") or 0)
+                row["level_count"] = level_counts.get(level, 1)
+            active = sorted(
+                selected, key=lambda row: row["sort_price"], reverse=True
+            )
+            active_grouped = True
+            active_note = (
+                f"神器在售共 {active_total:,} 条；按 +等级保留每级最低价，"
+                f"显示 {len(active)} 个等级"
+            )
 
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
@@ -961,6 +989,8 @@ def build_auction_view(
         "active": active,
         "active_total": active_total,
         "active_truncated": active_truncated,
+        "active_grouped": active_grouped,
+        "active_note": active_note,
         "recent_groups": groups,
         "recent_limit": limit,
         "recent_total_limit": total_limit,
@@ -1058,9 +1088,15 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
     else:
         active_heading = "在售（按买断价从高到低）"
         if view.get("active_truncated"):
-            active_heading += (
-                f"｜共 {view['active_total']:,} 条，显示前 {len(view['active'])} 条"
-            )
+            if view.get("active_grouped"):
+                active_heading += (
+                    f"｜共 {view['active_total']:,} 条，按 +等级显示 "
+                    f"{len(view['active'])} 个等级"
+                )
+            else:
+                active_heading += (
+                    f"｜共 {view['active_total']:,} 条，显示前 {len(view['active'])} 条"
+                )
         lines.extend(["", active_heading])
         if view["active"]:
             if is_non_artifact:
@@ -1079,10 +1115,8 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                     )
         else:
             lines.append("当前无在售")
-        if view.get("active_truncated"):
-            lines.append(
-                f"仅显示 {len(view['active'])} / {view['active_total']:,} 条在售；可用品质或日期缩小范围"
-            )
+        if view.get("active_note"):
+            lines.append(str(view["active_note"]))
         if view.get("recent_total_limit") is not None:
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.1 - 2026-10-24
+
+### Fixed
+
+- High-volume artifact auctions now keep the cheapest lot for every upgrade level (+0/+N) before applying the 30-row display cap. This preserves each level instead of taking an arbitrary price slice; the card notes the total lot count and the number of levels shown. Non-artifact stacking still keeps the lowest unit-price row.
+- A 100-lot artifact sample renders as roughly 700×993 instead of a multi-thousand-pixel card.
+
+### Tests
+
+- Added artifact per-level cap coverage; 181 tests and 10 visual signatures pass.
+
 ## 1.1.0 - 2026-10-24
 
 ### Added
@@ -18,7 +29,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
-- Added circuit-breaker, diagnostics and visual-signature coverage; 180 tests and 10 visual signatures pass.
+- Added circuit-breaker, diagnostics and visual-signature coverage; 181 tests and 10 visual signatures pass.
 
 ## 1.0.42 - 2026-10-24
 
