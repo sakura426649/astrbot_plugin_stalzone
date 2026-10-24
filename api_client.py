@@ -32,7 +32,7 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 0.5
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/1.1.9"
+USER_AGENT = "astrbot-plugin-stalzone/1.1.10"
 
 logger = logging.getLogger("astrbot_plugin_stalzone")
 

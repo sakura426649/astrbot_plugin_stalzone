@@ -846,7 +846,12 @@ def build_auction_view(
                     break
 
     active_total = len(active)
+    artifact_limited_count = sum(
+        1 for row in active if row.get("quality") not in (4, 5)
+    )
     active_truncated = active_total > MAX_AUCTION_ACTIVE_ROWS
+    if not non_artifact:
+        active_truncated = artifact_limited_count > MAX_AUCTION_ACTIVE_ROWS
     active_grouped = False
     active_note = ""
     if non_artifact:
@@ -870,53 +875,65 @@ def build_auction_view(
                 f"中间省略 {omitted:,} 条"
             )
     elif active and active_truncated:
-        # Artifacts are grouped only for oversized result sets.  Normal
-        # auctions show every listing unchanged.
-        # cheapest lot for every quality/level pair, with quality sections.
-        by_quality: dict[int | None, dict[int, dict[str, Any]]] = {}
-        quality_counts: dict[int | None, int] = {}
+        # Only non-red/gold artifact volume triggers grouping.  Red and gold
+        # artifacts are rare and spread out in price, so every listing stays.
+        by_quality_all: dict[int | None, list[dict[str, Any]]] = {}
         level_counts: dict[tuple[int | None, int], int] = {}
         for row in active:
             quality = row.get("quality")
             level = int(row.get("level") or 0)
-            quality_counts[quality] = quality_counts.get(quality, 0) + 1
+            by_quality_all.setdefault(quality, []).append(row)
             level_counts[(quality, level)] = (
                 level_counts.get((quality, level), 0) + 1
             )
-            levels = by_quality.setdefault(quality, {})
-            current = levels.get(level)
-            if current is None or row["sort_price"] < current["sort_price"]:
-                levels[level] = row
 
         def quality_key(value: int | None) -> int:
             return -1 if value is None else value
 
         grouped: list[dict[str, Any]] = []
-        for quality in sorted(
-            by_quality, key=quality_key, reverse=True
-        ):
-            levels = by_quality[quality]
+        for quality in sorted(by_quality_all, key=quality_key, reverse=True):
+            all_rows = by_quality_all[quality]
             short_label = quality_label(quality).split("（", 1)[0]
+            if quality in (4, 5):
+                rows = sorted(
+                    all_rows, key=lambda row: row["sort_price"], reverse=True
+                )
+                header = (
+                    f"{short_label}｜{len(rows):,} 条在售｜全部显示"
+                )
+            else:
+                levels: dict[int, dict[str, Any]] = {}
+                for row in all_rows:
+                    level = int(row.get("level") or 0)
+                    current = levels.get(level)
+                    if current is None or row["sort_price"] < current["sort_price"]:
+                        levels[level] = row
+                rows = sorted(
+                    levels.values(),
+                    key=lambda row: row["sort_price"],
+                    reverse=True,
+                )
+                header = (
+                    f"{short_label}｜{len(all_rows):,} 条在售"
+                    f"｜{len(levels)} 个等级"
+                )
             grouped.append(
                 {
                     "quality_header": True,
                     "quality": quality,
-                    "name": (
-                        f"{short_label}｜{quality_counts.get(quality, 0):,} 条在售"
-                        f"｜{len(levels)} 个等级"
-                    ),
+                    "name": header,
                     "color": _quality_color(quality),
                 }
             )
-            for level in sorted(levels):
-                row = levels[level]
+            for row in rows:
+                level = int(row.get("level") or 0)
                 row["level_count"] = level_counts.get((quality, level), 1)
                 grouped.append(row)
         active = grouped
         active_grouped = True
         active_note = (
-            f"神器在售共 {active_total:,} 条；按品质分组，"
-            "每个 +等级显示最低价"
+            f"神器在售共 {active_total:,} 条；红/金品质全部显示，"
+            "其他品质按 +等级保留最低价，组内按价格倒序"
         )
 
     recent: dict[int | None, list[dict[str, Any]]] = {}

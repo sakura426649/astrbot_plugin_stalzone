@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.10 - 2026-10-24
+
+### Changed
+
+- Red and gold artifacts no longer count toward the 30-lot artifact limit and are always shown in full. The limit is evaluated only against other qualities.
+- When artifact grouping is triggered, rows inside each quality section are sorted by price descending; red/gold sections show every listing, while other qualities keep one cheapest lot per +0/+N level.
+- If 30 or fewer non-red/gold artifact lots exist, every artifact lot is shown without grouping, even when red/gold raises the total above 30.
+
+### Tests
+
+- Added red/gold exemption, full red/gold display and price-order coverage; 183 tests and 10 visual signatures pass.
+
 ## 1.1.9 - 2026-10-24
 
 ### Fixed

@@ -726,7 +726,7 @@ class FormatterTests(unittest.TestCase):
                     "startPrice": 1000 + i,
                     "buyoutPrice": 2000 + i,
                     "endTime": "2026-10-25T06:00:00Z",
-                    "additional": {"qlt": 4, "ptn": i % 10},
+                    "additional": {"qlt": 3, "ptn": i % 10},
                 }
                 for i in range(40)
             ],
@@ -746,11 +746,92 @@ class FormatterTests(unittest.TestCase):
             row for row in view["active"] if not row.get("quality_header")
         ]
         self.assertEqual(len(rows), 10)
-        self.assertEqual(sorted(row["level"] for row in rows), list(range(10)))
+        self.assertEqual(
+            [row["level"] for row in rows], list(range(9, -1, -1))
+        )
         self.assertEqual({row["level_count"] for row in rows}, {4})
         text = format_auction_text(view)
         self.assertIn("按品质分组显示每级最低价", text)
-        self.assertIn("每个 +等级显示最低价", text)
+        self.assertIn("其他品质按 +等级保留最低价，组内按价格倒序", text)
+
+    def test_artifact_gold_does_not_trigger_limit(self):
+        lots = []
+        for i in range(30):
+            lots.append(
+                {
+                    "amount": 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 3, "ptn": i % 10},
+                }
+            )
+        for i in range(6):
+            lots.append(
+                {
+                    "amount": 1,
+                    "startPrice": 50000 + i,
+                    "buyoutPrice": 60000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 5, "ptn": i},
+                }
+            )
+        view = build_auction_view(
+            "wg53",
+            {"total": 36, "lots": lots},
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertIsNotNone(view)
+        self.assertFalse(view["active_truncated"])
+        self.assertFalse(view["active_grouped"])
+        self.assertEqual(len(view["active"]), 36)
+        self.assertFalse(any(row.get("quality_header") for row in view["active"]))
+
+    def test_red_gold_artifacts_all_shown_when_grouped(self):
+        lots = []
+        for i in range(31):
+            lots.append(
+                {
+                    "amount": 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 3, "ptn": i % 8},
+                }
+            )
+        for i in range(3):
+            lots.append(
+                {
+                    "amount": 1,
+                    "startPrice": 50000 + i,
+                    "buyoutPrice": 60000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 5, "ptn": 0},
+                }
+            )
+        view = build_auction_view(
+            "wg53",
+            {"total": 34, "lots": lots},
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertIsNotNone(view)
+        self.assertTrue(view["active_grouped"])
+        gold_rows = [
+            row
+            for row in view["active"]
+            if row.get("quality") == 5 and not row.get("quality_header")
+        ]
+        self.assertEqual(len(gold_rows), 3)
+        headers = [
+            row["name"] for row in view["active"] if row.get("quality_header")
+        ]
+        self.assertTrue(any("全部显示" in name for name in headers))
 
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)
