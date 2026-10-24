@@ -192,8 +192,9 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.35"
+PLUGIN_VERSION = "1.0.36"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
+QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
 
 def _split_region_suffix(value: str) -> tuple[str, str | None]:
@@ -411,15 +412,55 @@ class StalzonePlugin(Star):
             return not text or text not in {"0", "false", "no", "off"}
         return bool(value)
 
+    @staticmethod
+    def _group_id_from_target(value: Any) -> str:
+        """Extract a numeric group id from an AstrBot group UMO."""
+        match = QQ_GROUP_TARGET_RE.search(str(value or "").strip())
+        return match.group(1) if match else ""
+
+    @classmethod
+    def _group_number(cls, value: Any) -> str:
+        """Accept either a QQ group number or a full group UMO."""
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        if text.isdigit():
+            return text
+        return cls._group_id_from_target(text)
+
+    def _group_filter(self, key: str) -> set[str]:
+        raw = self._cfg(key, [])
+        if isinstance(raw, str):
+            values: list[Any] = [part for part in re.split(r"[,，;；\s]+", raw) if part]
+        elif isinstance(raw, (list, tuple, set)):
+            values = list(raw)
+        else:
+            return set()
+        return {group for value in values if (group := self._group_number(value))}
+
+    def _auto_target_allowed(self, target: str) -> bool:
+        group = self._group_id_from_target(target)
+        if not group:
+            return False
+        if group in self._group_filter("emission_group_blacklist"):
+            return False
+        whitelist = self._group_filter("emission_group_whitelist")
+        return not whitelist or group in whitelist
+
     def _notify_target(self) -> str:
         configured = str(self._cfg("emission_notify_target", "") or "").strip()
-        if configured:
-            return configured
-        return str(self._auto_state.get("target", "") or "").strip()
+        if configured and self._group_id_from_target(configured):
+            return configured if self._auto_target_allowed(configured) else ""
+        remembered = str(self._auto_state.get("target", "") or "").strip()
+        if not self._group_id_from_target(remembered):
+            return ""
+        return remembered if self._auto_target_allowed(remembered) else ""
 
     def _remember_notify_target(self, event: AstrMessageEvent) -> None:
         target = str(getattr(event, "unified_msg_origin", "") or "").strip()
         if not target or self._auto_state.get("target") == target:
+            return
+        if not self._auto_target_allowed(target):
             return
         self._auto_state["target"] = target
         self._save_auto_state()

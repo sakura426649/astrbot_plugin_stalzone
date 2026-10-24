@@ -964,6 +964,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
+    GROUP_TARGET = "aiocqhttp:GroupMessage:123456"
+    OTHER_GROUP_TARGET = "aiocqhttp:GroupMessage:654321"
+    PRIVATE_TARGET = "aiocqhttp:FriendMessage:123456"
+
     class Client(FakeClient):
         def __init__(self, payload):
             self.payload = payload
@@ -988,7 +992,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 "lunar_enrich": False,
                 "sc_core_fallback": False,
                 "command_cooldown": 0,
-                "emission_notify_target": "group:test",
+                "emission_notify_target": self.GROUP_TARGET,
             },
         )
 
@@ -1066,7 +1070,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         context = RecordingContext()
         plugin = StalzonePlugin(
             context,
-            {"region": "eu", "emission_notify_target": "group:test"},
+            {"region": "eu", "emission_notify_target": self.GROUP_TARGET},
         )
         payload = {
             "currentStart": datetime.now(timezone.utc).isoformat(),
@@ -1083,7 +1087,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(sent)
         self.assertEqual(len(context.sent), 1)
         target, chain = context.sent[0]
-        self.assertEqual(target, "group:test")
+        self.assertEqual(target, self.GROUP_TARGET)
         self.assertIn("辐射风暴已开始", chain.components[0].text)
 
     async def test_active_end_anchors_window_if_api_lags(self):
@@ -1143,7 +1147,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         context = RecordingContext()
         plugin = StalzonePlugin(
             context,
-            {"region": "eu", "emission_notify_target": "group:test"},
+            {"region": "eu", "emission_notify_target": self.GROUP_TARGET},
         )
         payload = {
             "currentStart": datetime.now(timezone.utc).isoformat(),
@@ -1162,6 +1166,52 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             expected_path = str(image)
         self.assertEqual(len(context.sent), 1)
         self.assertEqual(context.sent[0][1].image_path, expected_path)
+
+    def test_private_chat_is_not_remembered(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin._auto_state = {}
+        plugin._remember_notify_target(
+            self.TargetEvent("/sz 风暴", self.PRIVATE_TARGET)
+        )
+        self.assertNotIn("target", plugin._auto_state)
+        self.assertEqual(plugin._notify_target(), "")
+
+    def test_whitelist_and_blacklist_priority(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = ["123456", "654321"]
+        plugin.config["emission_group_blacklist"] = ["654321"]
+        plugin._auto_state = {"target": self.GROUP_TARGET}
+        self.assertEqual(plugin._notify_target(), self.GROUP_TARGET)
+        plugin._auto_state = {"target": self.OTHER_GROUP_TARGET}
+        self.assertEqual(plugin._notify_target(), "")
+        plugin._auto_state = {
+            "target": "aiocqhttp:GroupMessage:999999"
+        }
+        self.assertEqual(plugin._notify_target(), "")
+        plugin.config["emission_group_whitelist"] = []
+        plugin.config["emission_group_blacklist"] = ["999999"]
+        self.assertEqual(plugin._notify_target(), "")
+        plugin.config["emission_group_blacklist"] = []
+        self.assertEqual(
+            plugin._notify_target(), "aiocqhttp:GroupMessage:999999"
+        )
+
+    def test_remember_ignores_groups_outside_whitelist(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = ["123456"]
+        plugin._auto_state = {}
+        plugin._remember_notify_target(
+            self.TargetEvent("/sz 风暴", "aiocqhttp:GroupMessage:999999")
+        )
+        self.assertNotIn("target", plugin._auto_state)
+        plugin._remember_notify_target(
+            self.TargetEvent("/sz 风暴", self.GROUP_TARGET)
+        )
+        self.assertEqual(plugin._auto_state["target"], self.GROUP_TARGET)
+        self.assertEqual(plugin._notify_target(), self.GROUP_TARGET)
 
     async def test_force_probe_updates_window_after_restart(self):
         plugin = self.make_plugin()
@@ -1184,7 +1234,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             try:
                 first = StalzonePlugin(Context(), {"region": "eu"})
                 first._remember_notify_target(
-                    self.TargetEvent("/sz 风暴", "group:survive")
+                    self.TargetEvent("/sz 风暴", self.GROUP_TARGET)
                 )
                 start = datetime.now(timezone.utc).isoformat()
                 first._auto_state.update(
@@ -1192,7 +1242,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 )
                 first._save_auto_state()
                 second = StalzonePlugin(Context(), {"region": "eu"})
-                self.assertEqual(second._notify_target(), "group:survive")
+                self.assertEqual(second._notify_target(), self.GROUP_TARGET)
                 self.assertTrue(second._auto_state["active"])
                 self.assertEqual(second._auto_state["last_notified_start"], start)
                 client = self.Client(

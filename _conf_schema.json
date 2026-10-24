@@ -98,6 +98,24 @@
     "description": "自动提醒发送目标（可选）",
     "type": "string",
     "default": "",
-    "hint": "填写 AstrBot 会话的 unified_msg_origin，例如群聊会话标识。留空则自动记住最近一次使用 /sz 指令的会话；重启后仍保留。"
+    "hint": "只接受 QQ 群聊的 unified_msg_origin，例如 aiocqhttp:GroupMessage:123456；私聊不会被使用。留空则自动记住最近一次群聊 /sz 会话；重启后仍保留。"
+  },
+  "emission_group_whitelist": {
+    "description": "自动提醒 QQ 群白名单",
+    "type": "list",
+    "default": [],
+    "items": {
+      "type": "string"
+    },
+    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。留空表示不限制群；填写后只向白名单内的群发送。"
+  },
+  "emission_group_blacklist": {
+    "description": "自动提醒 QQ 群黑名单",
+    "type": "list",
+    "default": [],
+    "items": {
+      "type": "string"
+    },
+    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
   }
 }

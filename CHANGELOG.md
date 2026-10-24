@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.36 - 2026-10-24
+
+### Added
+
+- Automatic emission alerts now accept only QQ group chats. Private sessions are never remembered or used as proactive targets.
+- Added `emission_group_whitelist` and `emission_group_blacklist` list settings. Both support adding multiple group numbers in the WebUI; an empty allow-list permits every QQ group, and the deny-list always takes priority.
+
+### Tests
+
+- Added regression coverage for private-target rejection, allow/deny filtering and deny-list precedence; 169 tests pass.
+
 ## 1.0.35 - 2026-10-24
 
 ### Changed
