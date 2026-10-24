@@ -823,8 +823,6 @@ def build_auction_view(
                 ),
                 "start": "\\" if non_artifact else _display_price(start),
                 "buyout": _display_price(buyout),
-                "start_value": start or 0,
-                "buyout_value": buyout or 0,
                 "unit_price": (
                     f"{unit_value:,}" if unit_value is not None else "\\"
                 ),
@@ -847,32 +845,6 @@ def build_auction_view(
                     row["lowest_label"] = "最低单价"
                     break
 
-    def add_badge(row: dict[str, Any] | None, label: str) -> None:
-        if row is None:
-            return
-        labels = row.setdefault("badges", [])
-        if label not in labels:
-            labels.append(label)
-
-    lowest_buyout = min(
-        (row for row in active if row.get("buyout_value", 0) > 0),
-        key=lambda row: row.get("buyout_value", 0),
-        default=None,
-    )
-    lowest_start = min(
-        (row for row in active if row.get("start_value", 0) > 0),
-        key=lambda row: row.get("start_value", 0),
-        default=None,
-    )
-    if non_artifact:
-        add_badge(lowest_buyout, "最低买断")
-        add_badge(lowest_start, "最低起拍")
-    special_rows = [
-        row
-        for row in (lowest_buyout, lowest_start)
-        if row is not None
-    ]
-
     active_total = len(active)
     active_truncated = active_total > MAX_AUCTION_ACTIVE_ROWS
     active_grouped = False
@@ -884,29 +856,19 @@ def build_auction_view(
             lowest = next((row for row in active if row.get("lowest")), None)
             if lowest is not None and lowest not in head and lowest not in tail:
                 tail[-1] = lowest
-            extras = [
-                row
-                for row in special_rows
-                if row not in head and row not in tail
-            ]
-            omitted = max(
-                0, active_total - len(head) - len(tail) - len(extras)
-            )
+            omitted = max(0, active_total - len(head) - len(tail))
             active = [
                 *head,
                 {
                     "ellipsis": True,
                     "name": f"…… 中间省略 {omitted:,} 条 ……",
                 },
-                *extras,
                 *tail,
             ]
             active_note = (
                 f"在售共 {active_total:,} 条；显示前 15 条和后 15 条，"
                 f"中间省略 {omitted:,} 条"
             )
-            if extras:
-                active_note += "；另补最低买断/起拍"
     elif active and active_truncated:
         # Artifacts are grouped only for oversized result sets.  Normal
         # auctions show every listing unchanged.
@@ -929,25 +891,11 @@ def build_auction_view(
         def quality_key(value: int | None) -> int:
             return -1 if value is None else value
 
-        selected_ids = {id(row) for row in by_quality.values() for row in row.values()}
-        extra_by_quality: dict[int | None, list[dict[str, Any]]] = {}
-        seen_specials: set[int] = set()
-        for row in special_rows:
-            if id(row) in selected_ids or id(row) in seen_specials:
-                continue
-            seen_specials.add(id(row))
-            extra_by_quality.setdefault(row.get("quality"), []).append(row)
-        has_extras = any(extra_by_quality.values())
-
         grouped: list[dict[str, Any]] = []
         for quality in sorted(
             by_quality, key=quality_key, reverse=True
         ):
             levels = by_quality[quality]
-            extras = extra_by_quality.get(quality, [])
-            level_numbers = set(levels) | {
-                int(row.get("level") or 0) for row in extras
-            }
             short_label = quality_label(quality).split("（", 1)[0]
             grouped.append(
                 {
@@ -955,15 +903,13 @@ def build_auction_view(
                     "quality": quality,
                     "name": (
                         f"{short_label}｜{quality_counts.get(quality, 0):,} 条在售"
-                        f"｜{len(level_numbers)} 个等级"
+                        f"｜{len(levels)} 个等级"
                     ),
                     "color": _quality_color(quality),
                 }
             )
-            rows = [*levels.values(), *extras]
-            rows.sort(key=lambda row: int(row.get("level") or 0))
-            for row in rows:
-                level = int(row.get("level") or 0)
+            for level in sorted(levels):
+                row = levels[level]
                 row["level_count"] = level_counts.get((quality, level), 1)
                 grouped.append(row)
         active = grouped
@@ -972,8 +918,6 @@ def build_auction_view(
             f"神器在售共 {active_total:,} 条；按品质分组，"
             "每个 +等级显示最低价"
         )
-        if has_extras:
-            active_note += "；另补最低买断/起拍"
 
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:

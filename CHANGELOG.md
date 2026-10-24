@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.5 - 2026-10-24
+
+### Changed
+
+- Removed the separate lowest-buyout and lowest-start badges/forced rows. Only the lowest unit-price row is marked and preserved for non-artifact stacks.
+- Artifact quality/level sections remain as-is and intentionally carry no "lowest" badge; every displayed per-level row is already the lowest for that quality and level.
+
+### Tests
+
+- Removed the obsolete buyout/start special-row coverage; 181 tests and 10 visual signatures pass.
+
 ## 1.1.4 - 2026-10-24
 
 ### Fixed
