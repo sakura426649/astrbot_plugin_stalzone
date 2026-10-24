@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.31 - 2026-10-23
+
+### Changed
+
+- Merged the separate PvP-details panel into the official statistics table, removing the duplicated section.
+- Added PvP summary rows to that single table: total kills, battlefield kills/deaths, open-world kills, total/PvP deaths, anomaly deaths, total/PvP K/D, duel wins, win rate and battlefield record.
+- Renamed the battlefield stats from “争锋/竞技场” to “团竞” throughout the player card.
+
 ## 1.0.30 - 2026-10-23
 
 ### Changed

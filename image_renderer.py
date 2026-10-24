@@ -1661,8 +1661,6 @@ def render_profile_card(
     stats_height = per_col * 36
     achievements = [str(x) for x in (view.get("achievements") or [])]
     hq = view.get("hq") if isinstance(view.get("hq"), dict) else None
-    pvp_detail_lines = list(hq.get("detail_lines") or []) if hq else []
-    pvp_detail_h = 16 + len(pvp_detail_lines) * 24 if pvp_detail_lines else 0
     ach_y = 692
     ach_chip_h = 44
     ach_gap = 10
@@ -1673,8 +1671,6 @@ def render_profile_card(
     if bio_height:
         y += 42 + bio_height + 28
     y += 42 + 128 + 24  # combat heading + panel + gap
-    if pvp_detail_h:
-        y += 42 + pvp_detail_h + 24
     y += 42 + stats_height + (24 if stat_note else 0) + 28
     right_end = y
     height = max(1120, right_end + 110, ach_end + 300 if achievements else 0)
@@ -1833,25 +1829,6 @@ def render_profile_card(
     else:
         draw.text((right_x + 22, panel_y + 42), "暂无 PvP 统计", font=body_font, fill=MUTED)
     ry = panel_y + 128 + 24
-    if pvp_detail_lines:
-        _draw_section_heading(
-            draw, right_x, ry, "PvP 明细 / DETAILS", section_font, "#FFD166"
-        )
-        detail_top = ry + 34
-        draw.rounded_rectangle(
-            (right_x, detail_top, right_x + right_w, detail_top + pvp_detail_h),
-            radius=12, fill=(12, 19, 28, 195), outline=(78, 98, 118, 70), width=1,
-        )
-        dy = detail_top + 12
-        for line in pvp_detail_lines:
-            draw.text(
-                (right_x + 16, dy),
-                _fit_text(draw, line, small_font, right_w - 32),
-                font=small_font, fill="#C9D8E4",
-            )
-            dy += 24
-        ry = detail_top + pvp_detail_h + 24
-
     section_label_y = ry
     _draw_section_heading(
         draw, right_x, section_label_y, "官方统计 / STATISTICS", section_font, "#FFD166"

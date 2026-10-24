@@ -49,12 +49,12 @@ STAT_LABELS = {
     "npc-kil": "NPC 击杀",
     "mut-kil": "变异体击杀",
     "kills-ops": "行动击杀",
-    "kills-bf": "竞技场击杀",
+    "kills-bf": "团竞击杀",
     "pres-kills": "Preset 击杀",
-    "deaths-bf": "竞技场死亡",
+    "deaths-bf": "团竞死亡",
     "pres-deaths": "Preset 死亡",
-    "won-bf": "竞技场胜场",
-    "lost-bf": "竞技场败场",
+    "won-bf": "团竞胜场",
+    "lost-bf": "团竞败场",
     "completed-ops": "完成行动",
     "exp-kil": "爆炸击杀",
     "total_kills": "总击杀",
@@ -1311,7 +1311,7 @@ HQ_PVP_DEATH_KEYS = (
 def calculate_hq_pvp_score(stats: Any) -> dict[str, Any] | None:
     """Apply the current StalzoneHQ Open World PvP formula.
 
-    Kills exclude battlefield (争锋) kills; PvP deaths exclude battlefield
+    Kills exclude battlefield (团竞) kills; PvP deaths exclude battlefield
     deaths and use only bullet/melee/explosion/bleeding deaths.  The score is
     floored to an integer, matching the public HQ player page.
     """
@@ -1389,7 +1389,7 @@ def _hq_detail_lines(hq: dict[str, Any]) -> list[str]:
     kd_total = f"{hq['kd_total']:.2f}" if hq.get("kd_total") is not None else "—"
     return [
         (
-            f"击杀总数：{hq['kills_total']:,}（争锋 {hq['kills_bf']:,}）"
+            f"击杀总数：{hq['kills_total']:,}（团竞 {hq['kills_bf']:,}）"
             f"｜总死亡：{hq['deaths_total']:,}（含 PvE）"
         ),
         (
@@ -1406,10 +1406,49 @@ def _hq_detail_lines(hq: dict[str, Any]) -> list[str]:
             f"（{hq['losses']:,} 负 / {hq['fights_total']:,} 场）"
         ),
         (
-            f"争锋：胜 {hq['bf_wins']:,} / 负 {hq['bf_losses']:,}"
+            f"团竞：胜 {hq['bf_wins']:,} / 负 {hq['bf_losses']:,}"
             f"｜击杀 {hq['bf_kills']:,} / 死亡 {hq['bf_deaths']:,}"
         ),
     ]
+
+
+def _combined_profile_stat_rows(
+    raw_rows: list[str], hq: dict[str, Any]
+) -> list[str]:
+    def num(value: Any, digits: int = 2) -> str:
+        return f"{float(value):.{digits}f}" if value is not None else "—"
+
+    def pct(value: Any) -> str:
+        return f"{float(value):.1f}%" if value is not None else "—"
+
+    rows = [
+        f"击杀总数（kil）：{hq['kills_total']:,}",
+        f"团竞：击杀 {hq['bf_kills']:,} / 死亡 {hq['bf_deaths']:,}",
+        f"开放世界击杀：{hq['kills']:,}",
+        f"助攻：{hq['assists']:,}",
+        f"总死亡（含 PvE）：{hq['deaths_total']:,}",
+        f"PvP 死亡估计：{hq['deaths']:,}",
+        f"异常死亡：{hq['anomaly_deaths']:,}",
+        f"K/D（总）：{num(hq.get('kd_total'))}",
+        f"PvP K/D：{num(hq.get('pvp_kd'))}",
+        f"对决胜场：{hq['wins']:,}（个人 {hq['wins_personal']:,} / 平等 {hq['wins_equal']:,}）",
+        f"胜率：{pct(hq.get('win_rate'))}（{hq['losses']:,} 负 / {hq['fights_total']:,} 场）",
+        f"团竞战绩：胜 {hq['bf_wins']:,} / 负 {hq['bf_losses']:,}",
+    ]
+    excluded = {
+        "击杀（kil）",
+        "助攻",
+        "总死亡",
+        "团竞击杀",
+        "团竞死亡",
+        "团竞胜场",
+        "团竞败场",
+    }
+    for row in raw_rows:
+        label = row.partition("：")[0]
+        if label not in excluded:
+            rows.append(row)
+    return rows
 
 
 def build_profile_view(
@@ -1472,7 +1511,8 @@ def build_profile_view(
     hq = calculate_hq_pvp_score(payload.get("stats"))
     if hq:
         hq["detail_lines"] = _hq_detail_lines(hq)
-    stat_rows = _profile_stat_rows(payload.get("stats"))
+    raw_stat_rows = _profile_stat_rows(payload.get("stats"))
+    stat_rows = _combined_profile_stat_rows(raw_stat_rows, hq) if hq else raw_stat_rows
 
     lunar_rows: list[str] = []
     lunar_heading = "战队战报（Lunar 第三方）"
@@ -1592,7 +1632,6 @@ def format_profile(
                 [
                     f"PvP Score：{hq['score']:,}",
                     f"开放世界击杀：{hq['kills']:,}｜助攻：{hq['assists']:,}｜PvP 死亡估计：{hq['deaths']:,}",
-                    *list(hq.get("detail_lines") or []),
                     "公式：((开放世界击杀 + 助攻×0.5) ÷ (PvP 死亡估计×0.33)) × 1000，向下取整",
                     "注：HQ 页面显示的是其缓存分，可能与此实时统计值不同",
                 ],
