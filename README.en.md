@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.0.38-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.39-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -87,6 +87,7 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `api_base` | production | `https://eapi.stalzone.com`; use `https://dapi.stalzone.com` for the demo environment |
 | `render_mode` | `auto` | `auto`, `text` or `image` |
 | `font_path` | empty | Optional CJK font path for Linux |
+| `hide_creator_watermark` | `false` | Hide the bottom-right `Created By @Sakura_Akira` signature on every generated image; off by default |
 | `lunar_enrich` | `true` | Add Lunar third-party K/D and battle score |
 | `sc_core_fallback` | `true` | Use SC CORE for older auction history when official pagination fails |
 | `command_cooldown` | `1.0` | Minimum seconds between queries in the same group; `0` disables |

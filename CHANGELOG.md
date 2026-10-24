@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.39 - 2026-10-24
+
+### Added
+
+- Added the `hide_creator_watermark` switch (default off). When enabled, every generated image omits the bottom-right `Created By @Sakura_Akira` signature. The help-image cache key includes the setting, so toggling it does not reuse an image with the wrong watermark state.
+
+### Tests
+
+- Added watermark toggle, cache-key and signature-suppression coverage; 176 tests pass.
+
 ## 1.0.38 - 2026-10-24
 
 ### Changed

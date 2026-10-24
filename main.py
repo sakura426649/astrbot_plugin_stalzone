@@ -103,6 +103,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_pass_card,
         render_profile_card,
         render_text_card,
+        set_creator_watermark_hidden,
     )
     from .item_index import (
         ItemIndex,
@@ -176,6 +177,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_pass_card,
         render_profile_card,
         render_text_card,
+        set_creator_watermark_hidden,
     )
     from item_index import (  # type: ignore[no-redef]
         ItemIndex,
@@ -192,7 +194,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.0.38"
+PLUGIN_VERSION = "1.0.39"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
 
@@ -326,6 +328,7 @@ class StalzonePlugin(Star):
         self._auto_state_path = data_dir / "emission_auto_state.json"
         self._auto_state = self._load_auto_state()
         self._auto_task: asyncio.Task | None = None
+        set_creator_watermark_hidden(self._hide_creator_watermark())
 
     # ------------------------------------------------------------------ config
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -333,6 +336,14 @@ class StalzonePlugin(Star):
             return self.config.get(key, default)
         except AttributeError:
             return default
+
+    def _hide_creator_watermark(self) -> bool:
+        value = self._cfg("hide_creator_watermark", False)
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
 
     def _region(self) -> str:
         return str(self._cfg("region", "ru") or "ru").strip().lower()
@@ -666,6 +677,7 @@ class StalzonePlugin(Star):
                     pass
 
     async def initialize(self) -> None:
+        set_creator_watermark_hidden(self._hide_creator_watermark())
         if not self._auto_notify_enabled():
             return
         if not str(self._cfg("client_id", "") or "").strip():
@@ -777,6 +789,7 @@ class StalzonePlugin(Star):
                     self._region(),
                     str(self._is_demo()),
                     str(self._cfg("font_path", "") or ""),
+                    str(self._hide_creator_watermark()),
                     background_stamp,
                 ]
             ).encode("utf-8")

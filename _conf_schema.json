@@ -117,5 +117,11 @@
       "type": "string"
     },
     "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
+  },
+  "hide_creator_watermark": {
+    "description": "隐藏制作者水印",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后所有生成图片不再显示右下角 Created By @Sakura_Akira；默认关闭（显示水印）。"
   }
 }

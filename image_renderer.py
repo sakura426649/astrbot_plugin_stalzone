@@ -41,6 +41,15 @@ SIGNATURE = f"{SIGNATURE_PREFIX} {SIGNATURE_NAME}"
 SIGNATURE_COLOR = "#e7c27d"
 SIGNATURE_HEIGHT = 38
 MORE_FEATURES_TIP = "更多功能：sz help 获取菜单"
+CREATOR_WATERMARK_HIDDEN = False
+
+
+def set_creator_watermark_hidden(hidden: bool) -> None:
+    """Toggle the bottom-right creator signature for every rendered card."""
+    global CREATOR_WATERMARK_HIDDEN
+    CREATOR_WATERMARK_HIDDEN = bool(hidden)
+
+
 RANK_COLORS = {
     "newbie": "#53C353",
     "stalker": "#4EA8FF",
@@ -1596,6 +1605,26 @@ def _draw_signature(
         y = max(0, min(y, int(max_bottom) - SIGNATURE_HEIGHT - 4))
     art_path = _find_artist_font(font_path)
     name_path = find_cjk_font(str(font_path) if font_path else None)
+    if more_tip:
+        tip_font = None
+        for size in (12, 11):
+            try:
+                tip_font = ImageFont.truetype(str(name_path or art_path), size)
+                break
+            except Exception:
+                continue
+        if tip_font is None and fallback_font is not None:
+            tip_font = fallback_font
+        if tip_font is not None:
+            bottom = int(max_bottom) if max_bottom is not None else int(y + 44)
+            draw.text(
+                (tip_x, bottom - 42),
+                MORE_FEATURES_TIP,
+                font=tip_font,
+                fill=tip_color,
+            )
+    if CREATOR_WATERMARK_HIDDEN:
+        return y
     if art_path is None and name_path is None:
         return y
     try:
@@ -1622,22 +1651,6 @@ def _draw_signature(
     baseline = y + max(art_ascent, name_ascent)
     art_top = baseline - art_ascent
     name_top = baseline - name_ascent
-    if more_tip:
-        tip_font = None
-        for size in (12, 11):
-            try:
-                tip_font = ImageFont.truetype(str(name_path or art_path), size)
-                break
-            except Exception:
-                continue
-        if tip_font is not None:
-            bottom = int(max_bottom) if max_bottom is not None else int(y + 44)
-            draw.text(
-                (tip_x, bottom - 42),
-                MORE_FEATURES_TIP,
-                font=tip_font,
-                fill=tip_color,
-            )
     # Soft drop shadow + gold script text; both parts share one baseline.
     draw.text(
         (x + 1, art_top + 2),

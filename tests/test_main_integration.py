@@ -996,6 +996,28 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    def test_watermark_switch_applies_globally(self):
+        import image_renderer as renderer
+
+        old = renderer.CREATOR_WATERMARK_HIDDEN
+        try:
+            StalzonePlugin(
+                Context(),
+                {"region": "eu", "hide_creator_watermark": True},
+            )
+            self.assertTrue(renderer.CREATOR_WATERMARK_HIDDEN)
+            StalzonePlugin(Context(), {"region": "eu"})
+            self.assertFalse(renderer.CREATOR_WATERMARK_HIDDEN)
+        finally:
+            renderer.set_creator_watermark_hidden(old)
+
+    def test_help_cache_key_tracks_watermark_setting(self):
+        plugin = self.make_plugin()
+        before = plugin._help_cache_path()
+        plugin.config["hide_creator_watermark"] = True
+        after = plugin._help_cache_path()
+        self.assertNotEqual(before, after)
+
     def test_enabled_by_default_and_config_flag(self):
         plugin = StalzonePlugin(Context(), {})
         self.assertTrue(plugin._auto_notify_enabled())

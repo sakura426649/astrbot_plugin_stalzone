@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 from pathlib import Path
 
 import httpx
@@ -1651,6 +1652,44 @@ class ImageRendererTests(unittest.TestCase):
         with Image.open(path) as image:
             self.assertEqual(image.size, (1200, 530))
         path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
+    def test_creator_watermark_can_be_hidden(self):
+        import image_renderer as renderer
+
+        old = renderer.CREATOR_WATERMARK_HIDDEN
+        try:
+            renderer.set_creator_watermark_hidden(True)
+            draw = Mock()
+            renderer._draw_signature(
+                draw,
+                1200,
+                100,
+                find_cjk_font(),
+                None,
+                more_tip=False,
+                max_bottom=500,
+            )
+            draw.text.assert_not_called()
+            draw.textlength.assert_not_called()
+
+            tip_draw = Mock()
+            renderer._draw_signature(
+                tip_draw,
+                1200,
+                100,
+                find_cjk_font(),
+                None,
+                more_tip=True,
+                max_bottom=500,
+            )
+            tip_draw.text.assert_called_once()
+            self.assertEqual(
+                tip_draw.text.call_args.args[1], renderer.MORE_FEATURES_TIP
+            )
+            tip_draw.textlength.assert_not_called()
+        finally:
+            renderer.set_creator_watermark_hidden(old)
 
     @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
     def test_emission_card(self):
