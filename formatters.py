@@ -430,9 +430,18 @@ def _quality_of(lot: dict[str, Any]) -> int | None:
     return None
 
 
+def _effective_quality(entry: dict[str, Any], non_artifact: bool) -> int | None:
+    """Treat missing artifact quality as the in-game default white (qlt 0)."""
+    if non_artifact:
+        return None
+    quality = _quality_of(entry)
+    return 0 if quality is None else quality
+
+
 def auction_quality_of(entry: dict[str, Any]) -> int | None:
-    """Public quality accessor for pagination stop conditions."""
-    return _quality_of(entry)
+    """Artifact quality for pagination; missing qlt counts as white (0)."""
+    quality = _quality_of(entry)
+    return 0 if quality is None else quality
 
 
 def _level_of(lot: dict[str, Any]) -> int:
@@ -783,8 +792,16 @@ def build_auction_view(
         quality_filter = None
 
     if quality_filter is not None:
-        lots = [lot for lot in lots if _quality_of(lot) == quality_filter]
-        history = [entry for entry in history if _quality_of(entry) == quality_filter]
+        lots = [
+            lot
+            for lot in lots
+            if _effective_quality(lot, non_artifact) == quality_filter
+        ]
+        history = [
+            entry
+            for entry in history
+            if _effective_quality(entry, non_artifact) == quality_filter
+        ]
 
     if before is not None:
         lots = []
@@ -801,7 +818,7 @@ def build_auction_view(
 
     active: list[dict[str, Any]] = []
     for lot in lots:
-        quality = None if non_artifact else _quality_of(lot)
+        quality = _effective_quality(lot, non_artifact)
         buyout = _safe_int(lot.get("buyoutPrice"))
         start = _safe_int(lot.get("startPrice"))
         amount = _safe_int(lot.get("amount")) or 1
@@ -1018,7 +1035,7 @@ def build_auction_view(
 
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
-        quality = None if non_artifact else _quality_of(entry)
+        quality = _effective_quality(entry, non_artifact)
         price = _safe_int(entry.get("price"))
         amount = _safe_int(entry.get("amount")) or 1
         unit_value = _unit_price(price, amount)

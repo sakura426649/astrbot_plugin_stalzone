@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.29 - 2026-10-24
+
+### Fixed
+
+- Artifact lots/history entries whose API payload omits `additional.qlt` now default to 常见（白） instead of showing `品质未标注`. Valid qlt 1–5 values are still preserved, and filtering by 白 includes these missing-quality records.
+
+### Tests
+
+- Added missing-quality artifact coverage; 188 tests and 12 visual signatures pass.
+
 ## 1.1.28 - 2026-10-24
 
 ### Fixed

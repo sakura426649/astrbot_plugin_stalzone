@@ -389,6 +389,52 @@ class FormatterTests(unittest.TestCase):
             [group["quality"] for group in view["recent_groups"]], [5, 3]
         )
 
+    def test_artifact_missing_quality_defaults_to_white(self):
+        lots = {
+            "total": 1,
+            "lots": [
+                {
+                    "amount": 1,
+                    "startPrice": 1000,
+                    "buyoutPrice": 2000,
+                    "endTime": "2026-10-22T15:00:00Z",
+                    "additional": {},
+                }
+            ],
+        }
+        history = {
+            "total": 1,
+            "prices": [
+                {
+                    "amount": 1,
+                    "price": 1500,
+                    "time": "2026-10-22T05:00:00Z",
+                    "additional": {},
+                }
+            ],
+        }
+        view = build_auction_view(
+            "wg53",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertEqual(view["active"][0]["quality"], 0)
+        self.assertEqual(view["active"][0]["color"], QUALITY_COLORS[0])
+        self.assertEqual(view["recent_groups"][0]["label"], "常见（白）")
+        filtered = build_auction_view(
+            "wg53",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="原子 / Atom",
+            quality_filter=0,
+        )
+        self.assertEqual(len(filtered["active"]), 1)
+
     def test_common_quality_uses_title_white_not_fallback_grey(self):
         lots = {
             "lots": [
