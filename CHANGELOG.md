@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.16 - 2026-10-24
+
+### Changed
+
+- The stackable quantity section is now titled `按数量汇总` with an explicit subtitle: each quantity shows the lowest buyout, adding an auction row when its price is lower.
+- Auction rows show `竞拍 · 100,000` immediately after the unit price; the redundant `总价` wording and parentheses were removed.
+
+### Tests
+
+- Updated the quantity heading/annotation assertions; 185 tests and 11 visual signatures pass.
+
 ## 1.1.15 - 2026-10-24
 
 ### Changed

@@ -2775,7 +2775,7 @@ def _render_quantity_auction_card(
     table_head_h = 30
     row_h = 32
     table_h = table_head_h + per_col * row_h
-    table_top = section_y + 36
+    table_top = section_y + 58
     recent_groups = [
         group
         for group in (view.get("recent_groups") or [])
@@ -2816,7 +2816,7 @@ def _render_quantity_auction_card(
     )
 
     draw.text(
-        (pad, section_y), "按数量最低单价", font=section_font, fill=ACCENT
+        (pad, section_y), "按数量汇总", font=section_font, fill=ACCENT
     )
     draw.text(
         (width - pad, section_y + 3),
@@ -2825,6 +2825,12 @@ def _render_quantity_auction_card(
         font=small_font,
         fill=MUTED,
         anchor="ra",
+    )
+    draw.text(
+        (pad, section_y + 28),
+        "每种数量显示最低买断；竞拍价更低时并列显示",
+        font=small_font,
+        fill=MUTED,
     )
     y = table_top
     for column in range(columns):

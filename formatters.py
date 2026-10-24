@@ -913,9 +913,7 @@ def build_auction_view(
                     row["offer_unit_value"] = start_value / amount
                     unit = _unit_price(start_value, amount)
                     row["unit_price"] = f"{unit:,}" if unit is not None else "\\"
-                    row["offer_total_display"] = (
-                        f"(竞拍·总价{start_value:,})"
-                    )
+                    row["offer_total_display"] = f"竞拍 · {start_value:,}"
                     row["buyout"] = "—"
                     row.pop("lowest", None)
                     row.pop("lowest_label", None)
@@ -1230,8 +1228,9 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
         if view.get("quantity_mode"):
             lines.extend([
                 "",
-                f"在售（按数量最低单价｜{view['quantity_count']} 种数量 / "
+                f"在售（按数量汇总｜{view['quantity_count']} 种数量 / "
                 f"{view['active_total']:,} 条在售）",
+                "说明：每种数量显示最低买断；竞拍价更低时并列显示",
                 "  名称  单价  总价  剩余时间",
             ])
             for row in view["active"]:
