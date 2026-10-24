@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.13 - 2026-10-24
+
+### Changed
+
+- Per stack quantity, the card now shows the cheapest buyout offer and, when the cheapest auction/start price is lower than that buyout, an additional auction row (maximum two rows per quantity).
+- If the lowest auction price is greater than or equal to the lowest buyout, the auction row is omitted.
+- Both offer types are labeled `买断` / `竞拍` in the image and text, and all offers are sorted by unit price ascending.
+
+### Tests
+
+- Added auction-vs-buyout omission and duplicate-offer coverage; 185 tests and 11 visual signatures pass.
+
 ## 1.1.12 - 2026-10-24
 
 ### Changed

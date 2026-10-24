@@ -823,6 +823,8 @@ def build_auction_view(
                 ),
                 "start": "\\" if non_artifact else _display_price(start),
                 "buyout": _display_price(buyout),
+                "start_value": start or 0,
+                "buyout_value": buyout or 0,
                 "unit_price": (
                     f"{unit_value:,}" if unit_value is not None else "\\"
                 ),
@@ -861,36 +863,72 @@ def build_auction_view(
         for row in active
     }
     if non_artifact and len(distinct_amounts) > 1:
-        best_by_amount: dict[int, dict[str, Any]] = {}
+        offers_by_amount: dict[int, dict[str, dict[str, Any] | None]] = {}
         for row in active:
             amount = int(row.get("amount") or 1)
-            current = best_by_amount.get(amount)
-            if current is None or (
-                row.get("unit_value", 0),
-                row.get("sort_price", 0),
-            ) < (
-                current.get("unit_value", 0),
-                current.get("sort_price", 0),
-            ):
-                best_by_amount[amount] = row
+            slot = offers_by_amount.setdefault(
+                amount, {"buyout": None, "start": None}
+            )
+            buyout = int(row.get("buyout_value") or 0)
+            start = int(row.get("start_value") or 0)
+            if buyout > 0:
+                current = slot["buyout"]
+                if current is None or buyout < int(current.get("buyout_value") or 0):
+                    slot["buyout"] = row
+            if start > 0:
+                current = slot["start"]
+                if current is None or start < int(current.get("start_value") or 0):
+                    slot["start"] = row
+
+        quantity_rows: list[dict[str, Any]] = []
+        for amount in sorted(offers_by_amount):
+            slot = offers_by_amount[amount]
+            buyout_row = slot["buyout"]
+            start_row = slot["start"]
+            if buyout_row is not None:
+                row = dict(buyout_row)
+                row["offer_kind"] = "buyout"
+                row["offer_label"] = "买断"
+                row["offer_unit_value"] = (
+                    int(row.get("buyout_value") or 0) / amount
+                )
+                row.pop("lowest", None)
+                row.pop("lowest_label", None)
+                row.pop("badges", None)
+                quantity_rows.append(row)
+            if start_row is not None:
+                start_value = int(start_row.get("start_value") or 0)
+                buyout_value = (
+                    int(buyout_row.get("buyout_value") or 0)
+                    if buyout_row is not None
+                    else 0
+                )
+                if buyout_row is None or start_value < buyout_value:
+                    row = dict(start_row)
+                    row["offer_kind"] = "auction"
+                    row["offer_label"] = "竞拍"
+                    row["offer_unit_value"] = start_value / amount
+                    unit = _unit_price(start_value, amount)
+                    row["unit_price"] = f"{unit:,}" if unit is not None else "\\"
+                    row["buyout"] = "—"
+                    row.pop("lowest", None)
+                    row.pop("lowest_label", None)
+                    row.pop("badges", None)
+                    quantity_rows.append(row)
         active = sorted(
-            best_by_amount.values(),
+            quantity_rows,
             key=lambda row: (
-                row.get("unit_value", 0),
-                row.get("sort_price", 0),
+                row.get("offer_unit_value", 0),
                 int(row.get("amount") or 1),
+                0 if row.get("offer_kind") == "auction" else 1,
             ),
         )
-        for row in active:
-            row.pop("lowest", None)
-            row.pop("lowest_label", None)
-            row.pop("badges", None)
         quantity_mode = True
-        quantity_count = len(active)
+        quantity_count = len(offers_by_amount)
         active_truncated = False
         active_note = (
-            f"按数量聚合：共 {quantity_count} 种数量 / {active_total:,} 条在售，"
-            "每种数量显示最低单价"
+            f"按数量聚合：{quantity_count} 种数量 / {active_total:,} 条在售；"
+            "每种数量显示最低买断价，竞拍价更低时并列显示"
         )
     elif non_artifact:
         if active_truncated:
@@ -1188,12 +1226,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 "",
                 f"在售（按数量最低单价｜{view['quantity_count']} 种数量 / "
                 f"{view['active_total']:,} 条在售）",
-                "  名称  单价  买断  剩余时间",
+                "  名称  类型  单价  买断  剩余时间",
             ])
             for row in view["active"]:
                 lines.append(
-                    f"  {row['name']}  {row['unit_price']}  "
-                    f"{row['buyout']}  {row['remaining']}"
+                    f"  {row['name']}  [{row.get('offer_label') or '买断'}]  "
+                    f"{row['unit_price']}  {row['buyout']}  {row['remaining']}"
                 )
             if view.get("active_note"):
                 lines.append(str(view["active_note"]))

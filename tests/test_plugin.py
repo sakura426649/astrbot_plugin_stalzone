@@ -503,11 +503,14 @@ class FormatterTests(unittest.TestCase):
         )
         active = view["active"]
         self.assertTrue(view["quantity_mode"])
+        self.assertEqual(len(active), 6)
         self.assertEqual(
-            [row["buyout"] for row in active], ["10,000", "6,000", "4,000"]
+            [row["offer_label"] for row in active],
+            ["竞拍", "竞拍", "买断", "竞拍", "买断", "买断"],
         )
         self.assertEqual(
-            [row["unit_price"] for row in active], ["500", "600", "800"]
+            [row["unit_price"] for row in active],
+            ["450", "500", "500", "600", "600", "800"],
         )
         self.assertEqual(active[0]["name"], "香烟×20")
         self.assertNotIn("lowest", active[0])
@@ -859,15 +862,24 @@ class FormatterTests(unittest.TestCase):
         self.assertTrue(view["quantity_mode"])
         self.assertEqual(view["quantity_count"], 5)
         self.assertEqual(view["active_total"], 15)
+        self.assertEqual(len(view["active"]), 10)
+        self.assertEqual(
+            [row["offer_kind"] for row in view["active"]],
+            ["auction"] * 5 + ["buyout"] * 5,
+        )
         self.assertEqual(
             [row["amount"] for row in view["active"]],
-            [1, 2, 5, 10, 100],
+            [1, 2, 5, 10, 100, 1, 2, 5, 10, 100],
         )
         self.assertTrue(
             all(
-                row["unit_value"]
+                row["offer_unit_value"]
                 == min(
-                    (item.get("buyoutPrice") or item.get("startPrice") or 0)
+                    (
+                        item.get("buyoutPrice")
+                        if row["offer_kind"] == "buyout"
+                        else item.get("startPrice")
+                    )
                     / max(1, item["amount"])
                     for item in lots
                     if item["amount"] == row["amount"]
@@ -878,6 +890,51 @@ class FormatterTests(unittest.TestCase):
         text = format_auction_text(view)
         self.assertIn("按数量最低单价", text)
         self.assertIn("5 种数量 / 15 条在售", text)
+        self.assertIn("[竞拍]", text)
+        self.assertIn("[买断]", text)
+
+    def test_stackable_auction_omits_auction_when_not_cheaper(self):
+        lots = {
+            "total": 2,
+            "lots": [
+                {
+                    "amount": 2,
+                    "startPrice": 5000,
+                    "buyoutPrice": 1000,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+                {
+                    "amount": 5,
+                    "startPrice": 1000,
+                    "buyoutPrice": 5000,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+            ],
+        }
+        view = build_auction_view(
+            "y1q9",
+            lots,
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="弹药 / Ammo",
+            non_artifact=True,
+        )
+        self.assertIsNotNone(view)
+        amount_two = [
+            row for row in view["active"] if row["amount"] == 2
+        ]
+        self.assertEqual(len(amount_two), 1)
+        self.assertEqual(amount_two[0]["offer_kind"], "buyout")
+        amount_five = [
+            row for row in view["active"] if row["amount"] == 5
+        ]
+        self.assertEqual(
+            [row["offer_kind"] for row in amount_five],
+            ["auction", "buyout"],
+        )
 
     def test_auction_empty(self):
         text = format_auction("nope", {}, {}, "ru", now=self.NOW)

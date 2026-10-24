@@ -2852,9 +2852,13 @@ def _render_quantity_auction_card(
             if row_index >= len(rows):
                 break
             row = rows[row_index]
+            label = str(row.get("offer_label") or "")
+            display_name = (
+                f"{row.get('name', '')} · {label}" if label else str(row.get("name", ""))
+            )
             name = _fit_text(
                 draw,
-                str(row.get("name", "")),
+                display_name,
                 body_font,
                 int(col_w * 0.50) - 10,
             )
