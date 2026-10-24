@@ -29,6 +29,8 @@ from image_renderer import (
     render_profile_card,
     render_text_card,
 )
+
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 from season_pass import calculate
 
 NOW = datetime(2026, 10, 24, 6, 0, tzinfo=timezone.utc)
@@ -114,7 +116,14 @@ def _auction() -> Path | None:
         item_label="原子 / Atom",
         item_color="#FF6FB5",
     )
-    return render_auction_card(view) if view else None
+    return (
+        render_auction_card(
+            view,
+            icon_path=PLUGIN_ROOT / "item_icons" / "wg53.png",
+        )
+        if view
+        else None
+    )
 
 
 def _auction_quantity() -> Path | None:
@@ -131,15 +140,41 @@ def _auction_quantity() -> Path | None:
                 }
             )
     view = build_auction_view(
-        "y1q9",
+        "d1p5",
         {"total": len(lots), "lots": lots},
-        {"total": 0, "prices": []},
+        {
+            "total": 3,
+            "prices": [
+                {
+                    "amount": 10,
+                    "price": 12_500,
+                    "time": "2026-10-24T05:00:00Z",
+                },
+                {
+                    "amount": 20,
+                    "price": 24_000,
+                    "time": "2026-10-24T04:00:00Z",
+                },
+                {
+                    "amount": 50,
+                    "price": 61_000,
+                    "time": "2026-10-24T03:00:00Z",
+                },
+            ],
+        },
         "ru",
         now=NOW,
-        item_label="弹药 / Ammo",
+        item_label="10mm 穿甲弹 / AP Round",
         non_artifact=True,
     )
-    return render_auction_card(view) if view else None
+    return (
+        render_auction_card(
+            view,
+            icon_path=PLUGIN_ROOT / "item_icons" / "d1p5.png",
+        )
+        if view
+        else None
+    )
 
 
 def _auction_quantity_many() -> Path | None:
@@ -166,15 +201,22 @@ def _auction_quantity_many() -> Path | None:
                 }
             )
     view = build_auction_view(
-        "y1q9",
+        "d1p5",
         {"total": len(lots), "lots": lots},
         {"total": 0, "prices": []},
         "ru",
         now=NOW,
-        item_label="7.62毫米穿甲燃烧弹 / AP Incendiary Ammo",
+        item_label="10mm 穿甲弹 / 10 mm Armor-Piercing Round",
         non_artifact=True,
     )
-    return render_auction_card(view) if view else None
+    return (
+        render_auction_card(
+            view,
+            icon_path=PLUGIN_ROOT / "item_icons" / "d1p5.png",
+        )
+        if view
+        else None
+    )
 
 
 def _candidate() -> Path | None:

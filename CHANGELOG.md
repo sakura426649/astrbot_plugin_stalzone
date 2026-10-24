@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.20 - 2026-10-24
+
+### Fixed
+
+- Restored the item thumbnail in the top-right corner of quantity-mode auction cards; the icon was previously bypassed when the renderer switched to the quantity table.
+- Single-column quantity cards now size themselves to the content, so the unit price sits next to the name instead of leaving a large empty middle.
+- Two-column quantity tables now draw a visible vertical divider between the columns.
+- Kept the same 18px font for unit prices, totals and auction annotations; overlap is avoided with measured columns, not smaller text.
+
+### Tests
+
+- Added item-icon and two-column-divider render coverage; 187 tests and 12 visual signatures pass.
+
 ## 1.1.19 - 2026-10-24
 
 ### Fixed

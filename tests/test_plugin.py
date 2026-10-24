@@ -2202,9 +2202,95 @@ class ImageRendererTests(unittest.TestCase):
         self.assertIsNotNone(path)
         try:
             with Image.open(path) as image:
-                self.assertGreaterEqual(image.width, 700)
+                self.assertGreaterEqual(image.width, 520)
                 self.assertLessEqual(image.width, WIDTH)
                 self.assertGreater(image.height, 430)
+        finally:
+            path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
+    def test_quantity_card_draws_item_icon(self):
+        from PIL import Image
+
+        lots = {
+            "lots": [
+                {
+                    "amount": 10,
+                    "startPrice": 5000,
+                    "buyoutPrice": 6000,
+                    "endTime": "2026-10-22T16:00:00Z",
+                    "additional": {},
+                },
+                {
+                    "amount": 20,
+                    "startPrice": 9000,
+                    "buyoutPrice": 10000,
+                    "endTime": "2026-10-22T16:00:00Z",
+                    "additional": {},
+                },
+            ]
+        }
+        view = build_auction_view(
+            "d1p5",
+            lots,
+            {"prices": []},
+            "eu",
+            now=FormatterTests.NOW,
+            item_label="10mm 穿甲弹 / AP Round",
+            non_artifact=True,
+        )
+        icon_path = Path(tempfile.gettempdir()) / "sz_quantity_icon_test.png"
+        Image.new("RGBA", (64, 64), (255, 0, 0, 255)).save(icon_path)
+        path = None
+        try:
+            path = render_auction_card(view, icon_path=icon_path)
+            self.assertIsNotNone(path)
+            with Image.open(path) as image:
+                pixel = image.convert("RGB").getpixel(
+                    (image.width - 76, 72)
+                )
+                self.assertGreater(pixel[0], 200)
+                self.assertLess(pixel[1], 80)
+        finally:
+            icon_path.unlink(missing_ok=True)
+            if path is not None:
+                path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
+    def test_quantity_two_column_divider_is_visible(self):
+        from PIL import Image
+
+        lots = [
+            {
+                "amount": amount,
+                "startPrice": amount * 100_000,
+                "buyoutPrice": amount * 120_000,
+                "endTime": "2026-10-25T06:00:00Z",
+                "additional": {},
+            }
+            for amount in range(2, 34, 2)
+        ]
+        view = build_auction_view(
+            "d1p5",
+            {"total": len(lots), "lots": lots},
+            {"total": 0, "prices": []},
+            "eu",
+            now=FormatterTests.NOW,
+            item_label="10mm 穿甲弹 / AP Round",
+            non_artifact=True,
+        )
+        self.assertTrue(view.get("quantity_mode"))
+        path = render_auction_card(view)
+        self.assertIsNotNone(path)
+        try:
+            with Image.open(path) as image:
+                pixels = image.convert("RGB")
+                x = image.width // 2
+                divider = pixels.getpixel((x, 300))
+                background = pixels.getpixel((x - 4, 300))
+                self.assertGreater(
+                    sum(divider), sum(background) + 30
+                )
         finally:
             path.unlink(missing_ok=True)
 
