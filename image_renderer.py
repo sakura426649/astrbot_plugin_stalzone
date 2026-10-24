@@ -2741,541 +2741,6 @@ def render_candidate_card(
     return output
 
 
-def _render_quantity_auction_card(
-    view: dict[str, Any],
-    *,
-    font_path: str | None = None,
-    icon_path: str | Path | None = None,
-) -> Path | None:
-    """Compact per-quantity price table for stackable non-artifact lots."""
-    if Image is None or ImageDraw is None or ImageFont is None:
-        return None
-    path = find_cjk_font(font_path)
-    if path is None:
-        return None
-    display_path = _find_display_font(font_path) or path
-    try:
-        title_font = ImageFont.truetype(str(display_path), 34)
-        subtitle_font = ImageFont.truetype(str(path), 19)
-        head_font = ImageFont.truetype(str(path), 17)
-        body_font = ImageFont.truetype(str(path), 18)
-        small_font = ImageFont.truetype(str(path), 15)
-        section_font = ImageFont.truetype(str(path), 21)
-        recent_body_font = ImageFont.truetype(str(path), 20)
-        recent_head_font = ImageFont.truetype(str(path), 17)
-        recent_time_font = ImageFont.truetype(str(path), 17)
-    except Exception:
-        return None
-
-    def _measure(value: Any, font: Any) -> float:
-        try:
-            return float(font.getlength(str(value)))
-        except Exception:
-            return float(len(str(value)) * 18)
-
-    rows = [row for row in (view.get("active") or []) if isinstance(row, dict)]
-    columns = 2 if len(rows) > 30 else 1
-    per_col = max(1, (len(rows) + columns - 1) // columns)
-    pad = 44
-    gap = 24
-    header_h = 170
-    section_y = header_h
-    table_head_h = 30
-    row_h = 32
-    table_h = table_head_h + per_col * row_h
-    table_top = section_y + 58
-    recent_groups = [
-        group
-        for group in (view.get("recent_groups") or [])
-        if isinstance(group, dict)
-    ]
-    recent_rows = [
-        row
-        for group in recent_groups
-        for row in (group.get("rows") or [])
-        if isinstance(row, dict)
-    ]
-    recent_h = 42 + (24 if recent_groups else 0) + sum(
-        30 + len(group.get("rows") or []) * 32
-        for group in recent_groups
-    )
-    if not recent_groups:
-        recent_h = 62
-    footer_h = 112
-
-    if view.get("recent_total_limit") is not None:
-        recent_heading = (
-            f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"
-        )
-    else:
-        recent_heading = (
-            f"最近成交（每品质最多 {view.get('recent_limit', 3)} 条，按时间倒序）"
-        )
-
-    show_remaining = columns == 1
-    unit_texts = [str(row.get("unit_price") or "\\") for row in rows]
-    total_texts = [
-        str(row.get("offer_total_display") or row.get("buyout") or "\\")
-        for row in rows
-    ]
-    remaining_texts = [str(row.get("remaining") or "—") for row in rows]
-    name_texts = [str(row.get("name", "")) for row in rows]
-    unit_w = (
-        max(
-            [
-                int(_measure("单价", head_font)),
-                *(int(_measure(text, body_font)) for text in unit_texts),
-            ]
-        )
-        + 12
-    )
-    total_w = (
-        max(
-            [
-                int(_measure("总价", head_font)),
-                *(int(_measure(text, body_font)) for text in total_texts),
-            ]
-        )
-        + 10
-    )
-    remaining_w = (
-        max(
-            [
-                int(_measure("剩余", head_font)),
-                *(int(_measure(text, small_font)) for text in remaining_texts),
-            ]
-        )
-        + 12
-        if show_remaining
-        else 0
-    )
-    name_max = max(
-        (int(_measure(text, body_font)) for text in name_texts), default=0
-    )
-
-    recent_time_w = (
-        max(
-            [
-                int(_measure("时间", recent_head_font)),
-                *(
-                    int(_measure(row.get("time", ""), recent_time_font))
-                    for row in recent_rows
-                ),
-            ]
-        )
-        + 12
-    )
-    recent_price_w = (
-        max(
-            [
-                int(_measure("成交价", recent_head_font)),
-                *(
-                    int(_measure(row.get("price", ""), recent_body_font))
-                    for row in recent_rows
-                ),
-            ]
-        )
-        + 16
-    )
-    recent_unit_w = (
-        max(
-            [
-                int(_measure("单价", recent_head_font)),
-                *(
-                    int(_measure(row.get("unit_price", ""), recent_body_font))
-                    for row in recent_rows
-                ),
-            ]
-        )
-        + 16
-    )
-    recent_name_max = max(
-        (
-            int(_measure(row.get("name", ""), recent_body_font))
-            for row in recent_rows
-        ),
-        default=0,
-    )
-    recent_min_w = (
-        pad * 2
-        + 110
-        + recent_price_w
-        + recent_unit_w
-        + recent_time_w
-        + 50
-    )
-    recent_min_w = max(
-        recent_min_w,
-        pad * 2 + int(_measure(recent_heading, head_font)),
-    )
-    recent_full_w = (
-        pad * 2
-        + recent_name_max
-        + 18
-        + recent_price_w
-        + 16
-        + recent_unit_w
-        + 16
-        + recent_time_w
-    )
-
-    icon_space = 148 if icon_path else 0
-    header_w = (
-        pad * 2
-        + 26
-        + int(_measure("STALZONE · 拍卖行", title_font))
-        + icon_space
-        + 8
-    )
-    header_w = max(
-        header_w,
-        pad * 2
-        + int(_measure(str(view.get("title", "")), subtitle_font))
-        + icon_space,
-    )
-    if columns == 2:
-        width = 960
-        col_w = (width - pad * 2 - gap * (columns - 1)) // columns
-        divider_x = pad + col_w + gap // 2
-    else:
-        cluster = unit_w + 16 + total_w + 18 + remaining_w
-        width = max(
-            520,
-            header_w,
-            recent_min_w,
-            recent_full_w,
-            pad * 2 + name_max + 8 + 18 + cluster,
-        )
-        width = min(width, 960)
-        col_w = width - pad * 2
-        name_w_single = min(
-            name_max + 8, max(60, col_w - 18 - cluster)
-        )
-
-    height = table_top + table_h + 24 + recent_h + footer_h
-    canvas = _card_canvas(width, height, alpha=228)
-    if canvas is None:
-        return None
-    draw = ImageDraw.Draw(canvas)
-    draw.rounded_rectangle(
-        (pad, pad + 4, pad + 7, pad + 44), radius=3, fill=ACCENT
-    )
-    draw.text((pad + 26, pad), "STALZONE · 拍卖行", font=title_font, fill=TEXT)
-    if icon_path:
-        try:
-            icon = Image.open(icon_path).convert("RGBA")
-            icon.thumbnail((124, 124), Image.LANCZOS)
-            canvas.paste(icon, (width - pad - icon.width, pad - 4), icon)
-        except Exception:
-            pass
-    draw.text(
-        (pad, pad + 48),
-        _fit_text(
-            draw,
-            str(view.get("title", "")),
-            subtitle_font,
-            width - pad - 30 - (138 if icon_path else 0),
-        ),
-        font=subtitle_font,
-        fill=MUTED,
-    )
-    draw.text(
-        (pad, pad + 74),
-        f"{view.get('region', '')}｜查询时间：{view.get('now', '')} UTC+8",
-        font=subtitle_font,
-        fill=MUTED,
-    )
-    draw.line(
-        (pad, header_h - 18, width - pad, header_h - 18), fill=BORDER, width=1
-    )
-
-    draw.text(
-        (pad, section_y), "按数量汇总", font=section_font, fill=ACCENT
-    )
-    draw.text(
-        (width - pad, section_y + 3),
-        f"{int(view.get('quantity_count') or 0)} 种数量 / "
-        f"{int(view.get('active_total') or 0):,} 条在售",
-        font=small_font,
-        fill=MUTED,
-        anchor="ra",
-    )
-    draw.text(
-        (pad, section_y + 28),
-        "每种数量显示最低买断；竞拍价更低时并列显示",
-        font=small_font,
-        fill=MUTED,
-    )
-
-    if columns == 2:
-        draw.line(
-            (divider_x, table_top - 6, divider_x, table_top + table_h + 6),
-            fill=BORDER,
-            width=2,
-        )
-
-    y = table_top
-    for column in range(columns):
-        x = pad + column * (col_w + gap)
-        if columns == 2:
-            right = x + col_w
-            total_x = right
-            unit_x = total_x - total_w - 10
-            name_w = max(48, unit_x - unit_w - 10 - x)
-        else:
-            name_w = name_w_single
-            unit_x = x + name_w + 18 + unit_w
-            total_x = unit_x + 16 + total_w
-            remaining_x = total_x + 18 + remaining_w
-        draw.text((x, y), "名称", font=head_font, fill="#7F93A8")
-        if show_remaining:
-            draw.text(
-                (remaining_x, y), "剩余", font=head_font, fill=MUTED, anchor="ra"
-            )
-        draw.text(
-            (total_x, y), "总价", font=head_font, fill=MUTED, anchor="ra"
-        )
-        draw.text(
-            (unit_x, y), "单价", font=head_font, fill=MUTED, anchor="ra"
-        )
-        ry = y + table_head_h
-        for index in range(per_col):
-            row_index = column * per_col + index
-            if row_index >= len(rows):
-                break
-            row = rows[row_index]
-            name_color = str(row.get("color") or TEXT)
-            display_name = str(row.get("name", ""))
-            amount = int(row.get("amount") or 0)
-            suffix = ""
-            marker = f"×{amount}"
-            if amount > 0 and display_name.endswith(marker):
-                display_name = display_name[: -len(marker)].rstrip()
-                suffix = marker
-            suffix_w = (
-                int(draw.textlength(suffix, font=body_font)) if suffix else 0
-            )
-            if suffix and name_w > suffix_w + 16:
-                base = _fit_text(
-                    draw, display_name, body_font, name_w - suffix_w
-                )
-                name_x = x
-                draw.text(
-                    (name_x, ry), base, font=body_font, fill=name_color
-                )
-                name_x += int(draw.textlength(base, font=body_font)) + 2
-                draw.text(
-                    (name_x, ry), suffix, font=body_font, fill=name_color
-                )
-            else:
-                name = suffix or _fit_text(
-                    draw, display_name, body_font, name_w
-                )
-                draw.text((x, ry), name, font=body_font, fill=name_color)
-            draw.text(
-                (unit_x, ry),
-                str(row.get("unit_price") or "\\"),
-                font=body_font,
-                fill=TEXT,
-                anchor="ra",
-            )
-            total_text = str(
-                row.get("offer_total_display") or row.get("buyout") or "\\"
-            )
-            draw.text(
-                (total_x, ry),
-                total_text,
-                font=body_font,
-                fill=TEXT,
-                anchor="ra",
-            )
-            if show_remaining:
-                draw.text(
-                    (remaining_x, ry),
-                    str(row.get("remaining") or "—"),
-                    font=small_font,
-                    fill=MUTED,
-                    anchor="ra",
-                )
-            ry += row_h
-
-    ry = table_top + table_h + 18
-    draw.line((pad, ry, width - pad, ry), fill=BORDER, width=1)
-    ry += 18
-    draw.text((pad, ry), recent_heading, font=head_font, fill=ACCENT)
-    ry += 28
-    if recent_groups:
-        recent_content = width - pad * 2
-        recent_block_w = (
-            recent_name_max
-            + 18
-            + recent_price_w
-            + 16
-            + recent_unit_w
-            + 16
-            + recent_time_w
-        )
-        if recent_block_w <= recent_content:
-            recent_name_w = recent_name_max
-            recent_x = pad
-        else:
-            recent_name_w = max(
-                80,
-                recent_content
-                - recent_price_w
-                - recent_unit_w
-                - recent_time_w
-                - 50,
-            )
-            recent_x = pad
-        price_x = recent_x + recent_name_w + 18 + recent_price_w
-        recent_unit_x = price_x + 16 + recent_unit_w
-        time_x = recent_unit_x + 16 + recent_time_w
-        draw.text((recent_x, ry), "名称", font=recent_head_font, fill=MUTED)
-        draw.text(
-            (price_x, ry),
-            "成交价",
-            font=recent_head_font,
-            fill=MUTED,
-            anchor="ra",
-        )
-        draw.text(
-            (recent_unit_x, ry),
-            "单价",
-            font=recent_head_font,
-            fill=MUTED,
-            anchor="ra",
-        )
-        draw.text(
-            (time_x, ry),
-            "时间",
-            font=recent_head_font,
-            fill=MUTED,
-            anchor="ra",
-        )
-        ry += 30
-        for group in recent_groups:
-            label = str(group.get("label") or "").split("（", 1)[0]
-            if label:
-                draw.text(
-                    (recent_x, ry),
-                    f"【{label}】",
-                    font=recent_head_font,
-                    fill=str(group.get("color") or ACCENT),
-                )
-                ry += 26
-            for row in group.get("rows") or []:
-                display_name = str(row.get("name", ""))
-                amount = int(row.get("amount") or 0)
-                suffix = ""
-                marker = f"×{amount}"
-                if amount > 0 and display_name.endswith(marker):
-                    display_name = display_name[: -len(marker)].rstrip()
-                    suffix = marker
-                suffix_w = (
-                    int(_measure(suffix, recent_body_font))
-                    if suffix
-                    else 0
-                )
-                if suffix and recent_name_w > suffix_w + 12:
-                    base = _fit_text(
-                        draw,
-                        display_name,
-                        recent_body_font,
-                        recent_name_w - suffix_w,
-                    )
-                    draw.text(
-                        (recent_x, ry),
-                        base,
-                        font=recent_body_font,
-                        fill=TEXT,
-                    )
-                    name_x = recent_x + int(
-                        draw.textlength(base, font=recent_body_font)
-                    ) + 2
-                    draw.text(
-                        (name_x, ry),
-                        suffix,
-                        font=recent_body_font,
-                        fill=TEXT,
-                    )
-                else:
-                    name = suffix or _fit_text(
-                        draw,
-                        display_name,
-                        recent_body_font,
-                        recent_name_w,
-                    )
-                    draw.text(
-                        (recent_x, ry),
-                        name,
-                        font=recent_body_font,
-                        fill=TEXT,
-                    )
-                draw.text(
-                    (price_x, ry),
-                    str(row.get("price", "")),
-                    font=recent_body_font,
-                    fill=TEXT,
-                    anchor="ra",
-                )
-                draw.text(
-                    (recent_unit_x, ry),
-                    str(row.get("unit_price", "")),
-                    font=recent_body_font,
-                    fill=TEXT,
-                    anchor="ra",
-                )
-                draw.text(
-                    (time_x, ry),
-                    str(row.get("time", "")),
-                    font=recent_time_font,
-                    fill=MUTED,
-                    anchor="ra",
-                )
-                ry += 32
-    else:
-        draw.text(
-            (pad, ry), "暂无成交记录", font=recent_body_font, fill=MUTED
-        )
-        ry += 32
-
-    note_y = height - 74
-    draw.text(
-        (pad, note_y),
-        _fit_text(
-            draw,
-            str(view.get("data_note") or ""),
-            small_font,
-            width - pad * 2,
-        ),
-        font=small_font,
-        fill=MUTED,
-    )
-    _draw_signature(
-        draw,
-        width,
-        height - 58,
-        path,
-        small_font,
-        right_margin=pad,
-        max_bottom=height,
-    )
-
-    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    _remove_old_files(out_dir)
-    output = (
-        out_dir
-        / f"sz_auction_quantity_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
-    )
-    try:
-        canvas.convert("RGB").save(output, "PNG", optimize=True)
-    except OSError:
-        return None
-    return output
-
-
 def render_auction_card(
     view: dict[str, Any],
     *,
@@ -3290,10 +2755,6 @@ def render_auction_card(
     """
     if Image is None or ImageDraw is None or ImageFont is None:
         return None
-    if view.get("quantity_mode"):
-        return _render_quantity_auction_card(
-            view, font_path=font_path, icon_path=icon_path
-        )
     path = find_cjk_font(font_path)
     if path is None:
         return None
@@ -3434,6 +2895,7 @@ def render_auction_card(
     # That keeps short names close to the prices instead of stranded at the
     # left edge of a fixed 960px table.
     non_artifact = bool(view.get("non_artifact"))
+    show_unit = bool(view.get("quantity_mode"))
     badge_extra = (
         58.0
         if non_artifact
@@ -3496,13 +2958,19 @@ def render_auction_card(
             max((_text_width(_row_price(row), body_font) for row in recent_rows), default=0.0),
         ) + 18
 
-        def _layout_active(name_width: float) -> tuple[int, int, int, int, int, float]:
+        def _layout_active(
+            name_width: float, include_unit: bool
+        ) -> tuple[int, int, int, int, int, float]:
             nr = int(left + name_width)
             sr = int(nr + gap + start_w)
             br = int(sr + gap + buyout_w)
-            ur = int(br + gap + unit_w)
-            rx = int(ur + gap)
-            end = max(rx + remaining_w, ur + gap + time_w)
+            if include_unit:
+                ur = int(br + gap + unit_w)
+                rx = int(ur + gap)
+            else:
+                ur = br
+                rx = int(br + gap)
+            end = max(rx + remaining_w, (ur if include_unit else br) + gap + time_w)
             return nr, sr, br, ur, rx, end
 
         def _layout_history(name_width: float) -> tuple[int, int, int, int, float]:
@@ -3512,12 +2980,12 @@ def render_auction_card(
             tx = int(ur + gap)
             return nr, pr, ur, tx, tx + time_w
 
-        name_right, start_right, buyout_right, unit_right, remaining_x, active_end = _layout_active(name_w)
+        name_right, start_right, buyout_right, unit_right, remaining_x, active_end = _layout_active(name_w, show_unit)
         _, price_right, history_unit_right, time_x, history_end = _layout_history(name_w)
         desired = max(active_end if not history_only else 0.0, history_end) + PAD + 10
         if desired > WIDTH:
             name_w = max(160.0, name_w - (desired - WIDTH))
-            name_right, start_right, buyout_right, unit_right, remaining_x, active_end = _layout_active(name_w)
+            name_right, start_right, buyout_right, unit_right, remaining_x, active_end = _layout_active(name_w, show_unit)
             _, price_right, history_unit_right, time_x, history_end = _layout_history(name_w)
             desired = max(active_end if not history_only else 0.0, history_end) + PAD + 10
         width = int(max(700, min(WIDTH, desired)))
@@ -3610,7 +3078,12 @@ def render_auction_card(
             active_h += 24
         recent_h = 36 + history_header_h + groups_h
         height = header_h + active_h + 35 + recent_h + tail_h
-    height = max(460, min(height, 8000 if history_only else 6000))
+    max_height = (
+        12000
+        if view.get("quantity_mode")
+        else (8000 if history_only else 6000)
+    )
+    height = max(460, min(height, max_height))
 
     image = _card_canvas(width, height, alpha=228)
     if image is None:
@@ -3684,6 +3157,8 @@ def render_auction_card(
     else:
         draw.text((left, y), "名称", font=head_font, fill="#7F93A8")
         active_headers = [("起拍", start_right), ("买断", buyout_right)]
+        if show_unit:
+            active_headers.append(("单价", unit_right))
         for label, x in active_headers:
             draw.text((x - draw.textlength(label, font=head_font), y), label, font=head_font, fill=MUTED)
         draw.text((remaining_x, y), "剩余时间", font=head_font, fill=MUTED)
@@ -3723,6 +3198,8 @@ def render_auction_card(
                     (row.get("start", "\\"), start_right),
                     (row.get("buyout", "\\"), buyout_right),
                 ]
+                if show_unit:
+                    values.append((row.get("unit_price", "\\"), unit_right))
                 for value, x in values:
                     text = str(value)
                     draw.text((x - draw.textlength(text, font=body_font), y), text, font=body_font, fill=TEXT)

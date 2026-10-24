@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.23 - 2026-10-24
+
+### Changed
+
+- Rolled the quantity-mode image layout back to the earlier single-column auction table: `名称 / 起拍 / 买断 / 单价 / 剩余时间`.
+- Removed the two-column quantity table, its divider and the recent-trades centering experiments. Every aggregated quantity row is rendered in one column, however tall the card becomes.
+- Quantity aggregation logic is unchanged: one lowest-buyout row per amount, plus a cheaper auction row when applicable. The item icon and recent-trades table remain.
+
+### Tests
+
+- Regenerated the 12 Windows visual signatures; 186 tests pass.
+
 ## 1.1.22 - 2026-10-24
 
 ### Changed
