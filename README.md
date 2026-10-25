@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.2.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -145,7 +145,7 @@
 | `text` | 始终发送卡片式纯文本，适合低配容器 |
 | `image` | 强制图片；渲染失败时仍会回退文本，不影响指令可用性 |
 
-图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。卡片使用官方壁纸暗色背景、品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：sz help 获取菜单」提示。
+图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。默认使用官方壁纸暗色背景，可在配置中切换 16 张内置官方壁纸、填写自定义背景图片，并调整卡片面板不透明度；所有卡片共享同一套背景设置。卡片使用品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：sz help 获取菜单」提示。
 
 候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 826 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 
@@ -161,6 +161,9 @@
 | `api_base` | 生产 | 默认 `https://eapi.stalzone.com`；可切 `https://dapi.stalzone.com` 演示环境 |
 | `render_mode` | `auto` | `auto` / `text` / `image` |
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
+| `card_background` | `default` | 全局卡片背景；可选内置官方壁纸 `01 仓库小队` … `16 爆炸战场`，所有卡片共享 |
+| `card_background_custom` | 空 | 自定义背景图片绝对路径（或以插件目录为基准的相对路径），支持 jpg/png/webp；非空且文件存在时优先于预设 |
+| `card_panel_opacity` | `0.9` | 卡片面板不透明度 `0–1`；`0` 背景最透，`1` 面板完全不透明；所有普通卡片共享 |
 | `hide_creator_watermark` | `false` | 隐藏右下角 `Created By @Sakura_Akira` 水印；默认关闭（显示水印），开启后所有图片都不再绘制 |
 | `lunar_enrich` | `true` | 玩家资料追加 Lunar 第三方 K/D、KDA、战斗分；关闭后不请求第三方 |
 | `sc_core_fallback` | `true` | 官方成交历史翻页失效时用 SC CORE 第三方存档补全旧成交；结果会标注来源 |
@@ -316,7 +319,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **195 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 82%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **197 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 82%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

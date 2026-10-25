@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.2.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -94,6 +94,9 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `api_base` | production | `https://eapi.stalzone.com`; use `https://dapi.stalzone.com` for the demo environment |
 | `render_mode` | `auto` | `auto`, `text` or `image` |
 | `font_path` | empty | Optional CJK font path for Linux |
+| `card_background` | `default` | Shared card wallpaper; choose one of the 16 bundled official wallpapers (`01`–`16`) |
+| `card_background_custom` | empty | Optional custom background image path (absolute, or relative to the plugin directory); jpg/png/webp; takes priority when the file exists |
+| `card_panel_opacity` | `0.9` | Shared card panel opacity from `0` (wallpaper most visible) to `1` (fully opaque) |
 | `hide_creator_watermark` | `false` | Hide the bottom-right `Created By @Sakura_Akira` signature on every generated image; off by default |
 | `lunar_enrich` | `true` | Add Lunar third-party K/D and battle score |
 | `sc_core_fallback` | `true` | Use SC CORE for older auction history when official pagination fails |

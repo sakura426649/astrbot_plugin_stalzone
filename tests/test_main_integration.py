@@ -1056,6 +1056,24 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         plugin.config["emission_auto_notify"] = False
         self.assertFalse(plugin._auto_notify_enabled())
 
+    def test_background_config_applies_globally(self):
+        import image_renderer as renderer
+
+        try:
+            StalzonePlugin(
+                Context(),
+                {
+                    "region": "eu",
+                    "card_background": "03 瞭望塔",
+                    "card_panel_opacity": 0.5,
+                },
+            )
+            stamp = renderer.card_background_stamp()
+            self.assertIn("wallpaper_03.jpg", stamp)
+            self.assertIn("|128", stamp)
+        finally:
+            StalzonePlugin(Context(), {"region": "eu"})
+
     async def test_empty_whitelist_skips_api_polling(self):
         plugin = self.make_plugin()
         client = self.Client({})

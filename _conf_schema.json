@@ -70,6 +70,43 @@
     "default": "",
     "hint": "Linux 无中文字体时填写，例如 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc；留空自动查找。"
   },
+  "card_background": {
+    "description": "全局卡片背景",
+    "type": "string",
+    "options": [
+      "default",
+      "01 仓库小队",
+      "02 军械库",
+      "03 瞭望塔",
+      "04 补给箱",
+      "05 车旁集结",
+      "06 废墟街道",
+      "07 雷暴草原",
+      "08 室内小队",
+      "09 雪地行军",
+      "10 木屋交火",
+      "11 狙击镜",
+      "12 红色警报",
+      "13 地下通道",
+      "14 绿色爆发",
+      "15 辐射标志",
+      "16 爆炸战场"
+    ],
+    "default": "default",
+    "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。"
+  },
+  "card_background_custom": {
+    "description": "自定义背景图片路径",
+    "type": "string",
+    "default": "",
+    "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。"
+  },
+  "card_panel_opacity": {
+    "description": "卡片面板不透明度",
+    "type": "float",
+    "default": 0.9,
+    "hint": "0–1；0=背景最透，1=面板完全不透明。所有普通卡片共享；风暴海报等特殊页面仍保留自己的暗色处理。"
+  },
   "lunar_enrich": {
     "description": "追加 Lunar 第三方战队战报",
     "type": "bool",

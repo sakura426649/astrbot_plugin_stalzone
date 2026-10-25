@@ -88,7 +88,9 @@ from image_renderer import (  # noqa: E402
     STAT_GREEN,
     STAT_RED,
     WIDTH,
+    card_background_stamp,
     find_cjk_font,
+    set_card_background,
     _artifact_label_color,
     _stat_direction,
     faction_icon_path,
@@ -1938,6 +1940,24 @@ class V2FormatterTests(unittest.TestCase):
 
 
 class ImageRendererTests(unittest.TestCase):
+    def test_card_background_preset_and_opacity(self):
+        from PIL import Image
+
+        try:
+            selected = set_card_background("03 瞭望塔", "", 0.5)
+            self.assertEqual(selected.name, "wallpaper_03.jpg")
+            self.assertIn("|128", card_background_stamp())
+            custom = Path(tempfile.gettempdir()) / "sz_bg_custom.png"
+            Image.new("RGB", (16, 16), (30, 40, 50)).save(custom)
+            try:
+                selected = set_card_background("03 瞭望塔", custom, 0.25)
+                self.assertEqual(selected, custom)
+                self.assertIn("|64", card_background_stamp())
+            finally:
+                custom.unlink(missing_ok=True)
+        finally:
+            set_card_background("default", "", 0.9)
+
     def test_rank_colors(self):
         self.assertEqual(rank_color("Newbie"), "#53C353")
         self.assertEqual(rank_color("Stalker"), "#4EA8FF")

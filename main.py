@@ -91,7 +91,7 @@ try:  # Package import (normal AstrBot plugin loading).
         parse_auction_time,
     )
     from .image_renderer import (
-        HELP_BACKGROUND,
+        card_background_stamp,
         find_cjk_font,
         render_auction_card,
         render_diag_card,
@@ -104,6 +104,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_pass_card,
         render_profile_card,
         render_text_card,
+        set_card_background,
         set_creator_watermark_hidden,
     )
     from .item_index import (
@@ -166,7 +167,7 @@ except ImportError:  # Direct execution / flat import fallback.
         parse_auction_time,
     )
     from image_renderer import (  # type: ignore[no-redef]
-        HELP_BACKGROUND,
+        card_background_stamp,
         faction_icon_path,
         find_cjk_font,
         render_auction_card,
@@ -179,6 +180,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_pass_card,
         render_profile_card,
         render_text_card,
+        set_card_background,
         set_creator_watermark_hidden,
     )
     from item_index import (  # type: ignore[no-redef]
@@ -196,7 +198,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.2.2"
+PLUGIN_VERSION = "1.3.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -334,6 +336,14 @@ class StalzonePlugin(Star):
         self._auto_state = self._load_auto_state()
         self._auto_task: asyncio.Task | None = None
         set_creator_watermark_hidden(self._hide_creator_watermark())
+        self._apply_card_background()
+
+    def _apply_card_background(self) -> Path:
+        return set_card_background(
+            self._cfg("card_background", "default"),
+            self._cfg("card_background_custom", ""),
+            self._cfg("card_panel_opacity", 0.90),
+        )
 
     # ------------------------------------------------------------------ config
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -798,6 +808,7 @@ class StalzonePlugin(Star):
 
     async def initialize(self) -> None:
         set_creator_watermark_hidden(self._hide_creator_watermark())
+        self._apply_card_background()
         if not self._auto_notify_enabled():
             return
         if not str(self._cfg("client_id", "") or "").strip():
@@ -905,10 +916,7 @@ class StalzonePlugin(Star):
         return path
 
     def _help_cache_path(self) -> Path:
-        try:
-            background_stamp = str(HELP_BACKGROUND.stat().st_mtime_ns)
-        except OSError:
-            background_stamp = "missing"
+        background_stamp = card_background_stamp()
         key = hashlib.sha1(
             "|".join(
                 [

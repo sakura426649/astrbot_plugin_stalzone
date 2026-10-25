@@ -72,6 +72,54 @@ _LAST_TEMP_CLEANUP = 0.0
 HELP_WIDTH = 1600
 HELP_HEIGHT = 1100
 HELP_BACKGROUND = Path(__file__).with_name("assets") / "help_background.jpg"
+BACKGROUND_DIR = Path(__file__).with_name("assets") / "backgrounds"
+BACKGROUND_OPTIONS = ["default"] + [
+    f"官方壁纸 {index:02d}" for index in range(1, 17)
+]
+_CARD_BACKGROUND = HELP_BACKGROUND
+_CARD_PANEL_ALPHA = int(round(0.90 * 255))
+
+
+def set_card_background(
+    preset: Any = None,
+    custom: Any = None,
+    opacity: Any = 0.90,
+) -> Path:
+    """Select the shared card wallpaper and panel opacity."""
+    global _CARD_BACKGROUND, _CARD_PANEL_ALPHA
+    selected = HELP_BACKGROUND
+    custom_text = str(custom or "").strip()
+    if custom_text:
+        candidate = Path(custom_text).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(__file__).resolve().parent / candidate
+        if candidate.is_file():
+            selected = candidate
+    if selected == HELP_BACKGROUND:
+        match = re.search(r"(\d{1,2})", str(preset or ""))
+        if match:
+            number = int(match.group(1))
+            candidate = BACKGROUND_DIR / f"wallpaper_{number:02d}.jpg"
+            if 1 <= number <= len(BACKGROUND_OPTIONS) - 1 and candidate.is_file():
+                selected = candidate
+    _CARD_BACKGROUND = selected
+    try:
+        value = float(opacity)
+    except (TypeError, ValueError):
+        value = 0.90
+    value = min(1.0, max(0.0, value))
+    _CARD_PANEL_ALPHA = int(round(value * 255))
+    return selected
+
+
+def card_background_stamp() -> str:
+    """Cache key component for help/overlay background changes."""
+    try:
+        stamp = str(_CARD_BACKGROUND.stat().st_mtime_ns)
+    except OSError:
+        stamp = "missing"
+    return f"{_CARD_BACKGROUND}|{stamp}|{_CARD_PANEL_ALPHA}"
+
 
 
 def _candidate_fonts() -> list[Path]:
@@ -584,14 +632,17 @@ def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
     if Image is None or ImageDraw is None:
         return None
     try:
+        background = _CARD_BACKGROUND
+        if not background.is_file():
+            background = HELP_BACKGROUND
         if (
             ImageEnhance is None
             or ImageFilter is None
             or ImageOps is None
-            or not HELP_BACKGROUND.is_file()
+            or not background.is_file()
         ):
             raise OSError("background unavailable")
-        base = Image.open(HELP_BACKGROUND).convert("RGB")
+        base = Image.open(background).convert("RGB")
         base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
         base = ImageEnhance.Brightness(base).enhance(0.48)
         base = base.filter(ImageFilter.GaussianBlur(1.4))
@@ -601,10 +652,13 @@ def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     draw.rectangle((0, 0, width, height), fill=(3, 7, 12, 35))
+    panel_alpha = (
+        _CARD_PANEL_ALPHA if _CARD_PANEL_ALPHA is not None else alpha
+    )
     draw.rounded_rectangle(
         (12, 12, width - 12, height - 12),
         radius=26,
-        fill=(10, 17, 26, alpha),
+        fill=(10, 17, 26, panel_alpha),
         outline=(100, 122, 146, 70),
         width=2,
     )
@@ -1015,14 +1069,17 @@ def _emission_canvas(width: int, height: int) -> Any:
     if Image is None or ImageDraw is None:
         return None
     try:
+        background = _CARD_BACKGROUND
+        if not background.is_file():
+            background = HELP_BACKGROUND
         if (
             ImageEnhance is None
             or ImageFilter is None
             or ImageOps is None
-            or not HELP_BACKGROUND.is_file()
+            or not background.is_file()
         ):
             raise OSError("background unavailable")
-        base = Image.open(HELP_BACKGROUND).convert("RGB")
+        base = Image.open(background).convert("RGB")
         base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
         base = ImageEnhance.Brightness(base).enhance(0.20)
         base = base.filter(ImageFilter.GaussianBlur(2.1))
@@ -1478,7 +1535,7 @@ def render_help_card(
         return None
 
     width, height = HELP_WIDTH, HELP_HEIGHT
-    background = Path(background_path) if background_path else HELP_BACKGROUND
+    background = Path(background_path) if background_path else _CARD_BACKGROUND
     try:
         canvas = Image.open(background).convert("RGB")
         canvas = ImageOps.fit(canvas, (width, height), method=Image.LANCZOS)

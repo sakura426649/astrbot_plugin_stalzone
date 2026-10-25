@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.0 - 2026-10-25
+
+### Added
+
+- Global card background configuration: `card_background` selects one of 16 bundled official wallpapers (or `default`), `card_background_custom` accepts a custom image path, and `card_panel_opacity` controls the shared card panel opacity from 0 to 1.
+- The selected wallpaper is used by normal cards, the help card and the emission poster; the help and storm posters keep their own dark/red treatments.
+- Help-image cache keys now include the selected background file and opacity.
+
+### Tests
+
+- Added background preset/custom-path/opacity and plugin-config application coverage; 197 tests and 12 visual signatures pass.
+
 ## 1.2.2 - 2026-10-25
 
 ### Fixed
