@@ -196,9 +196,12 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.1.30"
+PLUGIN_VERSION = "1.2.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
-QQ_GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:(\d+)(?::|$)")
+GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
+GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+ONEBOT_PLATFORM_PREFIXES = ("aiocqhttp", "onebot")
+OFFICIAL_PLATFORM_PREFIXES = ("qq_official",)
 
 
 def _split_region_suffix(value: str) -> tuple[str, str | None]:
@@ -428,10 +431,28 @@ class StalzonePlugin(Star):
         return bool(value)
 
     @staticmethod
-    def _group_id_from_target(value: Any) -> str:
-        """Extract a numeric group id from an AstrBot group UMO."""
-        match = QQ_GROUP_TARGET_RE.search(str(value or "").strip())
-        return match.group(1) if match else ""
+    def _group_key(value: Any) -> str:
+        """Extract a numeric OneBot group id or a QQ Official group openid."""
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        match = GROUP_TARGET_RE.search(text)
+        session = (match.group(1) if match else text).strip()
+        upper = session.upper()
+        index = upper.find("GROUP-")
+        if index >= 0:
+            key = session[index:]
+        elif "USER-" in upper:
+            return ""
+        else:
+            key = session
+        if key.isdigit() or key.upper().startswith("GROUP-"):
+            return key if GROUP_KEY_RE.fullmatch(key) else ""
+        return ""
+
+    @staticmethod
+    def _has_group_umo(value: Any) -> bool:
+        return bool(GROUP_TARGET_RE.search(str(value or "").strip()))
 
     @staticmethod
     def _platform_from_target(value: Any) -> str:
@@ -441,15 +462,22 @@ class StalzonePlugin(Star):
         )
         return match.group(1) if match else ""
 
+    @staticmethod
+    def _is_official_platform(platform: str) -> bool:
+        return str(platform or "").strip().lower().startswith(
+            OFFICIAL_PLATFORM_PREFIXES
+        )
+
+    @staticmethod
+    def _is_onebot_platform(platform: str) -> bool:
+        return str(platform or "").strip().lower().startswith(
+            ONEBOT_PLATFORM_PREFIXES
+        )
+
     @classmethod
     def _group_number(cls, value: Any) -> str:
-        """Accept either a QQ group number or a full group UMO."""
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        if text.isdigit():
-            return text
-        return cls._group_id_from_target(text)
+        """Accept a group number/openid or a full group UMO."""
+        return cls._group_key(value)
 
     def _group_values(self, key: str) -> list[str]:
         raw = self._cfg(key, [])
@@ -471,16 +499,16 @@ class StalzonePlugin(Star):
             self._auto_state.get("target"),
         ):
             prefix = self._platform_from_target(value)
-            if prefix:
+            if prefix and self._is_onebot_platform(prefix):
                 return prefix
         for value in self._group_values("emission_group_whitelist"):
             prefix = self._platform_from_target(value)
-            if prefix:
+            if prefix and self._is_onebot_platform(prefix):
                 return prefix
         return ""
 
     def _notify_targets(self) -> list[str]:
-        """Return every allow-listed QQ group; an empty list sends nothing."""
+        """Return allow-listed OneBot groups; QQ Official cannot push proactively."""
         blacklist = self._group_ids("emission_group_blacklist")
         whitelist = self._group_values("emission_group_whitelist")
         if not whitelist:
@@ -492,17 +520,26 @@ class StalzonePlugin(Star):
             group = self._group_number(value)
             if not group or group in blacklist or group in seen:
                 continue
-            seen.add(group)
-            explicit = self._group_id_from_target(value)
-            if explicit:
-                targets.append(str(value).strip())
+            if self._has_group_umo(value):
+                target = str(value).strip()
             elif prefix:
-                targets.append(f"{prefix}:GroupMessage:{group}")
+                target = f"{prefix}:GroupMessage:{group}"
+            else:
+                continue
+            platform = self._platform_from_target(target)
+            if not self._is_onebot_platform(platform):
+                continue
+            if not group.isdigit():
+                continue
+            seen.add(group)
+            targets.append(target)
         return targets
 
     def _auto_target_allowed(self, target: str) -> bool:
-        group = self._group_id_from_target(target)
-        if not group:
+        group = self._group_key(target)
+        if not group or not group.isdigit():
+            return False
+        if not self._is_onebot_platform(self._platform_from_target(target)):
             return False
         if group in self._group_ids("emission_group_blacklist"):
             return False
@@ -511,13 +548,16 @@ class StalzonePlugin(Star):
 
     def _remember_notify_target(self, event: AstrMessageEvent) -> None:
         target = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        if not target:
+            return
         changed = False
         platform = self._platform_from_target(target)
-        if platform and self._auto_state.get("platform") != platform:
-            self._auto_state["platform"] = platform
-            changed = True
-        if target and self._auto_state.get("target") != target:
-            if self._auto_target_allowed(target):
+        if platform and self._is_onebot_platform(platform):
+            if self._auto_state.get("platform") != platform:
+                self._auto_state["platform"] = platform
+                changed = True
+        if self._auto_target_allowed(target):
+            if self._auto_state.get("target") != target:
                 self._auto_state["target"] = target
                 changed = True
         if changed:
@@ -532,11 +572,13 @@ class StalzonePlugin(Star):
             status = "关闭"
         elif not whitelist:
             status = "未配置白名单"
+        elif not targets:
+            status = "无可用 OneBot 群"
         else:
             status = "已启用"
         previous_end = parse_auction_time(state.get("last_previous_end"))
         now = datetime.now(timezone.utc)
-        if not whitelist:
+        if not whitelist or not targets:
             window = "不轮询"
         elif state.get("active"):
             window = "风暴进行中"
@@ -605,7 +647,7 @@ class StalzonePlugin(Star):
 
     async def _emission_auto_tick(self, *, force: bool = False) -> bool:
         """Poll the official emission API only in the 2–4h after-storm window."""
-        if not self._group_values("emission_group_whitelist"):
+        if not self._notify_targets():
             return False
         state = self._auto_state
         now = datetime.now(timezone.utc)
@@ -662,7 +704,7 @@ class StalzonePlugin(Star):
         elif "notified_targets" not in state:
             legacy = str(state.get("target", "") or "").strip()
             state["notified_targets"] = (
-                [legacy] if self._group_id_from_target(legacy) else []
+                [legacy] if self._auto_target_allowed(legacy) else []
             )
         targets = self._notify_targets()
         raw_notified = state.get("notified_targets")
@@ -766,6 +808,13 @@ class StalzonePlugin(Star):
                 "STALZONE automatic emission has no group whitelist; "
                 "polling and sending stay disabled until groups are added"
             )
+            return
+        if not self._notify_targets():
+            logger.warning(
+                "STALZONE automatic emission has no usable OneBot group target; "
+                "QQ Official bots cannot send unsolicited alerts"
+            )
+            return
         if self._auto_task is not None and not self._auto_task.done():
             return
         self._auto_task = asyncio.create_task(self._emission_auto_loop())

@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.2.0 - 2026-10-25
+
+### Added
+
+- QQ Official Bot support for both AstrBot adapters: WebSocket (`qq_official`) and Webhook (`qq_official_webhook`). AstrBot handles official image uploads; commands and image replies use the same dispatch path as OneBot.
+- Group target parsing now recognizes official `GROUP-...` openids and combined `USER-..._GROUP-...` sessions, in addition to numeric OneBot group IDs.
+
+### Changed
+
+- Automatic storm alerts are explicitly OneBot-only. QQ Official groups are skipped from the allow-list, do not trigger API polling when no OneBot target remains, and show `无可用 OneBot 群` in diagnostics. This avoids relying on official bots' passive-reply window and cached `msg_id` for unsolicited alerts.
+- Config hints and README now document the OneBot/official platform split.
+
+### Tests
+
+- Added official UMO parsing, mixed allow-list, official-only polling skip, and official command-path coverage; 193 tests and 12 visual signatures pass.
+
 ## 1.1.30 - 2026-10-24
 
 ### Changed

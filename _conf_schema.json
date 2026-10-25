@@ -92,13 +92,13 @@
     "description": "自动辐射风暴提醒",
     "type": "bool",
     "default": true,
-    "hint": "默认开启；但只有白名单非空时才工作和轮询。只在上一场风暴结束后的 2–4 小时窗口内每分钟查询；检测到新风暴后向白名单群发送“风暴已开始”图片。白名单为空时不发送也不请求 API。"
+    "hint": "默认开启；只有白名单非空且至少有一个 OneBot 群目标时才工作和轮询。只在上一场风暴结束后的 2–4 小时窗口内每分钟查询；检测到新风暴后向白名单群发送“风暴已开始”图片。QQ 官方机器人（qq_official / qq_official_webhook）受被动回复限制，不支持此自动主动提醒。"
   },
   "emission_notify_target": {
     "description": "自动提醒平台前缀种子（可选）",
     "type": "string",
     "default": "",
-    "hint": "可选，仅用于给纯群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；白名单为空时不会单独发送，也不会成为收件群。"
+    "hint": "可选，仅用于给纯 OneBot 群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；白名单为空时不会单独发送，也不会成为收件群。QQ 官方机器人无法用于自动提醒。"
   },
   "emission_group_whitelist": {
     "description": "自动提醒 QQ 群白名单",
@@ -107,7 +107,7 @@
     "items": {
       "type": "string"
     },
-    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。"
+    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。QQ 官方机器人（qq_official / qq_official_webhook）不支持主动提醒，不会进入发送队列。"
   },
   "emission_group_blacklist": {
     "description": "自动提醒 QQ 群黑名单",
@@ -116,7 +116,7 @@
     "items": {
       "type": "string"
     },
-    "hint": "每项填一个 QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
+    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
   },
   "hide_creator_watermark": {
     "description": "隐藏制作者水印",

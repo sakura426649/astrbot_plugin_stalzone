@@ -994,6 +994,10 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
     GROUP_TARGET = "aiocqhttp:GroupMessage:123456"
     OTHER_GROUP_TARGET = "aiocqhttp:GroupMessage:654321"
     PRIVATE_TARGET = "aiocqhttp:FriendMessage:123456"
+    OFFICIAL_TARGET = "qq_official:GroupMessage:GROUP-abc123"
+    OFFICIAL_WEBHOOK_TARGET = (
+        "qq_official_webhook:GroupMessage:USER-111_GROUP-xyz789"
+    )
 
     class Client(FakeClient):
         def __init__(self, payload):
@@ -1303,6 +1307,60 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("target", plugin._auto_state)
         self.assertEqual(plugin._notify_targets(), [])
+
+    def test_official_group_keys_are_parsed(self):
+        plugin = self.make_plugin()
+        self.assertEqual(
+            plugin._group_key(self.OFFICIAL_TARGET), "GROUP-abc123"
+        )
+        self.assertEqual(
+            plugin._group_key(self.OFFICIAL_WEBHOOK_TARGET), "GROUP-xyz789"
+        )
+        self.assertEqual(
+            plugin._group_key("aiocqhttp:GroupMessage:123456"), "123456"
+        )
+        self.assertEqual(plugin._group_key("GROUP-abc123"), "GROUP-abc123")
+
+    def test_official_targets_are_not_auto_alert_targets(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = [self.OFFICIAL_TARGET]
+        plugin._auto_state = {}
+        self.assertFalse(plugin._auto_target_allowed(self.OFFICIAL_TARGET))
+        self.assertEqual(plugin._notify_targets(), [])
+        plugin._remember_notify_target(
+            self.TargetEvent("/sz 风暴", self.OFFICIAL_TARGET)
+        )
+        self.assertNotIn("target", plugin._auto_state)
+        self.assertNotIn("platform", plugin._auto_state)
+
+    def test_mixed_whitelist_keeps_onebot_targets_only(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [
+            self.OFFICIAL_TARGET,
+            "123456",
+        ]
+        self.assertEqual(
+            plugin._notify_targets(), ["aiocqhttp:GroupMessage:123456"]
+        )
+
+    async def test_official_only_whitelist_skips_api_polling(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = [self.OFFICIAL_TARGET]
+        client = self.Client({})
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        await plugin._emission_auto_tick(force=True)
+        self.assertEqual(client.calls, 0)
+
+    async def test_official_platform_command_path(self):
+        plugin = self.make_plugin()
+        event = self.TargetEvent("/sz help", self.OFFICIAL_TARGET)
+        results = []
+        async for item in plugin.sz(event):
+            results.append(item)
+        self.assertTrue(results)
+        self.assertNotIn("target", plugin._auto_state)
 
     def test_whitelist_broadcasts_every_allowed_group(self):
         plugin = self.make_plugin()
