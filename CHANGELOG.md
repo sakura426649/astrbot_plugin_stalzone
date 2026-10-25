@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.3 - 2026-10-25
+
+### Changed
+
+- Short ambiguous weapon tokens now show candidates instead of silently choosing the base weapon. `mk47` lists MK47 Mutant, its parts and Melted MK47; `mp7` lists Melted MP7, HK MP7A2 and related matches.
+- Same-category variants still auto-resolve when unambiguous (for example `x95` → IWI Tavor X95); explicit skin names still resolve directly.
+- Fuzzy matching no longer uses raw item IDs, removing unrelated candidates such as Zombie Eye (`m2k7`) from an `mk47` search.
+
+### Tests
+
+- Updated resolver integration coverage to use a real catalog item; 200 tests and 12 visual signatures pass.
+
 ## 1.3.2 - 2026-10-25
 
 ### Fixed

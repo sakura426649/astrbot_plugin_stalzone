@@ -233,13 +233,13 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
         results = []
-        async for item in plugin.sz_bare(FakeEvent("sz 拍卖 y1q9")):
+        async for item in plugin.sz_bare(FakeEvent("sz 拍卖 wg53")):
             results.append(item[1])
         text = "\n".join(results)
         self.assertIn("在售", text)
         self.assertIn("最近成交", text)
 
-        event = FakeEvent("SZ 拍卖 y1q9")
+        event = FakeEvent("SZ 拍卖 wg53")
         first = []
         async for item in plugin.sz_bare(event):
             first.append(item[1])
@@ -259,7 +259,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     async def test_auction_success(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
-        text = await collect(plugin, "/sz 拍卖 y1q9")
+        text = await collect(plugin, "/sz 拍卖 wg53")
         self.assertIn("在售", text)
         self.assertIn("最近成交", text)
         self.assertIn("1,000", text)
@@ -348,7 +348,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         client = RecordingClient()
         plugin = self.make_plugin()
         plugin._make_client = lambda: client  # type: ignore[assignment]
-        await collect(plugin, "/sz 拍卖 y1q9")
+        await collect(plugin, "/sz 拍卖 wg53")
         self.assertIn(("lots", 100), client.calls)
         self.assertIn(("history", 100, 0), client.calls)
 

@@ -274,8 +274,14 @@ class ItemIndex:
                 continue
             if fuzzy_enabled:
                 score = 0.0
+                item_id = _normalize(item.get("id"))
                 for term in terms:
                     for alias in aliases:
+                        # IDs are already handled by exact/contains matching;
+                        # fuzzy-matching them adds unrelated short-ID noise
+                        # (e.g. "m2k7" for "mk47").
+                        if alias == item_id:
+                            continue
                         total = len(term) + len(alias)
                         # SequenceMatcher's ratio can never exceed 2*min/total.
                         if total and 200 * min(len(term), len(alias)) < 72 * total:
@@ -355,15 +361,20 @@ class ItemIndex:
                 return english[0], matches
             if len(english) > 1:
                 return None, matches
-            # A short weapon token such as "mk47" or "mp7" must resolve to
-            # the base weapon, not a skin whose name merely contains it.
+            # A short token can match a weapon, its parts and a skin
+            # ("mk47" → MK47 Mutant / MK47 parts / Melted MK47). Do not hide
+            # the skin by choosing the weapon; show candidates instead.
+            categories = {
+                str(item.get("cat") or "").split("/", 1)[0]
+                for item in matches
+            }
+            if len(categories) > 1:
+                return None, matches
             weapons = [
                 item
                 for item in matches
                 if str(item.get("cat") or "").startswith("weapon/")
             ]
-            if len(weapons) == 1:
-                return weapons[0], matches
             # "x95" should resolve to "IWI Tavor X95" (the base weapon),
             # not to "X95 (A)" whose stripped base name is also "X95".
             # Skip very short tokens so "m4" offers candidates instead of

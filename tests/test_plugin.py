@@ -1723,13 +1723,18 @@ class ItemIndexTests(unittest.TestCase):
         variant, _ = self.index.resolve("X95 (A)")
         self.assertEqual(variant["id"], "lyv9k")
 
-    def test_short_weapon_token_prefers_base_over_skin(self):
-        mk47, _ = self.index.resolve("mk47")
-        self.assertEqual(mk47["id"], "4q0gl")
-        self.assertEqual(mk47["cat"], "weapon/assault_rifle")
-        mp7, _ = self.index.resolve("mp7")
-        self.assertEqual(mp7["id"], "lylnq")
-        self.assertEqual(mp7["cat"], "weapon/submachine_gun")
+    def test_short_ambiguous_weapon_token_shows_candidates(self):
+        mk47, mk47_matches = self.index.resolve("mk47")
+        self.assertIsNone(mk47)
+        mk47_ids = {item["id"] for item in mk47_matches}
+        self.assertIn("4q0gl", mk47_ids)  # MK47 Mutant body
+        self.assertIn("knlvj", mk47_ids)  # Melted MK47 skin
+        self.assertNotIn("m2k7", mk47_ids)  # unrelated fuzzy ID match
+        mp7, mp7_matches = self.index.resolve("mp7")
+        self.assertIsNone(mp7)
+        mp7_ids = {item["id"] for item in mp7_matches}
+        self.assertIn("lylnq", mp7_ids)  # HK MP7A2 body
+        self.assertIn("qjvg4", mp7_ids)  # Melted MP7 skin
         # Explicit skin names still resolve to the skin.
         skin, _ = self.index.resolve("melted mk47")
         self.assertEqual(skin["id"], "knlvj")
