@@ -511,6 +511,74 @@ def _paste_corner_icon(
         return False
 
 
+def _draw_candidate_icon(
+    canvas: Any,
+    icon_path: str,
+    left: int,
+    top: int,
+    size: int,
+) -> bool:
+    """Draw a candidate icon with a neutral rim glow for dark artwork."""
+    if canvas is None or Image is None:
+        return False
+    try:
+        icon = _normalize_icon(Image.open(icon_path), size)
+        if ImageEnhance is not None:
+            alpha = icon.getchannel("A")
+            rgb = ImageEnhance.Brightness(icon.convert("RGB")).enhance(1.12)
+            rgb = ImageEnhance.Contrast(rgb).enhance(1.06)
+            rgb = rgb.point(lambda value: int(255 * ((value / 255) ** 0.76)))
+            icon = rgb.convert("RGBA")
+            icon.putalpha(alpha)
+        if ImageFilter is not None:
+            pad = 7
+            glow = Image.new(
+                "RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0)
+            )
+            silhouette = Image.new("RGBA", icon.size, (190, 200, 212, 0))
+            silhouette.putalpha(icon.getchannel("A"))
+            glow.alpha_composite(silhouette, (pad, pad))
+            glow = glow.filter(ImageFilter.GaussianBlur(5))
+            glow.putalpha(
+                glow.getchannel("A").point(lambda value: int(value * 0.42))
+            )
+            canvas.alpha_composite(glow, (left - pad, top - pad))
+        canvas.alpha_composite(icon, (left, top))
+        return True
+    except Exception:
+        return False
+
+
+def _draw_candidate_icon_frame(
+    canvas: Any, draw: Any, left: int, top: int, size: int
+) -> None:
+    """Subtle neutral gradient behind a candidate icon."""
+    gradient = Image.new("RGBA", (1, size))
+    for offset in range(size):
+        ratio = offset / max(1, size - 1)
+        gradient.putpixel(
+            (0, offset),
+            (
+                int(32 - 17 * ratio),
+                int(45 - 22 * ratio),
+                int(60 - 27 * ratio),
+                235,
+            ),
+        )
+    gradient = gradient.resize((size, size))
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, size - 1, size - 1), radius=12, fill=255
+    )
+    canvas.paste(gradient, (left, top), mask)
+    draw.rounded_rectangle(
+        (left, top, left + size, top + size),
+        radius=12,
+        outline=(105, 130, 155, 90),
+        width=1,
+    )
+
+
 def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
     """Dark, wallpaper-backed canvas with a readable translucent card."""
     if Image is None or ImageDraw is None:
@@ -2678,13 +2746,7 @@ def render_candidate_card(
 
         icon_left = x + frame_w - icon_pad - icon_size
         icon_top = y + (card_h - icon_size) // 2
-        draw.rounded_rectangle(
-            (icon_left, icon_top, icon_left + icon_size, icon_top + icon_size),
-            radius=12,
-            fill=(7, 12, 19, 225),
-            outline=(80, 100, 120, 70),
-            width=1,
-        )
+        _draw_candidate_icon_frame(canvas, draw, icon_left, icon_top, icon_size)
 
         icon_source = str(entry.get("icon_path") or "").strip()
         if not icon_source and entry.get("faction"):
@@ -2692,19 +2754,14 @@ def render_candidate_card(
             icon_source = str(faction_path) if faction_path else ""
         icon_rendered = False
         if icon_source:
-            try:
-                icon = Image.open(icon_source).convert("RGBA")
-                icon.thumbnail((icon_size - 16, icon_size - 16), Image.LANCZOS)
-                canvas.alpha_composite(
-                    icon,
-                    (
-                        icon_left + (icon_size - icon.width) // 2,
-                        icon_top + (icon_size - icon.height) // 2,
-                    ),
-                )
-                icon_rendered = True
-            except Exception:
-                icon_rendered = False
+            inner = icon_size - 16
+            icon_rendered = _draw_candidate_icon(
+                canvas,
+                icon_source,
+                icon_left + (icon_size - inner) // 2,
+                icon_top + (icon_size - inner) // 2,
+                inner,
+            )
         if not icon_rendered:
             draw.text(
                 (icon_left + icon_size / 2, icon_top + icon_size / 2),

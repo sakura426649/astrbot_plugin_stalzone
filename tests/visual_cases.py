@@ -231,14 +231,20 @@ def _auction_quantity_many() -> Path | None:
 
 def _candidate() -> Path | None:
     view = build_item_candidate_view(
-        "原子",
+        "步枪",
         [
+            {"display": "AK-74M / AK-74M", "cat_label": "突击步枪", "color": "RANK_NEWBIE", "id": "vjr1n"},
+            {"display": "M4A1 / M4A1", "cat_label": "突击步枪", "color": "RANK_STALKER", "id": "zz7y2"},
             {"display": "原子 / Atom", "cat_label": "神器", "color": "RANK_MASTER", "id": "wg53"},
-            {"display": "原罪 / Sin", "cat_label": "其他物品", "color": "RANK_MASTER", "id": "7lrr9"},
-            {"display": "原型机 / Prototype", "cat_label": "其他 / 外观", "color": "RANK_MASTER", "id": "1r6pq"},
-            {"display": "测试物品", "cat_label": "材料", "color": "DEFAULT", "id": "test"},
+            {"display": "9mm 穿甲弹 / 9 mm AP", "cat_label": "弹药", "color": "DEFAULT", "id": "1nr1"},
         ],
     )
+    for entry, item_id in zip(
+        view["entries"], ("vjr1n", "zz7y2", "wg53", "1nr1")
+    ):
+        entry["icon_path"] = str(
+            PLUGIN_ROOT / "item_icons" / f"{item_id}.png"
+        )
     return render_candidate_card(view)
 
 

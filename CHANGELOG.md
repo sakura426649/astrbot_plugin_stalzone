@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.1.30 - 2026-10-24
+
+### Changed
+
+- Candidate-list icons now sit on a subtle neutral gradient frame and receive a gentle shadow-lift, contrast and rim-glow treatment. Dark weapons such as AK-74M and M4A1 are readable without brightening the whole card or shifting icon hues.
+- Small candidate icons are normalized to the 76px inner frame, matching the top-right icon treatment.
+
+### Tests
+
+- Candidate visual case now uses real dark weapon icons; 188 tests and 12 visual signatures pass.
+
 ## 1.1.29 - 2026-10-24
 
 ### Fixed
