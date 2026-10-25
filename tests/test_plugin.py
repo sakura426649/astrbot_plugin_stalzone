@@ -114,9 +114,9 @@ def json_response(payload: dict, status: int = 200) -> httpx.Response:
 class APIClientTests(unittest.IsolatedAsyncioTestCase):
     def test_temporary_api_messages_are_actionable(self):
         self.assertNotIn("不可用", ServerError.user_message)
-        self.assertIn("再发一次", ServerError.user_message)
-        self.assertIn("等几秒", RateLimitError.user_message)
-        self.assertIn("再发一次", NetworkError.user_message)
+        self.assertIn("稍后重试", ServerError.user_message)
+        self.assertIn("稍后重试", RateLimitError.user_message)
+        self.assertIn("稍后重试", NetworkError.user_message)
 
     async def test_health_opens_circuit_after_repeated_5xx(self):
         calls = 0

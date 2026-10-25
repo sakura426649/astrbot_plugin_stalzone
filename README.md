@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.3.6-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.7-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -145,7 +145,7 @@
 | `text` | 始终发送卡片式纯文本，适合低配容器 |
 | `image` | 强制图片；渲染失败时仍会回退文本，不影响指令可用性 |
 
-图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。默认使用官方壁纸暗色背景，可在配置中切换 16 张内置官方壁纸、填写自定义背景图片，并调整卡片面板不透明度；所有卡片共享同一套背景设置。卡片使用品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：sz help 获取菜单」提示。
+图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。默认使用官方壁纸暗色背景，可在配置中切换 16 张内置官方壁纸、填写自定义背景图片，并调整卡片面板不透明度；所有卡片共享同一套背景设置。卡片使用品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：/sz help 获取菜单」提示。
 
 候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 826 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 
@@ -313,7 +313,7 @@ astrbot_plugin_stalzone/
 
 ## 开发与测试
 
-测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 12 张主要卡片的视觉快照（Linux 自动跳过）：
+测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 13 张主要卡片的视觉快照（Linux 自动跳过）：
 
 ```bash
 python -m unittest discover -s tests -v

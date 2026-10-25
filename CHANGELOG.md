@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.7 - 2026-10-25
+
+### Changed
+
+- Temporary API failures now use more formal wording: `官方数据服务暂时未响应，请稍后重试；连续失败请等待约 30 秒。` Rate-limit, timeout and response-error messages were formalized too.
+- API failures in image mode now render a dedicated dark `服务提示` card with a subtle `RETRY` watermark, amber accent, original query and retry guidance, instead of a generic text card.
+- The bottom-left hint now reads `更多功能：/sz help 获取菜单`; its position, size, color and the creator-watermark switch are unchanged.
+
+### Tests
+
+- Added the error-card visual signature (13 total); 203 tests pass.
+
 ## 1.3.6 - 2026-10-25
 
 ### Changed

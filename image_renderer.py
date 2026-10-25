@@ -40,7 +40,7 @@ SIGNATURE_NAME = "@Sakura_Akira"
 SIGNATURE = f"{SIGNATURE_PREFIX} {SIGNATURE_NAME}"
 SIGNATURE_COLOR = "#e7c27d"
 SIGNATURE_HEIGHT = 38
-MORE_FEATURES_TIP = "更多功能：sz help 获取菜单"
+MORE_FEATURES_TIP = "更多功能：/sz help 获取菜单"
 CREATOR_WATERMARK_HIDDEN = False
 
 
@@ -919,6 +919,8 @@ def render_notice_card(
     now = str(view.get("now") or "").strip()
     note = str(view.get("note") or "").strip() or "请检查查询内容后重试。"
     accent = str(view.get("accent") or ACCENT)
+    is_error = bool(view.get("error"))
+    footer_text = str(view.get("footer") or "STALZONE · 查询结果")
 
     headline_labels = {
         "玩家": "没有找到这个玩家",
@@ -927,7 +929,10 @@ def render_notice_card(
         "战队": "没有找到这个战队",
         "平衡调整": "没有找到相关调整",
     }
-    headline = headline_labels.get(kind, "没有找到相关信息")
+    headline = str(
+        view.get("headline")
+        or headline_labels.get(kind, "没有找到相关信息")
+    )
     hints = {
         "玩家": "可尝试切换区服、检查角色名拼写，或直接提供 UUID。",
         "物品": "可尝试更短的关键词、检查物品 ID，或先查看候选。",
@@ -935,7 +940,9 @@ def render_notice_card(
         "战队": "可尝试切换区服、检查战队名/标签，或直接提供 UUID。",
         "平衡调整": "可尝试检查物品名/ID，或先确认物品是否存在。",
     }
-    hint = hints.get(kind, "可尝试检查查询内容后重试。")
+    hint = str(
+        view.get("hint") or hints.get(kind, "可尝试检查查询内容后重试。")
+    )
 
     query_max_w = min(640, width - 2 * PAD - 150)
     query_size = 56
@@ -968,8 +975,27 @@ def render_notice_card(
     draw = ImageDraw.Draw(canvas)
 
     # Large, deliberately low-contrast watermark.
-    draw.text((width - 404, 84), "404", font=ImageFont.truetype(str(display_path), 190), fill="#16222E")
-    draw.text((PAD, 32), "STALZONE / QUERY RESULT", font=eyebrow_font, fill=accent)
+    if is_error:
+        draw.text(
+            (width - PAD, 76),
+            str(view.get("watermark") or "RETRY"),
+            font=ImageFont.truetype(str(display_path), 130),
+            fill="#16222E",
+            anchor="ra",
+        )
+    else:
+        draw.text(
+            (width - 404, 84),
+            "404",
+            font=ImageFont.truetype(str(display_path), 190),
+            fill="#16222E",
+        )
+    draw.text(
+        (PAD, 32),
+        "STALZONE / SERVICE NOTICE" if is_error else "STALZONE / QUERY RESULT",
+        font=eyebrow_font,
+        fill=accent,
+    )
     draw.text(
         (width - PAD, 32),
         f"{region} · RESULT" if region else "RESULT",
@@ -1004,7 +1030,7 @@ def render_notice_card(
     )
 
     draw.line((PAD, footer_y, width - PAD, footer_y), fill=(90, 110, 130, 65), width=1)
-    draw.text((PAD, footer_y + 12), "STALZONE · 查询结果", font=footer_font, fill=MUTED)
+    draw.text((PAD, footer_y + 12), footer_text, font=footer_font, fill=MUTED)
     _draw_signature(
         draw, width, height - 50, path, footer_font, max_bottom=height,
     )

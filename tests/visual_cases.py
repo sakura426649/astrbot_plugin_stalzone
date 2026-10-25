@@ -259,6 +259,23 @@ def _notice() -> Path | None:
     return render_notice_card(view)
 
 
+def _notice_error() -> Path | None:
+    return render_notice_card(
+        {
+            "error": True,
+            "kind_label": "查询服务",
+            "query": "/sz 拍卖 冰霜",
+            "region": "EU",
+            "now": "2026-10-24 14:00",
+            "note": "官方数据服务暂时未响应，请稍后重试；连续失败请等待约 30 秒。",
+            "headline": "这次查询没有完成",
+            "hint": "请稍后重新发送查询；连续失败请等待约 30 秒。",
+            "accent": "#FFB454",
+            "footer": "STALZONE · 服务提示",
+        }
+    )
+
+
 def _diag() -> Path | None:
     info = {
         "version": "visual-test",
@@ -392,6 +409,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "auction_quantity_many": _auction_quantity_many,
     "candidate": _candidate,
     "notice": _notice,
+    "notice_error": _notice_error,
     "diag": _diag,
     "pass": _pass,
     "emission": _emission,

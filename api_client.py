@@ -32,7 +32,7 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 0.5
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/1.3.6"
+USER_AGENT = "astrbot-plugin-stalzone/1.3.7"
 
 _ITEM_ID_RE = re.compile(r"^[^\x00-\x1f/\\]{1,128}$")
 
@@ -153,19 +153,19 @@ class AuthenticationError(StalzoneAPIError):
 
 
 class RateLimitError(StalzoneAPIError):
-    user_message = "查询有点频繁，等几秒再试就好。"
+    user_message = "查询较为频繁，请稍后重试。"
 
 
 class ServerError(StalzoneAPIError):
-    user_message = "官方数据服务刚才没响应；通常再发一次就好，连续失败请等半分钟再试。"
+    user_message = "官方数据服务暂时未响应，请稍后重试；连续失败请等待约 30 秒。"
 
 
 class NetworkError(StalzoneAPIError):
-    user_message = "连接官方数据服务超时；通常再发一次就好。"
+    user_message = "连接官方数据服务超时，请稍后重试。"
 
 
 class ResponseError(StalzoneAPIError):
-    user_message = "官方数据返回有点异常，请再发一次试试。"
+    user_message = "官方数据返回异常，请稍后重试。"
 
 
 def normalize_base_url(value: str | None) -> str:

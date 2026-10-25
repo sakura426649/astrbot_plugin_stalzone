@@ -198,7 +198,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.6"
+PLUGIN_VERSION = "1.3.7"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -1530,9 +1530,22 @@ class StalzonePlugin(Star):
                 text = result
                 icon_url = None
         except StalzoneAPIError as exc:
-            # Technical detail goes to the log; QQ gets a safe message.
+            # Technical detail goes to the log; QQ gets a safe service card.
             logger.warning("STALZONE query failed (%s): %s", exc.__class__.__name__, exc)
             text = exc.user_message
+            notice_view = {
+                "error": True,
+                "kind_label": "查询服务",
+                "query": self._display_query(arg or sub),
+                "region": self._region().upper(),
+                "now": datetime.now(CST).strftime("%Y-%m-%d %H:%M"),
+                "note": exc.user_message,
+                "headline": "这次查询没有完成",
+                "hint": "请稍后重新发送查询；连续失败请等待约 30 秒。",
+                "accent": "#FFB454",
+                "footer": "STALZONE · 服务提示",
+            }
+            render_sub = "notice"
         except Exception:
             logger.exception("Unexpected STALZONE plugin error")
             text = "查询失败，请稍后再试。"
