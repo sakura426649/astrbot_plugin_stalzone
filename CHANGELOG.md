@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.2.1 - 2026-10-25
+
+### Fixed
+
+- `metadata.yaml` declared only `aiocqhttp` in `support_platforms`, so the plugin page still showed OneBot v11 as the sole supported platform. Added `qq_official` and `qq_official_webhook` (and mirrored them in `platforms`).
+
+### Tests
+
+- 193 tests and 12 visual signatures pass.
+
 ## 1.2.0 - 2026-10-25
 
 ### Added
