@@ -135,7 +135,9 @@ class BalanceHistory:
         return False
 
     @classmethod
-    def _extract_snippets(cls, text: str, names: list[str]) -> list[str]:
+    def _extract_snippets(
+        cls, text: str, names: list[str], *, header_only: bool = False
+    ) -> list[str]:
         lines = [line.strip() for line in str(text or "").splitlines()]
         snippets: list[str] = []
         index = 0
@@ -150,6 +152,13 @@ class BalanceHistory:
                 continue
             is_change = cls._looks_like_change(line)
             is_name_line = cls._is_name_line(line, names)
+            # Artifacts share names with stat terms (e.g. Frost, Burning);
+            # only an exact item header may start their block.
+            if header_only:
+                if not is_name_line:
+                    index += 1
+                    continue
+                is_change = False
             # Prose that merely mentions the item (e.g. a patch comment) must
             # not start a block, or the next weapon's table would be attached.
             if not is_change and not is_name_line:
@@ -165,7 +174,6 @@ class BalanceHistory:
                 if not candidate or candidate in {"|", "•"}:
                     continue
                 if cls._is_property_label(candidate):
-                    changes.append(candidate.strip(":：").strip())
                     continue
                 if cls._looks_like_header(candidate):
                     break
@@ -184,21 +192,26 @@ class BalanceHistory:
             index = max(cursor, index + 1)
         return snippets
 
-    def search(self, names: list[str]) -> dict[str, list[Any]]:
+    def search(
+        self, names: list[str], *, artifact: bool = False
+    ) -> dict[str, list[Any]]:
         names = [str(name).strip() for name in names if str(name or "").strip()]
         names = list(dict.fromkeys(names))
         if not names:
             return {"rows": [], "patches": []}
         rows = []
-        for row in self.weapon_rows:
-            haystack = f"{row.get('label', '')} {row.get('changes', '')}"
-            if any(self._contains(name, haystack) for name in names):
-                rows.append(
-                    {
-                        "label": self._clean(str(row.get("label") or "")),
-                        "changes": self._clean(str(row.get("changes") or "")),
-                    }
-                )
+        if not artifact:
+            for row in self.weapon_rows:
+                haystack = f"{row.get('label', '')} {row.get('changes', '')}"
+                if any(self._contains(name, haystack) for name in names):
+                    rows.append(
+                        {
+                            "label": self._clean(str(row.get("label") or "")),
+                            "changes": self._clean(
+                                str(row.get("changes") or "")
+                            ),
+                        }
+                    )
 
         by_date: dict[str, dict[str, Any]] = {}
         # Prefer the official announcement text: it is the complete record for
@@ -209,7 +222,9 @@ class BalanceHistory:
             if not date:
                 continue
             changes = self._extract_snippets(
-                str(patch.get("text") or ""), names
+                str(patch.get("text") or ""),
+                names,
+                header_only=artifact,
             )
             if changes:
                 by_date[date] = {
@@ -219,7 +234,7 @@ class BalanceHistory:
                     "changes": changes,
                 }
 
-        for patch in self.patches:
+        for patch in (() if artifact else self.patches):
             date = str(patch.get("date") or "")
             if not date or date in by_date:
                 continue

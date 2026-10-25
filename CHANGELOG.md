@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.1 - 2026-10-25
+
+### Fixed
+
+- Artifact balance-history search now starts only at an exact item header. Short artifact names such as `Frost`/`冰霜` no longer match stat lines, `Frost Troopers`, `Frost Razor` or `frost consumables`; property-only labels are skipped and the weapon-only curated index is not used for artifacts.
+- Expanded English balance-term translation: singular `Psy-emission`, Frost/thermal/bioinfection/bleeding/radiation resistance, instant healing, new-property phrases, nested values after arrows, and ASCII colons normalized to Chinese punctuation.
+
+### Tests
+
+- Added Frost false-positive and stat-translation coverage; 199 tests and 12 visual signatures pass.
+
 ## 1.3.0 - 2026-10-25
 
 ### Added

@@ -245,6 +245,18 @@ BALANCE_STAT_CN.update(
         "bonus properties": "额外属性",
         "additional properties": "附加属性",
         "main properties": "主属性",
+        "new property added": "新增属性",
+        "psy-emission": "精神辐射",
+        "psy-emissions": "精神辐射",
+        "psy-emission resistance": "精神辐射抗性",
+        "psy-emissions resistance": "精神辐射抗性",
+        "frost resistance": "寒冷抗性",
+        "thermal resistance": "高温抗性",
+        "bioinfection resistance": "生物感染抗性",
+        "biological infection resistance": "生物感染抗性",
+        "bleeding resistance": "流血抗性",
+        "radiation resistance": "辐射抗性",
+        "instant healing": "即时治疗",
         "type": "类型",
         "weak": "弱",
         "standard": "标准",
@@ -278,6 +290,13 @@ BALANCE_VALUE_CN = {
     "Medium": "中",
     "Low": "低",
 }
+BALANCE_PHRASE_CN = {
+    "replaced with": "替换为",
+    "new property added": "新增属性",
+    "additional properties": "附加属性",
+    "bonus properties": "额外属性",
+    "main properties": "主属性",
+}
 
 
 def _balance_values(text: str) -> str:
@@ -291,6 +310,20 @@ def _balance_values(text: str) -> str:
     return value
 
 
+def _balance_fragments(text: str) -> str:
+    """Translate known stat/phrase fragments inside mixed values."""
+    value = _balance_values(text)
+    translations = {**BALANCE_STAT_CN, **BALANCE_PHRASE_CN}
+    for source in sorted(translations, key=len, reverse=True):
+        value = re.sub(
+            r"(?<![A-Za-z])" + re.escape(source) + r"(?![A-Za-z])",
+            translations[source],
+            value,
+            flags=re.IGNORECASE,
+        )
+    return value.replace(": ", "：").replace(":", "：")
+
+
 def _balance_change_text(text: str) -> str:
     """Translate the label of an official English balance line.
 
@@ -298,14 +331,14 @@ def _balance_change_text(text: str) -> str:
     the official patch note.
     """
     value = str(text or "").strip().strip("|").strip()
-    if not value or re.search(r"[\u4e00-\u9fff]", value):
+    if not value:
         return value
     bare = value.rstrip(":：").strip()
     direct = BALANCE_STAT_CN.get(bare.casefold())
     if direct:
         if bare.casefold() in {"bonus properties", "additional properties", "main properties"}:
             return f"{direct}："
-        return direct
+        return _balance_fragments(direct)
 
     label_match = re.match(
         r"^(?P<label>[A-Za-z][A-Za-z .'’()/+-]*?)\s*[:：]\s*(?P<value>.+)$",
@@ -322,7 +355,7 @@ def _balance_change_text(text: str) -> str:
                 break
         translated = BALANCE_STAT_CN.get(label.casefold())
         if translated:
-            rest = _balance_values(label_match.group("value").strip())
+            rest = _balance_fragments(label_match.group("value").strip())
             return f"{prefix}{translated}：{rest}"
 
     for source in sorted(BALANCE_STAT_CN, key=len, reverse=True):
@@ -330,8 +363,10 @@ def _balance_change_text(text: str) -> str:
             r"^" + re.escape(source) + r"\s+(.+)$", value, re.IGNORECASE
         )
         if match:
-            return f"{BALANCE_STAT_CN[source]} {_balance_values(match.group(1))}"
-    return _balance_values(value)
+            return _balance_fragments(
+                f"{BALANCE_STAT_CN[source]} {match.group(1)}"
+            )
+    return _balance_fragments(value)
 
 
 def _balance_dedupe_key(text: str) -> str:

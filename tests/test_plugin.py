@@ -1331,7 +1331,7 @@ class BalanceHistoryTests(unittest.TestCase):
         self.assertIn("Damage: 39.8 → 39.1", text)
 
     def test_artifact_history(self):
-        result = self.history.search(["Polyhedron"])
+        result = self.history.search(["Polyhedron"], artifact=True)
         self.assertTrue(result["patches"])
         self.assertIn("2026-01-14", [patch["date"] for patch in result["patches"]])
         text = "\n".join(
@@ -1342,12 +1342,45 @@ class BalanceHistoryTests(unittest.TestCase):
         self.assertIn("78.5 → 45", text)
         self.assertNotIn("Damage to mutant", text)
 
+    def test_artifact_named_like_stat_uses_exact_headers(self):
+        result = self.history.search(
+            ["Frost", "冰霜", "Иней", "gyln"], artifact=True
+        )
+        dates = {patch["date"] for patch in result["patches"]}
+        self.assertIn("2025-09-03", dates)
+        self.assertNotIn("2026-02-04", dates)  # Frost Troopers mode
+        self.assertNotIn("2026-09-30", dates)  # Frost Razor weapon
+        changes = "\n".join(
+            change
+            for patch in result["patches"]
+            for change in patch["changes"]
+        )
+        self.assertNotIn("Frost Troopers", changes)
+        self.assertNotIn("Frost Razor", changes)
+        self.assertNotIn("frost consumables", changes)
+
+    def test_artifact_stat_terms_are_translated(self):
+        from formatters import _balance_change_text
+
+        cases = {
+            "Psy-emission: 1 → 2": "精神辐射",
+            "Reaction to laceration: 2% → Stamina: 9.7%": "耐力",
+            "New property added: Temperature: -0,192": "新增属性",
+            "Temperature replaced with Laceration protection: 2": "撕裂防护",
+            "Added Frost resistance: 75%": "寒冷抗性",
+            "Instant healing: 7.2": "即时治疗",
+        }
+        for source, expected in cases.items():
+            self.assertIn(expected, _balance_change_text(source))
+
     def test_item_without_history(self):
         result = self.history.search(["Hunter’s Suit", "猎人套装"])
         self.assertEqual(result, {"rows": [], "patches": []})
 
     def test_historical_artifact_patchnotes(self):
-        result = self.history.search(["Spiral", "螺旋", "Спираль", "gyq5"])
+        result = self.history.search(
+            ["Spiral", "螺旋", "Спираль", "gyq5"], artifact=True
+        )
         dates = {patch["date"] for patch in result["patches"]}
         self.assertTrue(
             {

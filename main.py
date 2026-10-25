@@ -198,7 +198,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.0"
+PLUGIN_VERSION = "1.3.1"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -2232,8 +2232,10 @@ class StalzonePlugin(Star):
             str(item.get("ru") or ""),
             str(item.get("id") or ""),
         ]
+        artifact = str(item.get("cat") or "").startswith("artefact")
+
         def search_and_format() -> str:
-            result = self.balance_history.search(names)
+            result = self.balance_history.search(names, artifact=artifact)
             return format_balance_history(display_name(item), result)
 
         text = await asyncio.to_thread(search_and_format)
