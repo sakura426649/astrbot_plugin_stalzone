@@ -1750,6 +1750,17 @@ class ItemIndexTests(unittest.TestCase):
         duplicate, duplicate_matches = self.index.resolve("变压器")
         self.assertIsNone(duplicate)
         self.assertGreaterEqual(len(duplicate_matches), 2)
+        # Same Chinese name for a weapon and another item must not silently
+        # pick the non-weapon entry.
+        for query in ("逆变器", "清道夫的AKS"):
+            item, matches = self.index.resolve(query)
+            self.assertIsNone(item)
+            self.assertTrue(
+                any(
+                    str(candidate.get("cat") or "").startswith("weapon/")
+                    for candidate in matches
+                )
+            )
 
     def test_non_artifact_derived_translations(self):
         premium = self.index.get("7l9d3")

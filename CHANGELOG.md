@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.5 - 2026-10-25
+
+### Fixed
+
+- Exact Chinese names shared by a weapon and another item (for example `逆变器` and `清道夫的AKS`) no longer silently resolve to the non-weapon entry; they now show candidates. A unique exact name such as `冰霜` still resolves directly.
+- Automatic storm alerts now accept only known QQ-compatible OneBot adapters (`aiocqhttp`, `onebot`, `qq`, `napcat`, `llonebot`, `lagrange`, `cqhttp`, `go-cqhttp`) instead of every non-official platform, preventing a numeric QQ whitelist from being sent through Telegram or another adapter.
+
+### Tests
+
+- Audited all 352 weapon and 104 artifact names for wrong auto-resolution; added duplicate Chinese name and non-QQ platform coverage. 202 tests and 12 visual signatures pass.
+
 ## 1.3.4 - 2026-10-25
 
 ### Fixed

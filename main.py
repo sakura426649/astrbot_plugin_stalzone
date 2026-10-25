@@ -198,11 +198,21 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.4"
+PLUGIN_VERSION = "1.3.5"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 OFFICIAL_PLATFORM_PREFIXES = ("qq_official",)
+AUTO_PLATFORM_PREFIXES = (
+    "aiocqhttp",
+    "onebot",
+    "qq",
+    "napcat",
+    "llonebot",
+    "lagrange",
+    "cqhttp",
+    "go-cqhttp",
+)
 
 
 def _split_region_suffix(value: str) -> tuple[str, str | None]:
@@ -479,9 +489,11 @@ class StalzonePlugin(Star):
 
     @classmethod
     def _is_auto_supported_platform(cls, platform: str) -> bool:
-        """QQ Official bots cannot push unsolicited alerts; other adapters can."""
-        text = str(platform or "").strip()
-        return bool(text) and not cls._is_official_platform(text)
+        """QQ-compatible OneBot adapters can push; official and other bots cannot."""
+        text = str(platform or "").strip().lower()
+        if not text or cls._is_official_platform(text):
+            return False
+        return any(token in text for token in AUTO_PLATFORM_PREFIXES)
 
     @classmethod
     def _group_number(cls, value: Any) -> str:

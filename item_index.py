@@ -369,9 +369,13 @@ class ItemIndex:
                 for item in matches
                 if q
                 and q == _normalize(_base_name(str(item.get("zh") or "")))
-                and not str(item.get("cat") or "").startswith("weapon/")
             ]
-            if len(chinese_exact) == 1:
+            if (
+                len(chinese_exact) == 1
+                and not str(chinese_exact[0].get("cat") or "").startswith(
+                    "weapon/"
+                )
+            ):
                 return chinese_exact[0], matches
             # A short token can match a weapon, its parts and a skin
             # ("mk47" → MK47 Mutant / MK47 parts / Melted MK47). Do not hide

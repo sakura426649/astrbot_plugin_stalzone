@@ -1392,6 +1392,16 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(plugin._auto_target_allowed(self.CUSTOM_ONEBOT_TARGET))
 
+    def test_non_qq_platform_is_not_auto_alert_target(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = ["123456"]
+        plugin._auto_state = {"platform": "telegram"}
+        self.assertEqual(plugin._notify_targets(), [])
+        self.assertFalse(
+            plugin._auto_target_allowed("telegram:GroupMessage:123456")
+        )
+
     def test_custom_onebot_full_umo_whitelist(self):
         plugin = self.make_plugin()
         plugin.config["emission_notify_target"] = ""
