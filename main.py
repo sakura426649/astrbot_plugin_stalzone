@@ -196,11 +196,10 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.2.1"
+PLUGIN_VERSION = "1.2.2"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-ONEBOT_PLATFORM_PREFIXES = ("aiocqhttp", "onebot")
 OFFICIAL_PLATFORM_PREFIXES = ("qq_official",)
 
 
@@ -468,11 +467,11 @@ class StalzonePlugin(Star):
             OFFICIAL_PLATFORM_PREFIXES
         )
 
-    @staticmethod
-    def _is_onebot_platform(platform: str) -> bool:
-        return str(platform or "").strip().lower().startswith(
-            ONEBOT_PLATFORM_PREFIXES
-        )
+    @classmethod
+    def _is_auto_supported_platform(cls, platform: str) -> bool:
+        """QQ Official bots cannot push unsolicited alerts; other adapters can."""
+        text = str(platform or "").strip()
+        return bool(text) and not cls._is_official_platform(text)
 
     @classmethod
     def _group_number(cls, value: Any) -> str:
@@ -493,22 +492,24 @@ class StalzonePlugin(Star):
         return {group for value in self._group_values(key) if (group := self._group_number(value))}
 
     def _platform_prefix(self) -> str:
+        state_platform = str(self._auto_state.get("platform") or "").strip()
+        if self._is_auto_supported_platform(state_platform):
+            return state_platform
         for value in (
-            self._auto_state.get("platform"),
             self._cfg("emission_notify_target", ""),
             self._auto_state.get("target"),
         ):
             prefix = self._platform_from_target(value)
-            if prefix and self._is_onebot_platform(prefix):
+            if self._is_auto_supported_platform(prefix):
                 return prefix
         for value in self._group_values("emission_group_whitelist"):
             prefix = self._platform_from_target(value)
-            if prefix and self._is_onebot_platform(prefix):
+            if self._is_auto_supported_platform(prefix):
                 return prefix
         return ""
 
     def _notify_targets(self) -> list[str]:
-        """Return allow-listed OneBot groups; QQ Official cannot push proactively."""
+        """Return allow-listed proactive groups; QQ Official is skipped."""
         blacklist = self._group_ids("emission_group_blacklist")
         whitelist = self._group_values("emission_group_whitelist")
         if not whitelist:
@@ -527,7 +528,7 @@ class StalzonePlugin(Star):
             else:
                 continue
             platform = self._platform_from_target(target)
-            if not self._is_onebot_platform(platform):
+            if not self._is_auto_supported_platform(platform):
                 continue
             if not group.isdigit():
                 continue
@@ -539,7 +540,9 @@ class StalzonePlugin(Star):
         group = self._group_key(target)
         if not group or not group.isdigit():
             return False
-        if not self._is_onebot_platform(self._platform_from_target(target)):
+        if not self._is_auto_supported_platform(
+            self._platform_from_target(target)
+        ):
             return False
         if group in self._group_ids("emission_group_blacklist"):
             return False
@@ -552,7 +555,7 @@ class StalzonePlugin(Star):
             return
         changed = False
         platform = self._platform_from_target(target)
-        if platform and self._is_onebot_platform(platform):
+        if platform and self._is_auto_supported_platform(platform):
             if self._auto_state.get("platform") != platform:
                 self._auto_state["platform"] = platform
                 changed = True

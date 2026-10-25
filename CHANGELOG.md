@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.2.2 - 2026-10-25
+
+### Fixed
+
+- Automatic storm alerts no longer require the platform ID to start with `aiocqhttp`/`onebot`. Any non-official adapter (including custom OneBot IDs such as `qq`, `napcat` or `aiocqhttp_1`) is accepted again; only `qq_official`/`qq_official_webhook` are excluded.
+- `_platform_prefix()` now reads the bare platform name stored in `emission_auto_state.json`, so numeric whitelists work after restart even when no target UMO has been cached yet.
+- Added regression coverage for custom OneBot adapter IDs and state-only platform prefixes; 195 tests pass.
+
 ## 1.2.1 - 2026-10-25
 
 ### Fixed

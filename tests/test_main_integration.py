@@ -998,6 +998,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
     OFFICIAL_WEBHOOK_TARGET = (
         "qq_official_webhook:GroupMessage:USER-111_GROUP-xyz789"
     )
+    CUSTOM_ONEBOT_TARGET = "qq:GroupMessage:123456"
 
     class Client(FakeClient):
         def __init__(self, payload):
@@ -1361,6 +1362,27 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             results.append(item)
         self.assertTrue(results)
         self.assertNotIn("target", plugin._auto_state)
+
+    def test_custom_onebot_platform_prefix_from_state(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = ["123456", "654321"]
+        plugin._auto_state = {"platform": "qq"}
+        self.assertEqual(
+            plugin._notify_targets(),
+            ["qq:GroupMessage:123456", "qq:GroupMessage:654321"],
+        )
+        self.assertTrue(plugin._auto_target_allowed(self.CUSTOM_ONEBOT_TARGET))
+
+    def test_custom_onebot_full_umo_whitelist(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = [
+            self.CUSTOM_ONEBOT_TARGET
+        ]
+        self.assertEqual(
+            plugin._notify_targets(), [self.CUSTOM_ONEBOT_TARGET]
+        )
 
     def test_whitelist_broadcasts_every_allowed_group(self):
         plugin = self.make_plugin()
