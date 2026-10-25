@@ -2754,7 +2754,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz 候选 <序号> — 使用最近一次候选继续查询",
         "/sz 调整 / 平衡 <武器/神器> — 查看 2023-2026 官方平衡调整记录",
         "/sz 通行证计算 <等级> <每日任务>[+超载] <剩余天数> [每周天数] — 计算通行证经验与等级预测",
-        "/sz clan / 战队 <战队名/标签/ID> [EU/RU/NA/SEA/NEA] — 查看战队资料",
+        "/sz clan / 战队 <战队名/标签/ID> [EU/RU/NA/SEA/NEA] — 查看战队资料；优先匹配名称括号内标签，长度不限",
         "/sz clans [页码] — 战队列表",
         "/sz operations [地图ID] — 最近行动记录",
         "/sz regions — 官方区服列表",

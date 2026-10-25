@@ -1616,8 +1616,8 @@ def render_help_card(
         (
             "战队",
             "CLAN",
-            "/sz 战队 <名称或4字母标签>",
-            ["查看战队等级、阵营与成员数", "4 字母标签精确匹配，不区分大小写"],
+            "/sz 战队 <名称/括号标签/ID>",
+            ["优先匹配名称括号内标签", "标签长度不限，不区分大小写"],
             "#FF6FB5",
         ),
         (
@@ -1715,7 +1715,7 @@ def render_help_card(
 
     draw.line((60, 1018, width - 60, 1018), fill="#2A3A4A", width=1)
 
-    footer = "数据：STALZONE 官方 API｜时间：UTC+8｜玩家/战队/风暴可加区服 EU/RU/NA/SEA/NEA｜背景：官方壁纸"
+    footer = "数据：STALZONE 官方 API｜时间：UTC+8｜玩家/战队/风暴可加区服 EU/RU/NA/SEA/NEA｜背景：可配置官方壁纸"
     draw.text((60, 1030), footer, font=small_font, fill="#8FA2B8")
     _draw_signature(
         draw,

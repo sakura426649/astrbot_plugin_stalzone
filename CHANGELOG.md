@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.9 - 2026-10-25
+
+### Changed
+
+- Updated the help card's clan entry: it now shows the parenthesized-tag priority and arbitrary tag length instead of the old `4-letter tag` wording.
+- Help/footer now says the background wallpaper is configurable.
+- Updated the text help line for clan lookup to match the new tag behavior.
+
+### Tests
+
+- Regenerated the 13 visual signatures; 206 tests pass.
+
 ## 1.3.8 - 2026-10-25
 
 ### Changed
