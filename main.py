@@ -198,7 +198,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.7"
+PLUGIN_VERSION = "1.3.8"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -213,6 +213,11 @@ AUTO_PLATFORM_PREFIXES = (
     "cqhttp",
     "go-cqhttp",
 )
+CLAN_NAME_TAG_RE = re.compile(
+    r"[\(（\[【]\s*([^()\[\]（）【】]{1,24})\s*[\)）\]】]"
+)
+CLAN_DIRECTORY_TTL = 300.0
+CLAN_DIRECTORY_MAX = 600
 
 
 def _split_region_suffix(value: str) -> tuple[str, str | None]:
@@ -222,6 +227,13 @@ def _split_region_suffix(value: str) -> tuple[str, str | None]:
     if len(parts) == 2 and parts[1].lower() in VALID_REGIONS:
         return parts[0].strip(), parts[1].lower()
     return text, None
+
+
+def _clan_name_tag(name: Any) -> str:
+    """Read the trailing bracketed tag from a clan display name."""
+    matches = CLAN_NAME_TAG_RE.findall(str(name or ""))
+    return matches[-1].strip().casefold() if matches else ""
+
 
 def _looks_like_image(data: bytes) -> bool:
     head = data[:16]
@@ -330,6 +342,7 @@ class StalzonePlugin(Star):
         self._http_base = ""
         self._icons_pruned_at = 0.0
         self._api_cache: dict[str, tuple[float, Any]] = {}
+        self._clan_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         self._api_cache_hits = 0
         self._api_cache_misses = 0
         self._api_semaphore: asyncio.Semaphore | None = None
@@ -1231,7 +1244,7 @@ class StalzonePlugin(Star):
             ),
             "clan": (
                 "战队",
-                "请检查战队名、4 位标签或 UUID；标签匹配不区分大小写。",
+                "战队名称错误或战队资料未公开；请检查战队名/标签，或稍后重试。",
             ),
             "balance": (
                 "平衡调整",
@@ -2266,6 +2279,61 @@ class StalzonePlugin(Star):
         text = await asyncio.to_thread(search_and_format)
         return PluginReply(text, icon_url=item.get("icon"))
 
+    async def _clan_directory(self, client: Any) -> list[dict[str, Any]]:
+        """Fetch the bounded clan directory once, with parallel page reads."""
+        region = str(getattr(client, "region", "") or "").lower()
+        now = time.monotonic()
+        cached = self._clan_cache.get(region)
+        if cached is not None and now - cached[0] < CLAN_DIRECTORY_TTL:
+            return list(cached[1])
+
+        first = await client.list_clans(limit=200, offset=0)
+        data = first.get("data") if isinstance(first, dict) else None
+        page = [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
+        by_id: dict[str, dict[str, Any]] = {}
+        for clan in page:
+            clan_id = str(clan.get("id") or "")
+            if clan_id:
+                by_id[clan_id] = clan
+        raw_total = first.get("totalClans") if isinstance(first, dict) else None
+        total = raw_total if isinstance(raw_total, int) else None
+        offsets: list[int] = []
+        if len(page) >= 200 and (total is None or total > 200):
+            limit = min(total or CLAN_DIRECTORY_MAX, CLAN_DIRECTORY_MAX)
+            offsets = list(range(200, limit, 200))
+
+        complete = True
+        if offsets:
+            pages = await asyncio.gather(
+                *(
+                    client.list_clans(limit=200, offset=offset)
+                    for offset in offsets
+                ),
+                return_exceptions=True,
+            )
+            for result in pages:
+                if isinstance(result, Exception):
+                    complete = False
+                    logger.warning(
+                        "STALZONE clan directory page failed: %s",
+                        type(result).__name__,
+                    )
+                    continue
+                rows = result.get("data") if isinstance(result, dict) else None
+                if not isinstance(rows, list):
+                    complete = False
+                    continue
+                for clan in rows:
+                    if not isinstance(clan, dict):
+                        continue
+                    clan_id = str(clan.get("id") or "")
+                    if clan_id:
+                        by_id[clan_id] = clan
+        clans = list(by_id.values())
+        if complete:
+            self._clan_cache[region] = (time.monotonic(), clans)
+        return clans
+
     async def _handle_clan(
         self, query: str, *, event: Any = None, region: str | None = None
     ) -> str | PluginReply:
@@ -2285,7 +2353,7 @@ class StalzonePlugin(Star):
                         "clan",
                         value,
                         region=client.region,
-                        note="未找到该 UUID 对应的战队，请检查 UUID 与区服。",
+                        note="战队 UUID 不存在，或战队资料未公开。",
                     )
                 return PluginReply(
                     format_clan(clan, client.region),
@@ -2293,55 +2361,51 @@ class StalzonePlugin(Star):
                     sub="clan",
                 )
 
-            q = value.casefold()
-            q_tag = q.strip("[]# ")
-            tag_only = bool(re.fullmatch(r"[a-z]{4}", q_tag))
-            exact: list[dict[str, Any]] = []
+            q = value.casefold().strip()
+            q_tag = q.strip("[]# ").strip()
+            paren_exact: list[dict[str, Any]] = []
+            field_exact: list[dict[str, Any]] = []
+            name_exact: list[dict[str, Any]] = []
             partial: list[dict[str, Any]] = []
-            seen: set[str] = set()
-            offset = 0
-            total: int | None = None
-            # /clans only supports pagination, not name search. Scan a bounded
-            # number of pages to keep latency predictable (max 600 clans).
-            for _ in range(3):
-                payload = await client.list_clans(limit=200, offset=offset)
-                data = payload.get("data")
-                page = [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
-                if total is None:
-                    raw_total = payload.get("totalClans")
-                    total = raw_total if isinstance(raw_total, int) else None
-                for clan in page:
-                    clan_id = str(clan.get("id") or "")
-                    if clan_id and clan_id in seen:
-                        continue
-                    if clan_id:
-                        seen.add(clan_id)
-                    name = str(clan.get("name") or "").casefold()
-                    tag = str(clan.get("tag") or "").casefold()
-                    if tag_only:
-                        if tag == q_tag:
-                            exact.append(clan)
-                        continue
-                    if q == name or q_tag == tag or q == f"{name} [{tag}]".casefold():
-                        exact.append(clan)
-                    elif q in name or (q_tag and q_tag in tag):
-                        partial.append(clan)
-                if total is not None and offset + len(page) >= total:
-                    break
-                if len(page) < 200:
-                    break
-                offset += 200
+            for clan in await self._clan_directory(client):
+                name = str(clan.get("name") or "").strip()
+                folded_name = name.casefold()
+                if not folded_name:
+                    continue
+                tag = str(clan.get("tag") or "").strip()
+                folded_tag = tag.casefold()
+                name_tag = _clan_name_tag(name)
+                label_shapes = {
+                    f"{folded_name} [{folded_tag}]" if folded_tag else "",
+                    f"{folded_name} ({folded_tag})" if folded_tag else "",
+                    f"{folded_name} （{folded_tag}）" if folded_tag else "",
+                    f"{folded_name} ({name_tag})" if name_tag else "",
+                }
+                if q_tag and q_tag == name_tag:
+                    paren_exact.append(clan)
+                elif q_tag and q_tag == folded_tag:
+                    field_exact.append(clan)
+                elif q == folded_name or q in label_shapes:
+                    name_exact.append(clan)
+                elif q in folded_name or (
+                    q_tag
+                    and (q_tag in folded_tag or q_tag in name_tag)
+                ):
+                    partial.append(clan)
 
-            matches = exact if tag_only else (exact or partial)
+            # Prefer the tag inside the clan name, then an exact full name,
+            # then the official tag field, finally partial name/tag matches.
+            matches = paren_exact or name_exact or field_exact or partial
             if not matches:
-                if tag_only:
-                    return self._not_found(
-                        "clan",
-                        q_tag,
-                        region=client.region,
-                        note=f"没有找到标签 [{q_tag}] 的战队。",
-                    )
-                return self._not_found("clan", query, region=client.region)
+                return self._not_found(
+                    "clan",
+                    query,
+                    region=client.region,
+                    note=(
+                        "战队名称错误或战队资料未公开。"
+                        "请检查战队名/标签，或稍后重试。"
+                    ),
+                )
             if len(matches) == 1:
                 clan = matches[0]
                 return PluginReply(

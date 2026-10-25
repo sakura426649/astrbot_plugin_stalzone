@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.8 - 2026-10-25
+
+### Changed
+
+- Clan lookup now prioritizes the tag inside the clan name's parentheses, then an exact full name, then the official tag field, and finally partial matches. Tags are no longer restricted to four letters.
+- Clan not-found messages now say `战队名称错误或战队资料未公开`, covering private clan profiles instead of implying a query bug.
+- Clan directory reads are faster: the first page is fetched once, remaining pages (up to 600 clans) are fetched in parallel, and the directory is cached for five minutes.
+- Clan descriptions now strip PDA colour codes like player bios and keep their line breaks.
+
+### Tests
+
+- Added arbitrary tag length, parenthesized-tag priority, directory cache, private-profile message and PDA-description coverage; 206 tests and 13 visual signatures pass.
+
 ## 1.3.7 - 2026-10-25
 
 ### Changed

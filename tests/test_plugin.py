@@ -1968,6 +1968,18 @@ class V2FormatterTests(unittest.TestCase):
         )
         self.assertIn("阵营 佣兵", text)
 
+    def test_clan_description_strips_pda_codes(self):
+        clan = {
+            "id": "abc",
+            "name": "Clan #1",
+            "tag": "TAG",
+            "description": "§c红色简介§r\n§#FFAA00第二行§r",
+        }
+        text = format_clan(clan, "eu")
+        self.assertNotIn("§", text)
+        self.assertIn("红色简介", text)
+        self.assertIn("第二行", text)
+
     def test_faction_labels(self):
         clan = {
             "id": "abc",

@@ -674,6 +674,23 @@ def _fmt_duration(seconds: Any) -> str:
     return f"{minutes // 60} 小时 {minutes % 60} 分"
 
 
+def _clan_description_lines(value: Any, limit: int = 300) -> list[str]:
+    """Strip PDA colour codes from a clan description and compact it."""
+    text = str(value or "").strip()
+    if not text:
+        return []
+    try:
+        from .pda_format import strip_pda_formatting
+    except ImportError:
+        from pda_format import strip_pda_formatting
+    text = strip_pda_formatting(text)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    text = "\n".join(lines)
+    if len(text) > limit:
+        text = text[: limit - 1].rstrip() + "…"
+    return text.splitlines()
+
+
 def _clan_line(clan: dict[str, Any]) -> str:
     name = str(clan.get("name") or "未知战队")
     tag = clan.get("tag")
@@ -2367,9 +2384,9 @@ def format_clan(clan: dict[str, Any], region: str) -> str:
         f"成立：{_fmt_dt(clan.get('registrationTime'), with_year=True)}",
     ]
     sections = [("概况", overview)]
-    description = str(clan.get("description") or "").strip()
-    if description:
-        sections.append(("简介", [description[:300]]))
+    description_lines = _clan_description_lines(clan.get("description"))
+    if description_lines:
+        sections.append(("简介", description_lines))
     sections.append(("标识", [f"ID：{clan.get('id')}"]))
     return _card(
         "STALZONE · 战队",

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.3.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -32,7 +32,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Auto emission alert | OneBot only; inactive when the allow-list is empty; polls once a minute in the 2–4h window and sends one alert to every allow-listed group, deny-list wins |
 | Platform support | Queries and image replies work on OneBot (`aiocqhttp`) and QQ Official Bot (`qq_official` / `qq_official_webhook`); automatic storm alerts are OneBot-only |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
-| Clan | Search by name, tag or UUID; exact 4-letter tag matching; clan list |
+| Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
 | Item | 2,615 bilingual entries, 1,338 detail records, 826 bundled common icons plus an optional 2,600-icon extension pack |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
@@ -75,7 +75,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | `/sz candidate <number>` | Replay the previous query with a candidate |
 | `/sz balance <item>` | Official balance-change history |
 | `/sz pass <level> <daily> [overload] <days>` | Season-pass level prediction |
-| `/sz clan <name/tag/UUID>` | Clan profile; 4-letter tags are exact matches |
+| `/sz clan <name/tag/UUID>` | Clan profile; parenthesized tags take priority and any tag length works |
 | `/sz clans [page]` | Clan list |
 | `/sz operations [map]` | Recent operation sessions |
 | `/sz regions` | Official region list |

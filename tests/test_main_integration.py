@@ -189,6 +189,58 @@ class TagClient(FakeClient):
         return payload
 
 
+class ParenthesizedClanClient(FakeClient):
+    async def list_clans(self, limit=100, offset=0):
+        return {
+            "totalClans": 2,
+            "data": [
+                {
+                    "id": "p1",
+                    "name": "Alpha (LONG)",
+                    "tag": "FIELD1",
+                    "level": 1,
+                    "levelPoints": 1,
+                    "alliance": "duty",
+                    "memberCount": 1,
+                    "leader": "A",
+                },
+                {
+                    "id": "p2",
+                    "name": "Beta",
+                    "tag": "LONG",
+                    "level": 1,
+                    "levelPoints": 1,
+                    "alliance": "freedom",
+                    "memberCount": 1,
+                    "leader": "B",
+                },
+            ],
+        }
+
+
+class CountingClanClient(FakeClient):
+    def __init__(self):
+        self.calls = []
+        self.clans = [
+            {
+                "id": f"c{index}",
+                "name": f"Clan {index}",
+                "tag": f"T{index:03d}",
+                "level": 1,
+                "levelPoints": 1,
+                "alliance": "duty",
+                "memberCount": 1,
+                "leader": "A",
+            }
+            for index in range(401)
+        ]
+
+    async def list_clans(self, limit=100, offset=0):
+        self.calls.append((limit, offset))
+        page = self.clans[offset : offset + limit]
+        return {"totalClans": len(self.clans), "data": page}
+
+
 class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     def make_plugin(self):
         return StalzonePlugin(
@@ -716,15 +768,38 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Clan #1 [TAG]", text)
         self.assertIn("User token", text)
 
-    async def test_clan_four_letter_tag(self):
+    async def test_clan_tag_length_and_parenthesized_priority(self):
         plugin = self.make_plugin()
-        plugin._make_client = lambda: TagClient()  # type: ignore[assignment]
-        text = await collect(plugin, "/sz 战队 [rsht]")
-        self.assertIn("[RSHT]", text)
+        plugin._make_client = lambda: ParenthesizedClanClient()  # type: ignore[assignment]
+        # "LONG" is both a tag in Alpha's name and Beta's tag field; the
+        # parenthesized name tag wins.
+        text = await collect(plugin, "/sz 战队 [long]")
+        self.assertIn("Alpha (LONG) [FIELD1]", text)
+        self.assertNotIn("Beta", text)
+        # Tags are not restricted to four letters.
+        text = await collect(plugin, "/sz 战队 FIELD1")
+        self.assertIn("Alpha (LONG) [FIELD1]", text)
+        # Without a tag match, fall back to the full name.
+        text = await collect(plugin, "/sz 战队 Beta")
+        self.assertIn("Beta [LONG]", text)
 
-        # Four letters are always treated as a tag, never a name substring.
-        text = await collect(plugin, "/sz 战队 clan")
-        self.assertIn("没有找到标签 [clan]", text)
+    async def test_clan_directory_is_cached(self):
+        plugin = self.make_plugin()
+        client = CountingClanClient()
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        await collect(plugin, "/sz 战队 does-not-exist")
+        first_calls = len(client.calls)
+        self.assertEqual(first_calls, 3)
+        await collect(plugin, "/sz 战队 does-not-exist")
+        self.assertEqual(len(client.calls), first_calls)
+
+    async def test_clan_not_found_mentions_private_profile(self):
+        plugin = self.make_plugin()
+        client = CountingClanClient()
+        client.clans = []
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        text = await collect(plugin, "/sz 战队 unknown")
+        self.assertIn("战队名称错误或战队资料未公开", text)
 
     async def test_operations(self):
         plugin = self.make_plugin()

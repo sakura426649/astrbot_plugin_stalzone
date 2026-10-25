@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.3.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -69,7 +69,7 @@
 | **自动风暴提醒** | 仅 OneBot 群可用；白名单非空时才工作；只在上一场结束后的 2–4 小时窗口内每分钟查询，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询。QQ 官方机器人受被动回复限制，不参与自动提醒 |
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
-| **战队** | 按名称、标签或 UUID 查询；4 个英文字母的标签精确匹配，不区分大小写；支持战队列表 |
+| **战队** | 按名称、标签或 UUID 查询；优先匹配名称括号内的标签，标签长度不限、不区分大小写；支持战队列表 |
 | **物品图鉴** | 2,615 件物品的中/英/俄/ID 索引，1,338 件详情；基础包内置 826 个常用图标，完整 2,600 图标通过扩展包安装 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 168 份 2023–2026 官方补丁公告，按物品列出全部改动，支持武器、神器与配件 |
@@ -119,7 +119,7 @@
 | `/sz 候选 <序号>` | 使用最近一次候选继续原查询 | `/sz 候选 1` |
 | `/sz 调整 <装备>` | 官方平衡调整历史 | `/sz 调整 螺旋` |
 | `/sz 通行证计算 <等级> <每日任务> [天数]` | 通行证经验与等级预测 | `/sz 通行证计算 15 15+2 20` |
-| `/sz clan <名称/标签/UUID>` | 战队资料；4 字母标签精确匹配 | `/sz 战队 RSHT` |
+| `/sz clan <名称/标签/UUID>` | 战队资料；优先匹配名称括号内的标签，标签长度不限 | `/sz 战队 RSHT` |
 | `/sz clans [页码]` | 战队列表 | `/sz 战队列表 2` |
 | `/sz operations [地图ID]` | 最近行动记录 | `/sz 行动 operation_bigcleanup` |
 | `/sz regions` | 官方区服列表 | `/sz 区服` |
@@ -319,7 +319,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **203 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 82%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **206 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 82%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 
