@@ -1723,6 +1723,20 @@ class ItemIndexTests(unittest.TestCase):
         variant, _ = self.index.resolve("X95 (A)")
         self.assertEqual(variant["id"], "lyv9k")
 
+    def test_short_weapon_token_prefers_base_over_skin(self):
+        mk47, _ = self.index.resolve("mk47")
+        self.assertEqual(mk47["id"], "4q0gl")
+        self.assertEqual(mk47["cat"], "weapon/assault_rifle")
+        mp7, _ = self.index.resolve("mp7")
+        self.assertEqual(mp7["id"], "lylnq")
+        self.assertEqual(mp7["cat"], "weapon/submachine_gun")
+        # Explicit skin names still resolve to the skin.
+        skin, _ = self.index.resolve("melted mk47")
+        self.assertEqual(skin["id"], "knlvj")
+        # Ambiguous two-character weapon tokens show candidates instead of an
+        # arbitrary suffix match.
+        self.assertIsNone(self.index.resolve("m4")[0])
+
     def test_non_artifact_derived_translations(self):
         premium = self.index.get("7l9d3")
         self.assertIsNotNone(premium)

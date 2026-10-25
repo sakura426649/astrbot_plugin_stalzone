@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.2 - 2026-10-25
+
+### Fixed
+
+- Short weapon tokens now resolve to the base weapon instead of a skin: `mk47` → `MK47 突变体`, `mp7` → `HK MP7A2`. When matches contain exactly one weapon, that weapon wins before suffix matching; explicit skin names such as `熔融 MK47` still resolve to the skin.
+- Ambiguous two-character tokens such as `m4` now return candidates instead of an arbitrary suffix match.
+
+### Tests
+
+- Added MK47/MP7/skin/ambiguous-token resolver coverage; 200 tests and 12 visual signatures pass.
+
 ## 1.3.1 - 2026-10-25
 
 ### Fixed

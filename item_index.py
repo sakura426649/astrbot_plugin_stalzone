@@ -355,12 +355,24 @@ class ItemIndex:
                 return english[0], matches
             if len(english) > 1:
                 return None, matches
-            # "x95" should resolve to "IWI Tavor X95" (the base weapon),
-            # not to "X95 (A)" whose stripped base name is also "X95".
-            suffix = [
+            # A short weapon token such as "mk47" or "mp7" must resolve to
+            # the base weapon, not a skin whose name merely contains it.
+            weapons = [
                 item
                 for item in matches
-                if q
+                if str(item.get("cat") or "").startswith("weapon/")
+            ]
+            if len(weapons) == 1:
+                return weapons[0], matches
+            # "x95" should resolve to "IWI Tavor X95" (the base weapon),
+            # not to "X95 (A)" whose stripped base name is also "X95".
+            # Skip very short tokens so "m4" offers candidates instead of
+            # picking an arbitrary suffix match.
+            suffix = [
+                item
+                for item in weapons
+                if len(q) >= 3
+                and q
                 and _normalize(item.get("en")).endswith(q)
                 and _normalize(item.get("en")) != q
                 and not _PAREN_RE.search(str(item.get("en") or ""))
