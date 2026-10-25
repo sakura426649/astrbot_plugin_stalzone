@@ -361,6 +361,18 @@ class ItemIndex:
                 return english[0], matches
             if len(english) > 1:
                 return None, matches
+            # "冰霜" is an exact Chinese artifact name; don't turn it into
+            # candidates just because other items contain the same substring.
+            # Weapon bases are deferred so "x95" still prefers the base rifle.
+            chinese_exact = [
+                item
+                for item in matches
+                if q
+                and q == _normalize(_base_name(str(item.get("zh") or "")))
+                and not str(item.get("cat") or "").startswith("weapon/")
+            ]
+            if len(chinese_exact) == 1:
+                return chinese_exact[0], matches
             # A short token can match a weapon, its parts and a skin
             # ("mk47" → MK47 Mutant / MK47 parts / Melted MK47). Do not hide
             # the skin by choosing the weapon; show candidates instead.

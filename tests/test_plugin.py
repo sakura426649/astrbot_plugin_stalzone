@@ -1742,6 +1742,15 @@ class ItemIndexTests(unittest.TestCase):
         # arbitrary suffix match.
         self.assertIsNone(self.index.resolve("m4")[0])
 
+    def test_exact_chinese_artifact_name_wins(self):
+        item, matches = self.index.resolve("冰霜")
+        self.assertEqual(item["id"], "gyln")
+        self.assertEqual(item["cat"], "artefact/thermal")
+        # Genuine duplicate names still require a choice.
+        duplicate, duplicate_matches = self.index.resolve("变压器")
+        self.assertIsNone(duplicate)
+        self.assertGreaterEqual(len(duplicate_matches), 2)
+
     def test_non_artifact_derived_translations(self):
         premium = self.index.get("7l9d3")
         self.assertIsNotNone(premium)

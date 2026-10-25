@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.4 - 2026-10-25
+
+### Fixed
+
+- A unique exact Chinese base name now wins before the mixed-category candidate check: `冰霜` resolves directly to the Frost artifact (`gyln`), while true duplicates such as `变压器` still show candidates. Weapon variants keep the existing base-weapon behavior (`x95`), and `mk47`/`mp7` still show candidates including skins.
+
+### Tests
+
+- Added exact-Chinese artifact vs duplicate-name coverage; 201 tests and 12 visual signatures pass.
+
 ## 1.3.3 - 2026-10-25
 
 ### Changed
