@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.6 - 2026-10-25
+
+### Changed
+
+- Temporary API failures now use friendly, actionable messages instead of `官方 API 暂时不可用`: users are told to send the query again, and to wait about half a minute after repeated failures. Rate-limit and timeout messages were softened too.
+- No extra retry sleep was added: the client already makes up to 3 attempts with non-blocking 0.5s/1.0s backoff (plus jitter); 429 honors `Retry-After` up to 2s, and the circuit opens for 30s after repeated failures.
+
+### Tests
+
+- Added user-facing error message coverage; 203 tests and 12 visual signatures pass.
+
 ## 1.3.5 - 2026-10-25
 
 ### Fixed
