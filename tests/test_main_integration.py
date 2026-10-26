@@ -1074,6 +1074,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         "qq_official_webhook:GroupMessage:USER-111_GROUP-xyz789"
     )
     CUSTOM_ONEBOT_TARGET = "qq:GroupMessage:123456"
+    UNIQUE_ONEBOT_TARGET = "aiocqhttp:GroupMessage:111222_333444"
 
     class Client(FakeClient):
         def __init__(self, payload):
@@ -1466,6 +1467,23 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             ["qq:GroupMessage:123456", "qq:GroupMessage:654321"],
         )
         self.assertTrue(plugin._auto_target_allowed(self.CUSTOM_ONEBOT_TARGET))
+
+    def test_onebot_unique_session_normalizes_to_group(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_notify_target"] = ""
+        plugin.config["emission_group_whitelist"] = ["333444"]
+        plugin._auto_state = {"platform": "aiocqhttp"}
+        self.assertEqual(plugin._group_key(self.UNIQUE_ONEBOT_TARGET), "333444")
+        self.assertTrue(
+            plugin._auto_target_allowed(self.UNIQUE_ONEBOT_TARGET)
+        )
+        self.assertEqual(
+            plugin._notify_targets(), ["aiocqhttp:GroupMessage:333444"]
+        )
+        plugin.config["emission_group_whitelist"] = [self.UNIQUE_ONEBOT_TARGET]
+        self.assertEqual(
+            plugin._notify_targets(), ["aiocqhttp:GroupMessage:333444"]
+        )
 
     def test_non_qq_platform_is_not_auto_alert_target(self):
         plugin = self.make_plugin()

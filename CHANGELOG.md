@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.10 - 2026-10-25
+
+### Fixed
+
+- OneBot `unique_session` UMOs such as `aiocqhttp:GroupMessage:111222_333444` are now parsed to the group id `333444`, and proactive targets are normalized back to `platform:GroupMessage:group` instead of the sender-specific session.
+- Automatic alerts again accept custom OneBot adapter IDs. Instead of requiring an `aiocqhttp`/`onebot` prefix, only clearly non-QQ platforms (Telegram, Discord, Slack, Matrix, Feishu/Lark, WeChat/WeCom, DingTalk and Mattermost) are rejected.
+
+### Tests
+
+- Added unique-session normalization and custom-adapter coverage; 207 tests and 13 visual signatures pass.
+
 ## 1.3.9 - 2026-10-25
 
 ### Changed

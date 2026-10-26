@@ -198,20 +198,22 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.9"
+PLUGIN_VERSION = "1.3.10"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 OFFICIAL_PLATFORM_PREFIXES = ("qq_official",)
-AUTO_PLATFORM_PREFIXES = (
-    "aiocqhttp",
-    "onebot",
-    "qq",
-    "napcat",
-    "llonebot",
-    "lagrange",
-    "cqhttp",
-    "go-cqhttp",
+NON_QQ_PLATFORM_PREFIXES = (
+    "telegram",
+    "discord",
+    "slack",
+    "matrix",
+    "feishu",
+    "lark",
+    "wechat",
+    "wecom",
+    "dingtalk",
+    "mattermost",
 )
 CLAN_NAME_TAG_RE = re.compile(
     r"[\(（\[【]\s*([^()\[\]（）【】]{1,24})\s*[\)）\]】]"
@@ -474,10 +476,15 @@ class StalzonePlugin(Star):
         index = upper.find("GROUP-")
         if index >= 0:
             key = session[index:]
-        elif "USER-" in upper:
-            return ""
         else:
-            key = session
+            # aiocqhttp unique_session uses "{sender_id}_{group_id}".
+            parts = session.split("_")
+            if len(parts) > 1 and parts[-1].isdigit():
+                key = parts[-1]
+            elif "USER-" in upper:
+                return ""
+            else:
+                key = session
         if key.isdigit() or key.upper().startswith("GROUP-"):
             return key if GROUP_KEY_RE.fullmatch(key) else ""
         return ""
@@ -506,7 +513,9 @@ class StalzonePlugin(Star):
         text = str(platform or "").strip().lower()
         if not text or cls._is_official_platform(text):
             return False
-        return any(token in text for token in AUTO_PLATFORM_PREFIXES)
+        # Custom OneBot adapter IDs are common; only reject clearly non-QQ
+        # platforms.
+        return not text.startswith(NON_QQ_PLATFORM_PREFIXES)
 
     @classmethod
     def _group_number(cls, value: Any) -> str:
@@ -556,19 +565,20 @@ class StalzonePlugin(Star):
             group = self._group_number(value)
             if not group or group in blacklist or group in seen:
                 continue
-            if self._has_group_umo(value):
-                target = str(value).strip()
-            elif prefix:
-                target = f"{prefix}:GroupMessage:{group}"
-            else:
-                continue
-            platform = self._platform_from_target(target)
+            explicit_platform = (
+                self._platform_from_target(value)
+                if self._has_group_umo(value)
+                else ""
+            )
+            platform = explicit_platform or prefix
             if not self._is_auto_supported_platform(platform):
                 continue
             if not group.isdigit():
                 continue
             seen.add(group)
-            targets.append(target)
+            # Normalize away aiocqhttp unique_session's "{sender}_{group}"
+            # suffix so the proactive alert targets the group, not a member.
+            targets.append(f"{platform}:GroupMessage:{group}")
         return targets
 
     def _auto_target_allowed(self, target: str) -> bool:
