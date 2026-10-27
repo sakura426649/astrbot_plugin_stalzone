@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.11 - 2026-10-25
+
+### Fixed
+
+- Long auction names now truncate only the base name while keeping the trailing `＋level` visible; `伊里奇灯泡…` can no longer hide `＋15`.
+- Stacked item names likewise keep `×amount` when the base name is shortened, in both the active table and recent trades.
+
+### Tests
+
+- Added suffix-preserving name-fit coverage; 208 tests and 13 visual signatures pass.
+
 ## 1.3.10 - 2026-10-25
 
 ### Fixed

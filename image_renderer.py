@@ -1055,6 +1055,31 @@ def _fit_text(draw: Any, text: str, font: Any, max_width: int) -> str:
     return (trimmed + "…") if trimmed else "…"
 
 
+def _fit_auction_name(
+    draw: Any, text: str, font: Any, max_width: int
+) -> str:
+    """Truncate the base name but keep `＋level` / `×amount` visible."""
+    value = str(text)
+    marker = ""
+    for candidate in ("＋", "×"):
+        index = value.rfind(candidate)
+        if index <= 0:
+            continue
+        tail = value[index + 1 :]
+        if tail and re.fullmatch(r"\d[\d,]*", tail):
+            marker = candidate
+            suffix = value[index:]
+            base = value[:index].rstrip()
+            break
+    if not marker:
+        return _fit_text(draw, value, font, max_width)
+    suffix_w = int(draw.textlength(suffix, font=font))
+    if max_width <= suffix_w + 12:
+        return _fit_text(draw, suffix, font, max_width)
+    fitted = _fit_text(draw, base, font, max_width - suffix_w - 4)
+    return f"{fitted}{suffix}"
+
+
 def _find_display_font(explicit: str | None = None) -> Path | None:
     """Prefer a bold CJK face for the emission poster, then the configured font."""
     if ImageFont is None:
@@ -3352,7 +3377,12 @@ def render_auction_card(
                     )
                     y += line_h
                     continue
-                name = _fit_text(draw, str(row.get("name", "")), body_font, name_right - left - 12)
+                name = _fit_auction_name(
+                    draw,
+                    str(row.get("name", "")),
+                    body_font,
+                    name_right - left - 12,
+                )
                 color = str(row.get("color") or TEXT)
                 draw.text((left, y), name, font=body_font, fill=color)
                 values = [
@@ -3413,7 +3443,7 @@ def render_auction_card(
             else:
                 y += 4
             for row in group.get("rows") or []:
-                name = _fit_text(
+                name = _fit_auction_name(
                     draw,
                     str(row.get("name", "")),
                     body_font,

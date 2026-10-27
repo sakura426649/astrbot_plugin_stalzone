@@ -92,6 +92,7 @@ from image_renderer import (  # noqa: E402
     find_cjk_font,
     set_card_background,
     _artifact_label_color,
+    _fit_auction_name,
     _stat_direction,
     faction_icon_path,
     item_color,
@@ -2030,6 +2031,27 @@ class V2FormatterTests(unittest.TestCase):
 
 
 class ImageRendererTests(unittest.TestCase):
+    def test_auction_name_fit_keeps_level_and_amount_suffix(self):
+        from PIL import Image, ImageDraw, ImageFont
+
+        font_path = find_cjk_font()
+        if font_path is None:
+            self.skipTest("No CJK font")
+        font = ImageFont.truetype(str(font_path), 19)
+        draw = ImageDraw.Draw(Image.new("RGB", (400, 60)))
+        artifact = _fit_auction_name(
+            draw, "伊里奇 灯泡(Ilyich Lamp)＋15", font, 150
+        )
+        self.assertTrue(artifact.endswith("＋15"))
+        self.assertIn("…", artifact)
+        self.assertLessEqual(draw.textlength(artifact, font=font), 150)
+        stack = _fit_auction_name(
+            draw, "7.62毫米穿甲燃烧弹×100", font, 150
+        )
+        self.assertTrue(stack.endswith("×100"))
+        self.assertIn("…", stack)
+        self.assertLessEqual(draw.textlength(stack, font=font), 150)
+
     def test_card_background_preset_and_opacity(self):
         from PIL import Image
 
