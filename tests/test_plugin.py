@@ -92,6 +92,7 @@ from image_renderer import (  # noqa: E402
     find_cjk_font,
     set_card_background,
     _artifact_label_color,
+    _auction_name_column_width,
     _fit_auction_name,
     _stat_direction,
     faction_icon_path,
@@ -2051,6 +2052,15 @@ class ImageRendererTests(unittest.TestCase):
         self.assertTrue(stack.endswith("×100"))
         self.assertIn("…", stack)
         self.assertLessEqual(draw.textlength(stack, font=font), 150)
+
+    def test_auction_name_column_reserves_recent_indent(self):
+        # A 140px name in both tables must keep six pixels of slack after the
+        # recent list's 16px indent; the old budget left exactly zero.
+        width = _auction_name_column_width(140.0, 140.0, 0.0, 360.0)
+        self.assertGreater(width - 28, 140.0)
+        self.assertEqual(
+            _auction_name_column_width(500.0, 500.0, 0.0, 360.0), 360.0
+        )
 
     def test_card_background_preset_and_opacity(self):
         from PIL import Image

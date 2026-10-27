@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.12 - 2026-10-27
+
+### Fixed
+
+- Short auction names are no longer clipped in the recent-trades table: the name column now budgets active and recent rows separately, including the recent list's 16px indent. A five-character artifact such as `伊里奇 灯泡` keeps its full name and `＋15`.
+- Name-fit samples now use real catalog items instead of synthetic long labels, so the layout result matches what a group actually sees.
+
+### Tests
+
+- Added name-column budget coverage; 209 tests and 13 visual signatures pass.
+
 ## 1.3.11 - 2026-10-25
 
 ### Fixed

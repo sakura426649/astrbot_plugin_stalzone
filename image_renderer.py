@@ -1080,6 +1080,29 @@ def _fit_auction_name(
     return f"{fitted}{suffix}"
 
 
+def _auction_name_column_width(
+    active_width: float,
+    recent_width: float,
+    badge_extra: float,
+    cap: float,
+) -> float:
+    """Budget the name column for both tables, including the recent indent.
+
+    Recent rows start 16px to the right of the active rows and still end 12px
+    before the price column, so their text needs 28px of the column itself.
+    Six extra pixels keep a five-character name from ending in an ellipsis on
+    rounding alone.
+    """
+    return min(
+        max(
+            160.0,
+            active_width + 18 + badge_extra,
+            recent_width + 34 + badge_extra,
+        ),
+        cap,
+    )
+
+
 def _find_display_font(explicit: str | None = None) -> Path | None:
     """Prefer a bold CJK face for the emission poster, then the configured font."""
     if ImageFont is None:
@@ -3094,16 +3117,28 @@ def render_auction_card(
         and any(row.get("lowest") for row in active_rows + recent_rows)
         else 0.0
     )
-    name_w = min(
-        max(
-            160.0,
-            max(
-                (_text_width(row.get("name", ""), body_font) for row in active_rows + recent_rows),
-                default=38.0,
-            )
-            + 28
-            + badge_extra,
+    # Active rows start at `left` with 12px of right padding, while recent
+    # rows are indented 16px under their quality group and use the same
+    # endpoint. Budget each table separately; otherwise a five-character name
+    # loses a character in the recent list simply because of that indent.
+    active_name_w = max(
+        (_text_width(row.get("name", ""), body_font) for row in active_rows),
+        default=38.0,
+    )
+    recent_name_w = max(
+        (
+            _text_width(row.get("name", ""), body_font)
+            for group in groups
+            if isinstance(group, dict)
+            for row in (group.get("rows") or [])
+            if isinstance(row, dict)
         ),
+        default=38.0,
+    )
+    name_w = _auction_name_column_width(
+        active_name_w,
+        recent_name_w,
+        badge_extra,
         380.0 if non_artifact else 360.0,
     )
 
