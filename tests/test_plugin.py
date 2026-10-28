@@ -1686,6 +1686,17 @@ class BalanceHistoryTests(unittest.TestCase):
         )
         self.assertIn("Damage: 39.8 → 39.1", text)
 
+    def test_latest_october_patch_is_queryable(self):
+        result = self.history.search(["FN Scar-H"])
+        dates = {patch["date"] for patch in result["patches"]}
+        self.assertIn("2026-10-28", dates)
+        text = "\n".join(
+            change
+            for patch in result["patches"]
+            for change in patch["changes"]
+        )
+        self.assertIn("45.1 → 44.6", text)
+
     def test_artifact_history(self):
         result = self.history.search(["Polyhedron"], artifact=True)
         self.assertTrue(result["patches"])
@@ -2027,6 +2038,21 @@ class ItemIndexTests(unittest.TestCase):
         self.assertTrue(self.index.ready)
         self.assertGreater(len(self.index.items), 2500)
         self.assertEqual([item["id"] for item in self.index.items if not item["zh"]], [])
+
+    def test_new_season_items_resolve_with_icons(self):
+        self.assertGreaterEqual(len(self.index.items), 2636)
+        for query, item_id in (
+            ("阿萨梅", "g4v2p"),
+            ("PTRD-M 麻醉弹", "ojmm"),
+            ("5.45 扩容弹匣", "kn9mp"),
+            ("改装版柯尔特沃克", "5lndo"),
+        ):
+            item, matches = self.index.resolve(query)
+            self.assertIsNotNone(item, query)
+            self.assertEqual(item["id"], item_id)
+            self.assertTrue(
+                (PLUGIN_ROOT / "item_icons" / f"{item_id}.png").is_file()
+            )
 
     def test_chinese_artifact(self):
         item, matches = self.index.resolve("寒冰")

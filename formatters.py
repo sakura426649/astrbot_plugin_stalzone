@@ -148,6 +148,7 @@ ITEM_STAT_CN = {
     "Ergonomics": "人体工学",
     "Attack Speed": "攻击速度",
     "Penetration": "穿透",
+    "Chance for a deep wound": "深度伤口概率",
     "Maximum damage": "最高伤害",
     "Magazine size": "弹匣容量",
     "Magazine size:": "弹匣容量",
@@ -2570,7 +2571,7 @@ def format_item(item: dict[str, Any], details: dict[str, Any] | None = None) -> 
         "STALZONE · 物品",
         [name],
         sections,
-        f"查实时价格：/sz auction {item.get('id', '')}｜图标与属性来自 STALZONE WIKI｜中文名来自社区汉化（非官方）",
+        f"查实时价格：/sz auction {item.get('id', '')}｜图标与属性来自 STALZONE WIKI / 官方物品库｜中文名来自社区汉化（非官方）",
     )
 
 

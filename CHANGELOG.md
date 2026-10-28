@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.5.0 - 2026-10-29
+
+### Added
+
+- Synced the item database with the 2026-10-28 game update: 21 new official items, including Athame (`阿萨梅`), Modified Colt Walker (`改装版柯尔特沃克`), PTRD-M tranquilizer rounds, CR-380 Battery, 5.45 Extended Magazine and the autumn26 motifs/tokens/crates.
+- Item names were regenerated from `zh_new.lang`; new items carry Chinese names, English/Russian names, categories, official icons and item details (descriptions, stats) from the official EXBO database.
+- Added official icons for the new items to both the bundled icon set (828) and the full icon set (2,621).
+
+### Balance history
+
+- Added the 2026-10-28 Patch Notes to `/sz 调整`: AR/sniper/MG/SMG/pistol/shotgun/attachment/armor changes, event reward randomization, and the Detector Components sale-limit adjustment. Queries such as `/sz 调整 FN Scar-H` and `/sz 调整 SR-3M` now surface the 10-28 values.
+
+### Tests
+
+- Added new-item resolution/icon coverage and a 2026-10-28 balance regression; 220 tests and 13 visual signatures pass.
+
 ## 1.4.4 - 2026-10-28
 
 ### Fixed

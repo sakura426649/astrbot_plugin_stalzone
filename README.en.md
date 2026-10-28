@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.4.4-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.5.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -33,7 +33,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Platform support | Queries and image replies work on OneBot (`aiocqhttp`) and QQ Official Bot (`qq_official` / `qq_official_webhook`); automatic storm alerts are OneBot-only |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
-| Item | 2,615 bilingual entries, 1,338 detail records, 826 bundled common icons plus an optional 2,600-icon extension pack |
+| Item | 2,636 bilingual entries, 1,359 detail records, 828 bundled common icons plus an optional 2,621-icon extension pack |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction, no game API request |
@@ -48,8 +48,8 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 ## Quick start
 
 1. Install the plugin in AstrBot:
-   - **GitHub users** download [`astrbot_plugin_stalzone_full.zip`](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/astrbot_plugin_stalzone_full.zip) (all 2,600 icons) and import it;
-   - **Marketplace users** use the small `astrbot_plugin_stalzone.zip` (under 16 MiB, 826 common icons).
+   - **GitHub users** download [`astrbot_plugin_stalzone_full.zip`](https://github.com/sakura426649/astrbot_plugin_stalzone/releases/latest/download/astrbot_plugin_stalzone_full.zip) (all 2,621 icons) and import it;
+   - **Marketplace users** use the small `astrbot_plugin_stalzone.zip` (under 16 MiB, 828 common icons).
 2. Get a `Client-Id` and `Client-Secret` from the [STALZONE API application page](https://eapi.stalzone.com/registration.html).
 3. Configure the credentials and set `region` to your server (`eu`, `ru`, `na` or `sea`).
 4. Reload/restart AstrBot and try:
