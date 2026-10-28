@@ -1077,7 +1077,7 @@ def build_auction_view(
         if quantity_quality_count > 1:
             active_note = (
                 f"按数量与品质聚合：{quantity_count} 种数量 / "
-                f"{quantity_quality_count} 种品质 / {active_total:,} 条在售；"
+                f"{quantity_quality_count} 种品质 / {active_total:,} 条在售\n"
                 "品质高→低；每种组合最低买断，竞拍更低并列"
             )
         else:
@@ -1208,9 +1208,15 @@ def build_auction_view(
     else:
         limit = 3
     total_limit = limit if non_artifact else None
+    recent_grouped_quality = False
     if non_artifact:
         rows = recent.get(None, [])[:limit]
-        if rows:
+        recent_qualities = {
+            row.get("quality") for row in rows if row.get("quality") is not None
+        }
+        if rows and len(recent_qualities) <= 1:
+            # Quality groups already make the cheap rows obvious; the badge
+            # stays only for the ordinary single-quality list.
             unit_values = [
                 row.get("unit_value", 0) for row in rows if row.get("unit_value", 0) > 0
             ]
@@ -1221,14 +1227,37 @@ def build_auction_view(
                         row["lowest"] = True
                         row["lowest_label"] = "最低单价"
                         break
-        groups = [
-            {
-                "quality": None,
-                "label": "",
-                "color": item_color or "#E7EDF5",
-                "rows": rows,
-            }
-        ] if rows else []
+        if len(recent_qualities) > 1:
+            recent_grouped_quality = True
+            groups = []
+            for quality in sorted(
+                {row.get("quality") for row in rows},
+                key=lambda value: -1 if value is None else value,
+                reverse=True,
+            ):
+                groups.append(
+                    {
+                        "quality": quality,
+                        "label": (
+                            quality_label(quality)
+                            if quality is not None
+                            else "品质未标注"
+                        ),
+                        "color": _quality_color(quality),
+                        "rows": [
+                            row for row in rows if row.get("quality") == quality
+                        ],
+                    }
+                )
+        else:
+            groups = [
+                {
+                    "quality": None,
+                    "label": "",
+                    "color": item_color or "#E7EDF5",
+                    "rows": rows,
+                }
+            ] if rows else []
     else:
         groups = []
         for quality in sorted(
@@ -1284,6 +1313,7 @@ def build_auction_view(
         "recent_groups": groups,
         "recent_limit": limit,
         "recent_total_limit": total_limit,
+        "recent_grouped_quality": recent_grouped_quality,
         "non_artifact": non_artifact,
         "history_only": before is not None,
         "before": before_label,
@@ -1388,10 +1418,17 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             scope = "最多"
         else:
             scope = "每品质最多"
-        lines.extend([
-            "",
-            f"历史成交（截至 {view['before']}，{scope} {view['recent_limit']} 条，按时间倒序）",
-        ])
+        if view.get("recent_grouped_quality"):
+            history_heading = (
+                f"历史成交（截至 {view['before']}，最多 "
+                f"{view['recent_limit']} 条，按品质分组，组内时间倒序）"
+            )
+        else:
+            history_heading = (
+                f"历史成交（截至 {view['before']}，{scope} "
+                f"{view['recent_limit']} 条，按时间倒序）"
+            )
+        lines.extend(["", history_heading])
         if is_non_artifact:
             lines.append("  名称  成交价  单价  时间")
     else:
@@ -1421,7 +1458,7 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                     f"{row['remaining']}"
                 )
             if view.get("active_note"):
-                lines.append(str(view["active_note"]))
+                lines.extend(str(view["active_note"]).split("\n"))
         else:
             active_heading = "在售（按买断价从高到低）"
             if view.get("active_grouped"):
@@ -1460,7 +1497,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 lines.append("当前无在售")
             if view.get("active_note"):
                 lines.append(str(view["active_note"]))
-        if view.get("recent_total_limit") is not None:
+        if view.get("recent_grouped_quality"):
+            recent_heading = (
+                f"最近成交（最多 {view['recent_total_limit']} 条，"
+                "按品质分组，组内时间倒序）"
+            )
+        elif view.get("recent_total_limit") is not None:
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"
             )
@@ -1482,8 +1524,9 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 )
                 marker = f" [{marker_text}]" if row.get("lowest") else ""
                 if is_non_artifact:
+                    row_name = row["name"] if label else _text_name(row)
                     lines.append(
-                        f"  {_text_name(row)}{marker}  {row['price']}  "
+                        f"  {row_name}{marker}  {row['price']}  "
                         f"{row['unit_price']}  {row['time']}"
                     )
                 else:

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.15 - 2026-10-27
+
+### Changed
+
+- Recent trades for multi-quality stackables are grouped by quality as well (gold to white), with colored group headers and a "按品质分组，组内时间倒序" heading; the global ten-row cap still applies before grouping.
+- The "最低单价" badge is no longer shown in these quality-grouped recent lists, since the per-quality groups already make the cheap rows obvious. Single-quality items keep the badge and the old flat list.
+- Long quantity notes can use two lines instead of being clipped.
+
+### Tests
+
+- Extended module-core coverage for grouped recent trades and badge suppression; 210 tests and 13 visual signatures pass.
+
 ## 1.3.14 - 2026-10-27
 
 ### Changed

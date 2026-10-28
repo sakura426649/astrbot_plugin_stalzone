@@ -3297,12 +3297,17 @@ def render_auction_card(
     if history_only:
         height = header_h + 32 + history_header_h + groups_h + tail_h
     else:
+        note_lines = [
+            line
+            for line in str(view.get("active_note") or "").split("\n")
+            if line
+        ]
         active_h = 30 + sum(
             group_h if row.get("quality_header") else line_h
             for row in active
         )
-        if view.get("active_note"):
-            active_h += 24
+        if note_lines:
+            active_h += 24 * len(note_lines)
         recent_h = 32 + history_header_h + groups_h
         height = header_h + active_h + 35 + recent_h + tail_h
     max_height = (
@@ -3366,7 +3371,12 @@ def render_auction_card(
     y = header_h
     draw.line((PAD, y - 18, width - PAD, y - 18), fill=BORDER, width=1)
     if history_only:
-        draw.text((left, y), "历史成交（按时间倒序）", font=head_font, fill=ACCENT)
+        history_heading = (
+            "历史成交（按品质分组，组内时间倒序）"
+            if view.get("recent_grouped_quality")
+            else "历史成交（按时间倒序）"
+        )
+        draw.text((left, y), history_heading, font=head_font, fill=ACCENT)
         y += 28
         note = str(view.get("history_note") or "")
         if note:
@@ -3434,12 +3444,12 @@ def render_auction_card(
         else:
             draw.text((left, y), "当前无在售", font=body_font, fill=MUTED)
             y += line_h
-        if view.get("active_note"):
+        for note_line in note_lines:
             draw.text(
                 (left, y),
                 _fit_text(
                     draw,
-                    str(view.get("active_note")),
+                    note_line,
                     small_font,
                     width - 2 * PAD,
                 ),
@@ -3450,7 +3460,12 @@ def render_auction_card(
         y += 18
         draw.line((PAD, y, width - PAD, y), fill=BORDER, width=1)
         y += 18
-        if view.get("recent_total_limit") is not None:
+        if view.get("recent_grouped_quality"):
+            recent_heading = (
+                f"最近成交（最多 {view['recent_total_limit']} 条，"
+                "按品质分组，组内时间倒序）"
+            )
+        elif view.get("recent_total_limit") is not None:
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，按时间倒序）"
             )

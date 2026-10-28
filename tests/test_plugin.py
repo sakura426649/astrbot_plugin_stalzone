@@ -502,7 +502,7 @@ class FormatterTests(unittest.TestCase):
                     "amount": 1,
                     "price": 1000 + index,
                     "time": f"2026-10-22T{index:02d}:00:00Z",
-                    "additional": {"qlt": 0 if index % 2 else 3},
+                    "additional": {"qlt": 0},
                 }
                 for index in range(10)
             ]
@@ -567,10 +567,16 @@ class FormatterTests(unittest.TestCase):
             "prices": [
                 {
                     "amount": 1,
+                    "price": 1400,
+                    "time": "2026-10-22T06:00:00Z",
+                    "additional": {"qlt": 5},
+                },
+                {
+                    "amount": 1,
                     "price": 800,
                     "time": "2026-10-22T05:00:00Z",
                     "additional": {"qlt": 3},
-                }
+                },
             ]
         }
         view = build_auction_view(
@@ -613,13 +619,28 @@ class FormatterTests(unittest.TestCase):
             if not row.get("quality_header")
         ]
         self.assertEqual(ordered_qualities, [5, 4, 2])
-        recent = view["recent_groups"][0]["rows"][0]
-        self.assertEqual(recent["color"], QUALITY_COLORS[3])
+        recent_labels = [group["label"] for group in view["recent_groups"]]
+        self.assertEqual(recent_labels, ["传奇（金）", "稀有（粉）"])
+        self.assertEqual(
+            view["recent_groups"][0]["rows"][0]["color"], QUALITY_COLORS[5]
+        )
+        self.assertEqual(
+            view["recent_groups"][1]["rows"][0]["color"], QUALITY_COLORS[3]
+        )
+        self.assertFalse(
+            any(
+                row.get("lowest")
+                for group in view["recent_groups"]
+                for row in group["rows"]
+            )
+        )
         text = format_auction_text(view)
         self.assertIn("按数量与品质汇总", text)
         self.assertIn("【传奇｜1 种数量】", text)
         self.assertIn("【独特｜1 种数量】", text)
-        self.assertIn("模块核心（稀有）", text)
+        self.assertIn("【传奇】", text)
+        self.assertIn("【稀有】", text)
+        self.assertNotIn("模块核心（稀有）", text)
 
         ranked = build_auction_view(
             "wg53",
