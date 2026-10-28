@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.2 - 2026-10-28
+
+### Added
+
+- `/sz 拍卖 模块核心 蓝` now applies the quality filter. Without a filter the recent list stays at three rows per quality; with a quality filter it shows up to ten rows of that quality, keeps the quality group header, drops the lowest-price badge, and labels the filter under the active table.
+
+### Performance
+
+- Wallpaper resize/brighten/blur results are cached per background and card size, and normalized item icons are cached per icon file; warm auction renders drop to roughly 0.04s from about 0.10s on the test machine.
+- Module-core history fetches shrink to 30 rows (10 when a quality is selected) instead of 100; module lots fetch 200 only when a filter needs the extra coverage.
+
+### Tests
+
+- Added module-core quality-filter/history-limit coverage; 217 tests and 13 visual signatures pass.
+
 ## 1.4.1 - 2026-10-28
 
 ### Changed

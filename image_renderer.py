@@ -12,6 +12,7 @@ import re
 import tempfile
 import time
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -537,6 +538,16 @@ def _normalize_icon(icon: Any, size: int) -> Any:
     return icon
 
 
+@lru_cache(maxsize=128)
+def _normalized_icon_cached(path: str, stamp_ns: int, size: int) -> Any:
+    return _normalize_icon(Image.open(path), size)
+
+
+def _load_normalized_icon(icon_path: str | Path, size: int) -> Any:
+    path = Path(icon_path)
+    return _normalized_icon_cached(str(path), path.stat().st_mtime_ns, size)
+
+
 def _paste_corner_icon(
     image: Any,
     icon_path: str | Path | None,
@@ -550,7 +561,7 @@ def _paste_corner_icon(
     if image is None or icon_path is None or Image is None:
         return False
     try:
-        icon = _normalize_icon(Image.open(icon_path), size)
+        icon = _load_normalized_icon(icon_path, size)
         left = width - pad - size + (size - icon.width) // 2
         icon_top = top + (size - icon.height) // 2
         image.paste(icon, (left, icon_top), icon)
@@ -570,7 +581,7 @@ def _draw_candidate_icon(
     if canvas is None or Image is None:
         return False
     try:
-        icon = _normalize_icon(Image.open(icon_path), size)
+        icon = _load_normalized_icon(icon_path, size)
         if ImageEnhance is not None:
             alpha = icon.getchannel("A")
             rgb = ImageEnhance.Brightness(icon.convert("RGB")).enhance(1.12)
@@ -627,6 +638,23 @@ def _draw_candidate_icon_frame(
     )
 
 
+@lru_cache(maxsize=6)
+def _background_base(
+    path: str, stamp_ns: int, width: int, height: int
+) -> Any:
+    """Resize/brighten/blur a wallpaper once per card size.
+
+    Auction cards are rendered repeatedly at the same few heights; avoiding
+    a fresh LANCZOS fit and Gaussian blur on every query removes the largest
+    fixed cost in image output.  ``stamp_ns`` keeps the cache honest when the
+    user swaps a custom background file.
+    """
+    base = Image.open(path).convert("RGB")
+    base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
+    base = ImageEnhance.Brightness(base).enhance(0.48)
+    return base.filter(ImageFilter.GaussianBlur(1.4))
+
+
 def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
     """Dark, wallpaper-backed canvas with a readable translucent card."""
     if Image is None or ImageDraw is None:
@@ -642,10 +670,12 @@ def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
             or not background.is_file()
         ):
             raise OSError("background unavailable")
-        base = Image.open(background).convert("RGB")
-        base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
-        base = ImageEnhance.Brightness(base).enhance(0.48)
-        base = base.filter(ImageFilter.GaussianBlur(1.4))
+        base = _background_base(
+            str(background),
+            background.stat().st_mtime_ns,
+            width,
+            height,
+        )
         canvas = base.convert("RGBA")
     except Exception:
         canvas = Image.new("RGBA", (width, height), (16, 25, 35, 255))
@@ -3467,6 +3497,14 @@ def render_auction_card(
         if view.get("recent_per_quality"):
             recent_heading = (
                 f"最近成交（每品质最多 {view.get('recent_limit', 3)} 条，"
+                "按时间倒序）"
+            )
+        elif (
+            view.get("recent_grouped_quality")
+            and view.get("recent_total_limit") is None
+        ):
+            recent_heading = (
+                f"最近成交（每品质最多 {view.get('recent_limit', 10)} 条，"
                 "按时间倒序）"
             )
         elif view.get("recent_grouped_quality"):

@@ -202,7 +202,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.4.1"
+PLUGIN_VERSION = "1.4.2"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -1699,7 +1699,7 @@ class StalzonePlugin(Star):
         item_name_color = (
             item_rank_color(item_color) if non_artifact else None
         )
-        if non_artifact and not module_mode:
+        if non_artifact and not module_mode and not per_quality_recent:
             quality_filter = None
         short_label = (label or item_id).split(" / ", 1)[0].strip()
 
@@ -1713,7 +1713,7 @@ class StalzonePlugin(Star):
                 elif per_quality_recent:
                     # Three rows per quality; keep enough headroom for six
                     # quality groups when walking back to the requested date.
-                    fetch_limit = 20
+                    fetch_limit = 10 if quality_filter is not None else 20
                 elif non_artifact:
                     fetch_limit = 10
                 elif quality_filter is not None:
@@ -1784,11 +1784,31 @@ class StalzonePlugin(Star):
                     errors = []
                 else:
                     # Fetch concurrently; one failed side should not hide the other.
+                    history_fetch_limit = 100
+                    if per_quality_recent:
+                        history_fetch_limit = (
+                            10 if quality_filter is not None else 30
+                        )
+                    elif module_mode:
+                        history_fetch_limit = 30
                     results = await asyncio.gather(
                         client.get_auction_lots(
-                            item_id, limit=200 if module_mode else 100
+                            item_id,
+                            limit=(
+                                200
+                                if (
+                                    module_mode
+                                    or (
+                                        per_quality_recent
+                                        and quality_filter is not None
+                                    )
+                                )
+                                else 100
+                            ),
                         ),
-                        client.get_auction_history(item_id, limit=100),
+                        client.get_auction_history(
+                            item_id, limit=history_fetch_limit
+                        ),
                         return_exceptions=True,
                     )
                     lots, history = results

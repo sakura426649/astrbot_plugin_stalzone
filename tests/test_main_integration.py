@@ -418,6 +418,56 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.auction_view["recent_per_quality"])
         self.assertIsNone(result.auction_view["recent_total_limit"])
 
+    async def test_module_core_quality_filter_shows_ten_history_rows(self):
+        class CoreClient(FakeClient):
+            async def get_auction_lots(self, item_id, limit=50):
+                return {
+                    "total": 2,
+                    "lots": [
+                        {
+                            "amount": 1,
+                            "startPrice": 100,
+                            "buyoutPrice": 1000,
+                            "endTime": "2026-10-29T06:00:00Z",
+                            "additional": {"qlt": 2},
+                        },
+                        {
+                            "amount": 5,
+                            "startPrice": 100,
+                            "buyoutPrice": 5000,
+                            "endTime": "2026-10-29T06:00:00Z",
+                            "additional": {"qlt": 3},
+                        },
+                    ],
+                }
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {
+                    "total": 15,
+                    "prices": [
+                        {
+                            "amount": 1,
+                            "price": 1000 + index,
+                            "time": f"2026-10-28T{index:02d}:00:00Z",
+                            "additional": {"qlt": 2 if index < 12 else 3},
+                        }
+                        for index in range(15)
+                    ],
+                }
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: CoreClient()  # type: ignore[assignment]
+        result = await plugin._handle_auction("模块核心 蓝")
+        self.assertIsInstance(result, PluginReply)
+        view = result.auction_view
+        self.assertFalse(view["recent_per_quality"])
+        self.assertEqual(view["quality_filter"], 2)
+        self.assertIsNone(view["recent_total_limit"])
+        self.assertEqual(view["recent_limit"], 10)
+        self.assertEqual(len(view["recent_groups"]), 1)
+        self.assertEqual(view["recent_groups"][0]["label"], "特殊（蓝）")
+        self.assertEqual(len(view["recent_groups"][0]["rows"]), 10)
+
     async def test_weapon_module_filters_quality_and_affix(self):
         class ModuleClient(FakeClient):
             def __init__(self):

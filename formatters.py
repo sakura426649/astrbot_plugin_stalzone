@@ -1107,7 +1107,7 @@ def build_auction_view(
     history = [entry for entry in history if (_safe_int(entry.get("price")) or 0) > 0]
     if module_mode:
         non_artifact = True
-    if non_artifact and not module_mode:
+    if non_artifact and not module_mode and not per_quality_recent:
         quality_filter = None
 
     affix_terms = [
@@ -1121,11 +1121,9 @@ def build_auction_view(
 
     if quality_filter is not None:
         def _entry_quality(entry: dict[str, Any]) -> int | None:
-            return (
-                _quality_of(entry)
-                if module_mode
-                else _effective_quality(entry, non_artifact)
-            )
+            if module_mode or per_quality_recent:
+                return _quality_of(entry)
+            return _effective_quality(entry, non_artifact)
 
         lots = [
             lot for lot in lots if _entry_quality(lot) == quality_filter
@@ -1431,7 +1429,9 @@ def build_auction_view(
             "其他品质按 +等级保留最低价，组内按价格倒序"
         )
 
-    if module_mode and (quality_filter is not None or affix_terms):
+    if (module_mode or per_quality_recent) and (
+        quality_filter is not None or affix_terms
+    ):
         filter_parts: list[str] = []
         if quality_filter is not None:
             filter_parts.append(
@@ -1481,6 +1481,10 @@ def build_auction_view(
         per_quality_recent
         and not module_mode
         and history_limit is None
+        and quality_filter is None
+    )
+    quality_filtered_core = bool(
+        per_quality_recent and not module_mode and quality_filter is not None
     )
     if history_limit is not None:
         limit = max(1, min(history_limit, 200))
@@ -1493,7 +1497,9 @@ def build_auction_view(
     else:
         limit = 3
     total_limit = (
-        None if per_quality_mode else (limit if non_artifact else None)
+        None
+        if (per_quality_mode or quality_filtered_core)
+        else (limit if non_artifact else None)
     )
     recent_grouped_quality = False
     if non_artifact:
@@ -1504,7 +1510,11 @@ def build_auction_view(
             row.get("quality") for row in rows if row.get("quality") is not None
         }
         recent_grouped_quality = (
-            (len(recent_qualities) > 1 or per_quality_mode)
+            (
+                len(recent_qualities) > 1
+                or per_quality_mode
+                or quality_filtered_core
+            )
             and not module_mode
         )
         if per_quality_mode and not recent_grouped_quality:
@@ -1805,6 +1815,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             if view.get("active_note"):
                 lines.extend(str(view["active_note"]).split("\n"))
         if view.get("recent_per_quality"):
+            recent_heading = (
+                f"最近成交（每品质最多 {view['recent_limit']} 条，按时间倒序）"
+            )
+        elif (
+            view.get("recent_grouped_quality")
+            and view.get("recent_total_limit") is None
+        ):
             recent_heading = (
                 f"最近成交（每品质最多 {view['recent_limit']} 条，按时间倒序）"
             )
