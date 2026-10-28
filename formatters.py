@@ -1015,26 +1015,70 @@ def build_auction_view(
                     row.pop("lowest_label", None)
                     row.pop("badges", None)
                     quantity_rows.append(row)
-        active = sorted(
-            quantity_rows,
-            key=lambda row: (
-                row.get("offer_unit_value", 0),
-                int(row.get("amount") or 1),
-                -1 if row.get("quality") is None else int(row["quality"]),
-                0 if row.get("offer_kind") == "auction" else 1,
-            ),
-        )
         quantity_mode = True
         quantity_count = len(distinct_amounts)
         quantity_quality_count = len(
             {quality for _, quality in quantity_keys if quality is not None}
         )
+        if quantity_quality_count > 1:
+            # Quality first, then cheapest unit price inside each quality:
+            # a cheap white listing must not push every other quality down.
+            active = sorted(
+                quantity_rows,
+                key=lambda row: (
+                    -(
+                        -1
+                        if row.get("quality") is None
+                        else int(row["quality"])
+                    ),
+                    row.get("offer_unit_value", 0),
+                    int(row.get("amount") or 1),
+                    0 if row.get("offer_kind") == "auction" else 1,
+                ),
+            )
+            amounts_by_quality: dict[int | None, set[int]] = {}
+            for row in active:
+                quality = row.get("quality")
+                amounts_by_quality.setdefault(quality, set()).add(
+                    int(row.get("amount") or 1)
+                )
+            grouped_rows: list[dict[str, Any]] = []
+            current_quality: object = object()
+            for row in active:
+                quality = row.get("quality")
+                if quality != current_quality:
+                    current_quality = quality
+                    label = (
+                        quality_label(quality).split("（", 1)[0]
+                        if quality is not None
+                        else "品质未标注"
+                    )
+                    count = len(amounts_by_quality.get(quality, set()))
+                    grouped_rows.append(
+                        {
+                            "quality_header": True,
+                            "quality": quality,
+                            "name": f"{label}｜{count} 种数量",
+                            "color": _quality_color(quality),
+                        }
+                    )
+                grouped_rows.append(row)
+            active = grouped_rows
+        else:
+            active = sorted(
+                quantity_rows,
+                key=lambda row: (
+                    row.get("offer_unit_value", 0),
+                    int(row.get("amount") or 1),
+                    0 if row.get("offer_kind") == "auction" else 1,
+                ),
+            )
         active_truncated = False
         if quantity_quality_count > 1:
             active_note = (
                 f"按数量与品质聚合：{quantity_count} 种数量 / "
                 f"{quantity_quality_count} 种品质 / {active_total:,} 条在售；"
-                "每种组合最低买断，竞拍更低并列"
+                "品质高→低；每种组合最低买断，竞拍更低并列"
             )
         else:
             active_note = (
@@ -1368,8 +1412,11 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 "  名称  单价  总价  剩余时间",
             ])
             for row in view["active"]:
+                if row.get("quality_header"):
+                    lines.append(f"【{row['name']}】")
+                    continue
                 lines.append(
-                    f"  {_text_name(row)}  {row['unit_price']}  "
+                    f"  {row['name']}  {row['unit_price']}  "
                     f"{row.get('offer_total_display') or row['buyout']}  "
                     f"{row['remaining']}"
                 )

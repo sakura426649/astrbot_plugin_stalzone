@@ -585,8 +585,19 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertTrue(view["quantity_mode"])
         self.assertEqual(view["quantity_quality_count"], 3)
+        headers = [
+            row["name"]
+            for row in view["active"]
+            if row.get("quality_header")
+        ]
+        self.assertEqual(
+            headers,
+            ["传奇｜1 种数量", "独特｜1 种数量", "特殊｜1 种数量"],
+        )
         by_key = {
-            (row["amount"], row["quality"]): row for row in view["active"]
+            (row["amount"], row["quality"]): row
+            for row in view["active"]
+            if not row.get("quality_header")
         }
         # Same amount, different qualities remain separate rows; each keeps
         # its own quality color and the existing lowest-offer-per-group rule.
@@ -596,12 +607,19 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(by_key[(1, 2)]["color"], QUALITY_COLORS[2])
         self.assertEqual(by_key[(5, 4)]["name"], "模块核心×5")
         self.assertEqual(by_key[(5, 4)]["color"], QUALITY_COLORS[4])
+        ordered_qualities = [
+            row["quality"]
+            for row in view["active"]
+            if not row.get("quality_header")
+        ]
+        self.assertEqual(ordered_qualities, [5, 4, 2])
         recent = view["recent_groups"][0]["rows"][0]
         self.assertEqual(recent["color"], QUALITY_COLORS[3])
         text = format_auction_text(view)
         self.assertIn("按数量与品质汇总", text)
-        self.assertIn("模块核心（传奇）", text)
-        self.assertIn("模块核心（特殊）", text)
+        self.assertIn("【传奇｜1 种数量】", text)
+        self.assertIn("【独特｜1 种数量】", text)
+        self.assertIn("模块核心（稀有）", text)
 
         ranked = build_auction_view(
             "wg53",

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.14 - 2026-10-27
+
+### Changed
+
+- Multi-quality stackable non-artifacts now group by quality from gold down to white, with a colored quality header per group; unit price is the sort order only inside each group. A cheap white listing can no longer push every other quality below it. Single-quality and non-stacked items keep the previous ordering.
+
+### Tests
+
+- Extended module-core coverage for quality grouping and header order; 210 tests and 13 visual signatures pass.
+
 ## 1.3.13 - 2026-10-27
 
 ### Added
