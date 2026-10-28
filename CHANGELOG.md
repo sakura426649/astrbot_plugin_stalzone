@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.3 - 2026-10-28
+
+### Changed
+
+- Help menu now documents affix filtering for weapon modules and quality filtering for module cores, in both the image cards and the plain-text fallback. The auction card shows `/sz 拍卖 <物品> [品质] [词条]` with the new examples.
+
 ## 1.4.2 - 2026-10-28
 
 ### Added

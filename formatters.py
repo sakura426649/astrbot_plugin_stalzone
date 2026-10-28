@@ -3230,7 +3230,7 @@ def format_operations(payload: dict[str, Any] | None, map_name: str | None = Non
 def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
-        "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史；武器模块可加词条，如 武器模块 粉 抑制器",
+        "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
         "/sz item / 物品 <中文名/英文名/ID> — 查看物品属性、描述和 ID",
@@ -3244,9 +3244,15 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz diag / 状态 — 查看运行环境、数据、缓存与存储状态（不包含凭证）",
         "/sz help — 显示本帮助",
     ]
+    auction_tips = [
+        "武器模块：/sz 拍卖 武器模块 粉；/sz 拍卖 武器模块 抑制器；/sz 拍卖 武器模块 粉 抑制器",
+        "词条按中文/英文/ID 模糊匹配；模块名称显示为三个词条，如「瞬间 后退 猎人」",
+        "模块核心：/sz 拍卖 模块核心 蓝；筛选后只显示该品质，历史成交最多 10 条",
+        "日期与数量：/sz 拍卖 原子 粉 6.11 20（数量需同时有品质和日期）",
+    ]
     return _card(
         "STALZONE · 查询帮助",
         [f"当前区服：{region.upper()}｜{env}"],
-        [("指令", commands)],
+        [("指令", commands), ("拍卖筛选", auction_tips)],
         "斜杠可省略，但 sz 后需加空格｜时间均为 UTC+8｜玩家/战队/风暴可指定区服（如 sz 玩家 aaa ru）｜填日期只查该日及之前的成交｜拍卖数量需同时有品质和日期｜角色战报可含 Lunar 第三方补充｜需要 User token 的接口不提供",
     )
