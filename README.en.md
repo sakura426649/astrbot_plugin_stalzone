@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.4.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.4.4-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,7 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stackable lots summarized per quantity with the lowest buyout and any cheaper auction offer; long non-stackable lists keep the first and last 15 rows |
 | Emission | Time since the last emission, current status and region selection |
-| Auto emission alert | OneBot only; inactive when the allow-list is empty; polls once a minute in the 2–4h window and sends one alert to every allow-listed group, deny-list wins |
+| Auto emission alert | OneBot only; inactive when the allow-list is empty; polls once a minute in the 2–4h window plus a slow three-minute probe outside it, and sends one alert to every allow-listed group, deny-list wins |
 | Platform support | Queries and image replies work on OneBot (`aiocqhttp`) and QQ Official Bot (`qq_official` / `qq_official_webhook`); automatic storm alerts are OneBot-only |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
@@ -101,16 +101,16 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `lunar_enrich` | `true` | Add Lunar third-party K/D and battle score |
 | `sc_core_fallback` | `true` | Use SC CORE for older auction history when official pagination fails |
 | `command_cooldown` | `1.0` | Minimum seconds between queries in the same group; `0` disables |
-| `emission_auto_notify` | `true` | Automatic emission alert; polls once a minute only during the 2–4h window |
+| `emission_auto_notify` | `true` | Automatic emission alert; polls once a minute in the 2–4h window and every three minutes outside it |
 | `emission_notify_target` | empty | Optional platform-prefix seed for numeric allow-list entries; never an extra recipient |
 | `emission_group_whitelist` | empty | QQ group allow-list; add one group number per entry. Empty sends nothing; every listed group gets the alert |
 | `emission_group_blacklist` | empty | QQ group deny-list; add one group number per entry. Takes priority over the allow-list |
 
 ### Automatic emission alerts
 
-The game does not start a new emission in the first 2 hours after one ends; the next one is random within 2–4 hours. The plugin uses that rule instead of polling all day:
+The game usually does not start a new emission in the first 2 hours after one ends; the next one is random within 2–4 hours, but game updates can shift that cadence. The plugin uses a fast window plus a slow fallback:
 
-- On startup it probes the official emission endpoint once to restore the previous end time. It then polls once a minute only between `previousEnd + 2h` and `previousEnd + 4h`; idle time outside that window is not polled.
+- On startup it probes the official emission endpoint once to restore the previous end time. It polls once a minute between `previousEnd + 2h` and `previousEnd + 4h`, and every three minutes outside that window so a changed cadence is still detected.
 - A new `currentStart` triggers one "emission started" image for each recipient group. The same storm is never alerted twice to the same group.
 - While the storm is active the plugin keeps confirming its end once a minute; the saved end time is then refreshed and the next 2–4h window begins.
 - State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start, successfully notified groups and latest session, so a restart neither loses the window nor repeats an alert.

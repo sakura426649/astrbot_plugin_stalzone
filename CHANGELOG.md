@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.4 - 2026-10-28
+
+### Fixed
+
+- Automatic storm alerts no longer stop checking after the old 2–4h window. The plugin keeps a three-minute slow probe outside the window (and still polls every minute inside it), so a game update that shifts the storm cadence no longer leaves `last_check` frozen and misses every storm.
+- Diag now shows the slow-probe state (`每 3 分钟预检` / `每 3 分钟探测`) so a stale check time is distinguishable from a stopped task.
+- Successful probes with an empty payload now update `last_check_at` as well, instead of leaving an old timestamp.
+
+### Tests
+
+- Updated the outside-window test and added a regression that catches a storm after an old 4h+ window; 218 tests and 13 visual signatures pass.
+
 ## 1.4.3 - 2026-10-28
 
 ### Changed

@@ -202,7 +202,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.4.3"
+PLUGIN_VERSION = "1.4.4"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -638,15 +638,18 @@ class StalzonePlugin(Star):
         elif state.get("active"):
             window = "风暴进行中"
         elif previous_end is None:
-            window = "等待探测"
+            window = "等待探测（每 3 分钟）"
         else:
             elapsed = (now - previous_end).total_seconds()
             if elapsed < 2 * 3600:
-                window = f"等待窗口（约 {int((2 * 3600 - elapsed) // 60)} 分钟后）"
+                window = (
+                    f"等待窗口（约 {int((2 * 3600 - elapsed) // 60)} 分钟后；"
+                    "每 3 分钟预检）"
+                )
             elif elapsed < 4 * 3600 + 90:
-                window = "2–4 小时窗口内"
+                window = "2–4 小时窗口内（每分钟）"
             else:
-                window = "等待下一场风暴"
+                window = "等待下一场风暴（每 3 分钟探测）"
 
         def stamp(value: Any) -> str:
             try:
@@ -709,12 +712,20 @@ class StalzonePlugin(Star):
         previous_end = parse_auction_time(state.get("last_previous_end"))
         active = bool(state.get("active"))
         if not force and not active:
-            if previous_end is None:
-                return False
-            elapsed = (now - previous_end).total_seconds()
-            # One grace minute catches a storm starting at the very end of 4h.
-            if elapsed < 2 * 3600 or elapsed >= 4 * 3600 + 90:
-                return False
+            in_window = False
+            if previous_end is not None:
+                elapsed = (now - previous_end).total_seconds()
+                # One grace minute catches a storm starting at the very end.
+                in_window = 2 * 3600 <= elapsed < 4 * 3600 + 90
+            if not in_window:
+                last_probe = parse_auction_time(state.get("last_probe_at"))
+                if (
+                    last_probe is not None
+                    and (now - last_probe).total_seconds()
+                    < self.AUTO_SLOW_PROBE_SECONDS
+                ):
+                    return False
+                state["last_probe_at"] = now.isoformat()
         async with self._api_gate():
             async with self._make_client() as client:
                 payload = await client.get_emission()
@@ -723,15 +734,16 @@ class StalzonePlugin(Star):
             return False
         current_start = parse_auction_time(payload.get("currentStart"))
         payload_previous_end = parse_auction_time(payload.get("previousEnd"))
+        state["last_check_at"] = now.isoformat()
+        state["last_error"] = ""
+        state["last_error_at"] = ""
         if (
             current_start is None
             and payload_previous_end is None
             and previous_end is None
         ):
+            self._save_auto_state()
             return False
-        state["last_check_at"] = now.isoformat()
-        state["last_error"] = ""
-        state["last_error_at"] = ""
         if payload_previous_end is not None:
             state["last_previous_end"] = payload_previous_end.isoformat()
         state["region"] = region.lower()
@@ -1298,6 +1310,9 @@ class StalzonePlugin(Star):
     # ------------------------------------------------------------- candidates
     CHOICE_TTL_SECONDS = 600
     MAX_PENDING_CHOICES = 200
+    # Poll slowly even outside the usual 2–4h window; game updates have
+    # shifted the storm cadence before, and a missed window meant no alert.
+    AUTO_SLOW_PROBE_SECONDS = 180
 
     @staticmethod
     def _choice_scope(event: Any) -> str:

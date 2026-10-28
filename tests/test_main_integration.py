@@ -1275,8 +1275,9 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.calls, 0)
         self.assertEqual(plugin._notify_targets(), [])
 
-    async def test_outside_window_does_not_query_api(self):
+    async def test_outside_window_uses_slow_probe(self):
         plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [self.GROUP_TARGET]
         client = self.Client({"previousEnd": "2026-10-22T03:30:00Z"})
         plugin._make_client = lambda: client  # type: ignore[assignment]
         plugin._auto_state = {
@@ -1285,7 +1286,40 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             ).isoformat()
         }
         await plugin._emission_auto_tick()
-        self.assertEqual(client.calls, 0)
+        self.assertEqual(client.calls, 1)
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 1)
+        plugin._auto_state["last_probe_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=4)
+        ).isoformat()
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 2)
+
+    async def test_slow_probe_catches_storm_after_old_window(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = [self.GROUP_TARGET]
+        now = datetime.now(timezone.utc)
+        old_end = (now - timedelta(hours=6)).isoformat()
+        client = self.Client(
+            {
+                "currentStart": (now - timedelta(minutes=5)).isoformat(),
+                "previousStart": (now - timedelta(hours=6)).isoformat(),
+                "previousEnd": old_end,
+            }
+        )
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        plugin._auto_state = {"last_previous_end": old_end}
+        sent = []
+
+        async def fake_send(payload, region, targets):
+            sent.append(list(targets))
+            return list(targets), []
+
+        plugin._send_emission_alert = fake_send  # type: ignore[assignment]
+        await plugin._emission_auto_tick()
+        self.assertEqual(client.calls, 1)
+        self.assertEqual(sent, [[self.GROUP_TARGET]])
+        self.assertTrue(plugin._auto_state["active"])
 
     async def test_window_detects_once_and_deduplicates(self):
         plugin = self.make_plugin()
