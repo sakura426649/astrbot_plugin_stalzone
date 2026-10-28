@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.1 - 2026-10-28
+
+### Changed
+
+- Module-core (`模块核心`, `9yow`) recent/history trades now show at most three rows per quality, grouped from gold to white, matching the artifact history layout. The date walk fetches extra rows so six quality groups can still be represented.
+- The per-quality limit applies only to module cores; other stackable items keep the ten-row total list, and multi-quality non-stackables such as weapon modules are unchanged.
+
+### Tests
+
+- Added per-quality recent-limit coverage for module cores and its handler wiring; 216 tests and 13 visual signatures pass.
+
 ## 1.4.0 - 2026-10-28
 
 ### Added

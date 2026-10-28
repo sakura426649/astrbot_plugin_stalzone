@@ -940,6 +940,72 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertIsNone(none_match)
 
+    def test_module_core_recent_three_per_quality(self):
+        from datetime import datetime, timedelta, timezone
+
+        base = datetime(2026, 10, 22, 0, 0, tzinfo=timezone.utc)
+        prices = []
+        for index in range(5):
+            prices.append(
+                {
+                    "amount": 1,
+                    "price": 1000 + index,
+                    "time": (base + timedelta(hours=index)).isoformat().replace(
+                        "+00:00", "Z"
+                    ),
+                    "additional": {"qlt": 5},
+                }
+            )
+            prices.append(
+                {
+                    "amount": 1,
+                    "price": 500 + index,
+                    "time": (base + timedelta(hours=index + 10)).isoformat().replace(
+                        "+00:00", "Z"
+                    ),
+                    "additional": {"qlt": 2},
+                }
+            )
+        view = build_auction_view(
+            "9yow",
+            {"lots": []},
+            {"prices": prices},
+            "eu",
+            now=self.NOW,
+            item_label="模块核心",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            per_quality_recent=True,
+        )
+        self.assertTrue(view["recent_per_quality"])
+        self.assertIsNone(view["recent_total_limit"])
+        self.assertEqual(view["recent_limit"], 3)
+        self.assertEqual(
+            [len(group["rows"]) for group in view["recent_groups"]], [3, 3]
+        )
+        self.assertEqual(
+            [group["label"] for group in view["recent_groups"]],
+            ["传奇（金）", "特殊（蓝）"],
+        )
+        text = format_auction_text(view)
+        self.assertIn("每品质最多 3 条", text)
+
+        normal = build_auction_view(
+            "9yow",
+            {"lots": []},
+            {"prices": prices},
+            "eu",
+            now=self.NOW,
+            item_label="模块核心",
+            non_artifact=True,
+            item_color="#E7EDF5",
+        )
+        self.assertFalse(normal["recent_per_quality"])
+        self.assertEqual(normal["recent_total_limit"], 10)
+        self.assertEqual(
+            sum(len(group["rows"]) for group in normal["recent_groups"]), 10
+        )
+
     def test_auction_date_filters_history_and_limits(self):
         from datetime import date, datetime, timedelta, timezone
 

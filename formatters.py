@@ -546,6 +546,7 @@ def auction_day_cutoff(day: date_cls) -> datetime:
 
 
 MODULE_ITEM_ID = "1pyq"
+MODULE_CORE_ITEM_ID = "9yow"
 
 # Identified weapon modules are named by three rolled components.  The API
 # exposes them as ``additional.attributes`` with definition ids; these are the
@@ -1094,6 +1095,7 @@ def build_auction_view(
     item_color: str | None = None,
     module_mode: bool = False,
     affix_filter: str | None = None,
+    per_quality_recent: bool = False,
 ) -> dict[str, Any] | None:
     lots_payload = lots_payload if isinstance(lots_payload, dict) else {}
     history_payload = history_payload if isinstance(history_payload, dict) else {}
@@ -1475,26 +1477,38 @@ def build_auction_view(
         )
     for rows in recent.values():
         rows.sort(key=lambda row: row.get("ts") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    per_quality_mode = bool(
+        per_quality_recent
+        and not module_mode
+        and history_limit is None
+    )
     if history_limit is not None:
         limit = max(1, min(history_limit, 200))
     elif non_artifact:
-        limit = 10
+        limit = 3 if per_quality_mode else 10
     elif before is not None:
         limit = 20 if quality_filter is not None else 5
     elif quality_filter is not None:
         limit = 10
     else:
         limit = 3
-    total_limit = limit if non_artifact else None
+    total_limit = (
+        None if per_quality_mode else (limit if non_artifact else None)
+    )
     recent_grouped_quality = False
     if non_artifact:
-        rows = recent.get(None, [])[:limit]
+        rows = recent.get(None, [])
+        if not per_quality_mode:
+            rows = rows[:limit]
         recent_qualities = {
             row.get("quality") for row in rows if row.get("quality") is not None
         }
         recent_grouped_quality = (
-            len(recent_qualities) > 1 and not module_mode
+            (len(recent_qualities) > 1 or per_quality_mode)
+            and not module_mode
         )
+        if per_quality_mode and not recent_grouped_quality:
+            rows = rows[:limit]
         if rows and not recent_grouped_quality:
             # Quality groups already make the cheap rows obvious; the badge
             # stays only for a flat list.
@@ -1515,6 +1529,9 @@ def build_auction_view(
                 key=lambda value: -1 if value is None else value,
                 reverse=True,
             ):
+                quality_rows = [
+                    row for row in rows if row.get("quality") == quality
+                ]
                 groups.append(
                     {
                         "quality": quality,
@@ -1524,9 +1541,11 @@ def build_auction_view(
                             else "品质未标注"
                         ),
                         "color": _quality_color(quality),
-                        "rows": [
-                            row for row in rows if row.get("quality") == quality
-                        ],
+                        "rows": (
+                            quality_rows[:limit]
+                            if per_quality_mode
+                            else quality_rows
+                        ),
                     }
                 )
         else:
@@ -1594,6 +1613,7 @@ def build_auction_view(
         "recent_limit": limit,
         "recent_total_limit": total_limit,
         "recent_grouped_quality": recent_grouped_quality,
+        "recent_per_quality": per_quality_mode,
         "non_artifact": non_artifact,
         "module_mode": module_mode,
         "affix_filter": affix_filter or "",
@@ -1700,7 +1720,12 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             scope = "最多"
         else:
             scope = "每品质最多"
-        if view.get("recent_grouped_quality"):
+        if view.get("recent_per_quality"):
+            history_heading = (
+                f"历史成交（截至 {view['before']}，每品质最多 "
+                f"{view['recent_limit']} 条，按时间倒序）"
+            )
+        elif view.get("recent_grouped_quality"):
             history_heading = (
                 f"历史成交（截至 {view['before']}，最多 "
                 f"{view['recent_limit']} 条，按品质分组，组内时间倒序）"
@@ -1779,7 +1804,11 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 lines.append("当前无在售")
             if view.get("active_note"):
                 lines.extend(str(view["active_note"]).split("\n"))
-        if view.get("recent_grouped_quality"):
+        if view.get("recent_per_quality"):
+            recent_heading = (
+                f"最近成交（每品质最多 {view['recent_limit']} 条，按时间倒序）"
+            )
+        elif view.get("recent_grouped_quality"):
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，"
                 "按品质分组，组内时间倒序）"

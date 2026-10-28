@@ -410,6 +410,14 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_module_core_recent_uses_per_quality_limit(self):
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
+        result = await plugin._handle_auction("模块核心")
+        self.assertIsInstance(result, PluginReply)
+        self.assertTrue(result.auction_view["recent_per_quality"])
+        self.assertIsNone(result.auction_view["recent_total_limit"])
+
     async def test_weapon_module_filters_quality_and_affix(self):
         class ModuleClient(FakeClient):
             def __init__(self):

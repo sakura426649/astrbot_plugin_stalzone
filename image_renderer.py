@@ -3371,11 +3371,15 @@ def render_auction_card(
     y = header_h
     draw.line((PAD, y - 18, width - PAD, y - 18), fill=BORDER, width=1)
     if history_only:
-        history_heading = (
-            "历史成交（按品质分组，组内时间倒序）"
-            if view.get("recent_grouped_quality")
-            else "历史成交（按时间倒序）"
-        )
+        if view.get("recent_per_quality"):
+            history_heading = (
+                f"历史成交（每品质最多 {view.get('recent_limit', 3)} 条，"
+                "按时间倒序）"
+            )
+        elif view.get("recent_grouped_quality"):
+            history_heading = "历史成交（按品质分组，组内时间倒序）"
+        else:
+            history_heading = "历史成交（按时间倒序）"
         draw.text((left, y), history_heading, font=head_font, fill=ACCENT)
         y += 28
         note = str(view.get("history_note") or "")
@@ -3460,7 +3464,12 @@ def render_auction_card(
         y += 18
         draw.line((PAD, y, width - PAD, y), fill=BORDER, width=1)
         y += 18
-        if view.get("recent_grouped_quality"):
+        if view.get("recent_per_quality"):
+            recent_heading = (
+                f"最近成交（每品质最多 {view.get('recent_limit', 3)} 条，"
+                "按时间倒序）"
+            )
+        elif view.get("recent_grouped_quality"):
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，"
                 "按品质分组，组内时间倒序）"

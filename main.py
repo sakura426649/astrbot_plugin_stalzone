@@ -87,6 +87,7 @@ try:  # Package import (normal AstrBot plugin loading).
         item_rank_color,
         auction_day_cutoff,
         auction_quality_of,
+        MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
         parse_auction_query,
         parse_auction_time,
@@ -164,6 +165,7 @@ except ImportError:  # Direct execution / flat import fallback.
         item_rank_color,
         auction_day_cutoff,
         auction_quality_of,
+        MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
         parse_auction_query,
         parse_auction_time,
@@ -200,7 +202,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.4.0"
+PLUGIN_VERSION = "1.4.1"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -1653,6 +1655,7 @@ class StalzonePlugin(Star):
         non_artifact = False
         item_color = None
         module_mode = False
+        per_quality_recent = False
         if item:
             item_id = item["id"]
             label = display_name(item)
@@ -1660,6 +1663,7 @@ class StalzonePlugin(Star):
             item_color = item.get("color")
             non_artifact = not str(item.get("cat") or "").startswith("artefact")
             module_mode = item_id == MODULE_ITEM_ID
+            per_quality_recent = item_id == MODULE_CORE_ITEM_ID
             if module_mode:
                 non_artifact = True
         elif matches:
@@ -1706,6 +1710,10 @@ class StalzonePlugin(Star):
                 # A dated query is historical only; current lots would be noise.
                 if history_count is not None:
                     fetch_limit = history_count
+                elif per_quality_recent:
+                    # Three rows per quality; keep enough headroom for six
+                    # quality groups when walking back to the requested date.
+                    fetch_limit = 20
                 elif non_artifact:
                     fetch_limit = 10
                 elif quality_filter is not None:
@@ -1822,6 +1830,7 @@ class StalzonePlugin(Star):
                 item_color=item_name_color,
                 module_mode=module_mode,
                 affix_filter=affix_filter,
+                per_quality_recent=per_quality_recent,
             )
             text = format_auction_text(view)
             empty_view = None
