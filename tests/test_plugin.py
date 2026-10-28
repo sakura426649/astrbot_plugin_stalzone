@@ -537,6 +537,84 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("名称  起拍  买断  剩余时间", text)
         self.assertNotIn("名称  起拍  买断  单价", text)
 
+    def test_non_artifact_quality_colors_keep_quantity_logic(self):
+        lots = {
+            "lots": [
+                {
+                    "amount": 1,
+                    "startPrice": 1000,
+                    "buyoutPrice": 1000,
+                    "endTime": "2026-10-22T16:00:00Z",
+                    "additional": {"qlt": 5},
+                },
+                {
+                    "amount": 1,
+                    "startPrice": 900,
+                    "buyoutPrice": 900,
+                    "endTime": "2026-10-22T16:00:00Z",
+                    "additional": {"qlt": 2},
+                },
+                {
+                    "amount": 5,
+                    "startPrice": 5000,
+                    "buyoutPrice": 5000,
+                    "endTime": "2026-10-22T16:00:00Z",
+                    "additional": {"qlt": 4},
+                },
+            ]
+        }
+        history = {
+            "prices": [
+                {
+                    "amount": 1,
+                    "price": 800,
+                    "time": "2026-10-22T05:00:00Z",
+                    "additional": {"qlt": 3},
+                }
+            ]
+        }
+        view = build_auction_view(
+            "9yow",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="模块核心",
+            non_artifact=True,
+            item_color="#E7EDF5",
+        )
+        self.assertTrue(view["quantity_mode"])
+        self.assertEqual(view["quantity_quality_count"], 3)
+        by_key = {
+            (row["amount"], row["quality"]): row for row in view["active"]
+        }
+        # Same amount, different qualities remain separate rows; each keeps
+        # its own quality color and the existing lowest-offer-per-group rule.
+        self.assertEqual(by_key[(1, 5)]["name"], "模块核心")
+        self.assertEqual(by_key[(1, 5)]["color"], QUALITY_COLORS[5])
+        self.assertEqual(by_key[(1, 2)]["name"], "模块核心")
+        self.assertEqual(by_key[(1, 2)]["color"], QUALITY_COLORS[2])
+        self.assertEqual(by_key[(5, 4)]["name"], "模块核心×5")
+        self.assertEqual(by_key[(5, 4)]["color"], QUALITY_COLORS[4])
+        recent = view["recent_groups"][0]["rows"][0]
+        self.assertEqual(recent["color"], QUALITY_COLORS[3])
+        text = format_auction_text(view)
+        self.assertIn("按数量与品质汇总", text)
+        self.assertIn("模块核心（传奇）", text)
+        self.assertIn("模块核心（特殊）", text)
+
+        ranked = build_auction_view(
+            "wg53",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="原子 / Atom",
+            non_artifact=True,
+            item_color="#FFD166",
+        )
+        self.assertEqual(ranked["active"][0]["color"], "#FFD166")
+
     def test_non_artifact_stacked_unit_price(self):
         lots = {
             "lots": [

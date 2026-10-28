@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.13 - 2026-10-27
+
+### Added
+
+- Quality-tiered non-artifacts such as module cores now color each auction row by its own `qlt` (white / green / blue / pink / red / gold), while rank-colored items keep their catalog rank color.
+- Quantity aggregation now groups by amount **and** quality, so the same stack size listed at several qualities stays visible; each combination still keeps its lowest buyout, plus a cheaper auction row when one exists. Names and columns are unchanged; text output adds a short quality label when more than one quality is present.
+
+### Tests
+
+- Added module-core quality coverage; 210 tests and 13 visual signatures pass.
+
 ## 1.3.12 - 2026-10-27
 
 ### Fixed

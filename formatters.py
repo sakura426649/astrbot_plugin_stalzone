@@ -766,6 +766,25 @@ def _quality_color(quality: int | None) -> str:
     return QUALITY_COLORS.get(quality, "#93A6BA")
 
 
+def _auction_name_color(
+    entry: dict[str, Any], non_artifact: bool, item_color: str | None
+) -> str:
+    """Name color for one auction row.
+
+    Artifacts always follow their quality.  Non-artifacts normally keep the
+    catalog rank color; quality-tiered stackables such as module cores use
+    their per-lot ``qlt`` instead.  A rank-colored item keeps the rank color
+    even if the payload also carries a quality field.
+    """
+    if not non_artifact:
+        return _quality_color(_effective_quality(entry, False))
+    rank_color = item_color or ITEM_RANK_COLORS["DEFAULT"]
+    quality = _quality_of(entry)
+    if quality is not None and rank_color.upper() == ITEM_RANK_COLORS["DEFAULT"]:
+        return _quality_color(quality)
+    return rank_color
+
+
 def _remaining_text(value: Any, now: datetime | None = None) -> str:
     dt = _parse_dt(value)
     if dt is None:
@@ -870,7 +889,11 @@ def build_auction_view(
 
     active: list[dict[str, Any]] = []
     for lot in lots:
-        quality = _effective_quality(lot, non_artifact)
+        quality = (
+            _quality_of(lot)
+            if non_artifact
+            else _effective_quality(lot, False)
+        )
         buyout = _safe_int(lot.get("buyoutPrice"))
         start = _safe_int(lot.get("startPrice"))
         amount = _safe_int(lot.get("amount")) or 1
@@ -885,11 +908,7 @@ def build_auction_view(
                 "name": name,
                 "level": _level_of(lot),
                 "quality": quality,
-                "color": (
-                    (item_color or "#E7EDF5")
-                    if non_artifact
-                    else _quality_color(quality)
-                ),
+                "color": _auction_name_color(lot, non_artifact, item_color),
                 "start": _display_price(start),
                 "buyout": _display_price(buyout),
                 "start_value": start or 0,
@@ -927,16 +946,20 @@ def build_auction_view(
     active_note = ""
     quantity_mode = False
     quantity_count = 0
-    distinct_amounts = {
-        int(row.get("amount") or 1)
+    quantity_quality_count = 0
+    quantity_keys = {
+        (int(row.get("amount") or 1), row.get("quality"))
         for row in active
     }
-    if non_artifact and len(distinct_amounts) > 1:
-        offers_by_amount: dict[int, dict[str, dict[str, Any] | None]] = {}
+    distinct_amounts = {amount for amount, _ in quantity_keys}
+    if non_artifact and len(quantity_keys) > 1:
+        offers_by_key: dict[
+            tuple[int, int | None], dict[str, dict[str, Any] | None]
+        ] = {}
         for row in active:
-            amount = int(row.get("amount") or 1)
-            slot = offers_by_amount.setdefault(
-                amount, {"buyout": None, "start": None}
+            key = (int(row.get("amount") or 1), row.get("quality"))
+            slot = offers_by_key.setdefault(
+                key, {"buyout": None, "start": None}
             )
             buyout = int(row.get("buyout_value") or 0)
             start = int(row.get("start_value") or 0)
@@ -950,8 +973,12 @@ def build_auction_view(
                     slot["start"] = row
 
         quantity_rows: list[dict[str, Any]] = []
-        for amount in sorted(offers_by_amount):
-            slot = offers_by_amount[amount]
+        for key in sorted(
+            offers_by_key,
+            key=lambda item: (item[0], -1 if item[1] is None else item[1]),
+        ):
+            amount, _quality = key
+            slot = offers_by_key[key]
             buyout_row = slot["buyout"]
             start_row = slot["start"]
             if buyout_row is not None:
@@ -993,16 +1020,27 @@ def build_auction_view(
             key=lambda row: (
                 row.get("offer_unit_value", 0),
                 int(row.get("amount") or 1),
+                -1 if row.get("quality") is None else int(row["quality"]),
                 0 if row.get("offer_kind") == "auction" else 1,
             ),
         )
         quantity_mode = True
-        quantity_count = len(offers_by_amount)
-        active_truncated = False
-        active_note = (
-            f"按数量聚合：{quantity_count} 种数量 / {active_total:,} 条在售；"
-            "每种数量显示最低买断价，竞拍价更低时并列显示"
+        quantity_count = len(distinct_amounts)
+        quantity_quality_count = len(
+            {quality for _, quality in quantity_keys if quality is not None}
         )
+        active_truncated = False
+        if quantity_quality_count > 1:
+            active_note = (
+                f"按数量与品质聚合：{quantity_count} 种数量 / "
+                f"{quantity_quality_count} 种品质 / {active_total:,} 条在售；"
+                "每种组合最低买断，竞拍更低并列"
+            )
+        else:
+            active_note = (
+                f"按数量聚合：{quantity_count} 种数量 / {active_total:,} 条在售；"
+                "每种数量显示最低买断价，竞拍价更低时并列显示"
+            )
     elif non_artifact:
         if active_truncated:
             head = active[:15]
@@ -1087,22 +1125,21 @@ def build_auction_view(
 
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
-        quality = _effective_quality(entry, non_artifact)
+        group_quality = _effective_quality(entry, non_artifact)
+        row_quality = (
+            _quality_of(entry) if non_artifact else group_quality
+        )
         price = _safe_int(entry.get("price"))
         amount = _safe_int(entry.get("amount")) or 1
         unit_value = _unit_price(price, amount)
         name = _auction_level_name(short, entry)
         if non_artifact and amount > 1:
             name = f"{name}×{amount}"
-        recent.setdefault(quality, []).append(
+        recent.setdefault(group_quality, []).append(
             {
                 "name": name,
-                "quality": quality,
-                "color": (
-                    (item_color or "#E7EDF5")
-                    if non_artifact
-                    else _quality_color(quality)
-                ),
+                "quality": row_quality,
+                "color": _auction_name_color(entry, non_artifact, item_color),
                 "price": f"{price:,}" if price is not None else "未知",
                 "price_value": price or 0,
                 "unit_price": (
@@ -1198,6 +1235,7 @@ def build_auction_view(
         "active_grouped": active_grouped,
         "quantity_mode": quantity_mode,
         "quantity_count": quantity_count,
+        "quantity_quality_count": quantity_quality_count,
         "active_note": active_note,
         "recent_groups": groups,
         "recent_limit": limit,
@@ -1281,6 +1319,25 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
     if view["quality_filter"] is not None:
         lines.append(f"仅看品质：{quality_label(view['quality_filter']).split('（', 1)[0]}")
     is_non_artifact = bool(view.get("non_artifact"))
+    recent_qualities = {
+        row.get("quality")
+        for group in view.get("recent_groups") or []
+        for row in group.get("rows") or []
+        if row.get("quality") is not None
+    }
+    multi_quality = int(view.get("quantity_quality_count") or 0) > 1 or (
+        is_non_artifact and len(recent_qualities) > 1
+    )
+
+    def _text_name(row: dict[str, Any]) -> str:
+        name = str(row.get("name") or "")
+        quality = row.get("quality")
+        if multi_quality and is_non_artifact and quality is not None:
+            short_label = QUALITY_NAMES.get(int(quality), ("", ""))[0]
+            if short_label:
+                name = f"{name}（{short_label}）"
+        return name
+
     lines.append(SEP)
     if view.get("history_only"):
         if view.get("recent_total_limit") is not None or view["quality_filter"] is not None:
@@ -1295,16 +1352,24 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             lines.append("  名称  成交价  单价  时间")
     else:
         if view.get("quantity_mode"):
+            quality_scope = int(view.get("quantity_quality_count") or 0) > 1
+            summary = "按数量与品质汇总" if quality_scope else "按数量汇总"
+            count_text = f"{view['quantity_count']} 种数量"
+            if quality_scope:
+                count_text += f" / {view['quantity_quality_count']} 种品质"
             lines.extend([
                 "",
-                f"在售（按数量汇总｜{view['quantity_count']} 种数量 / "
-                f"{view['active_total']:,} 条在售）",
-                "说明：每种数量显示最低买断；竞拍价更低时并列显示",
+                f"在售（{summary}｜{count_text} / {view['active_total']:,} 条在售）",
+                (
+                    "说明：每种数量与品质组合显示最低买断；竞拍价更低时并列显示"
+                    if quality_scope
+                    else "说明：每种数量显示最低买断；竞拍价更低时并列显示"
+                ),
                 "  名称  单价  总价  剩余时间",
             ])
             for row in view["active"]:
                 lines.append(
-                    f"  {row['name']}  {row['unit_price']}  "
+                    f"  {_text_name(row)}  {row['unit_price']}  "
                     f"{row.get('offer_total_display') or row['buyout']}  "
                     f"{row['remaining']}"
                 )
@@ -1371,7 +1436,7 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 marker = f" [{marker_text}]" if row.get("lowest") else ""
                 if is_non_artifact:
                     lines.append(
-                        f"  {row['name']}{marker}  {row['price']}  "
+                        f"  {_text_name(row)}{marker}  {row['price']}  "
                         f"{row['unit_price']}  {row['time']}"
                     )
                 else:
