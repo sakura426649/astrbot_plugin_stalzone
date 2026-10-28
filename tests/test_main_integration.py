@@ -410,6 +410,65 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_weapon_module_filters_quality_and_affix(self):
+        class ModuleClient(FakeClient):
+            def __init__(self):
+                self.calls = []
+
+            async def get_auction_lots(self, item_id, limit=50):
+                self.calls.append(("lots", item_id, limit))
+                return {
+                    "total": 2,
+                    "lots": [
+                        {
+                            "amount": 1,
+                            "startPrice": 100,
+                            "buyoutPrice": 900,
+                            "endTime": "2026-10-29T06:00:00Z",
+                            "additional": {
+                                "qlt": 3,
+                                "attributes": [
+                                    {"definitionId": "hip_spread_pre"},
+                                    {"definitionId": "aim_switch_time_suf"},
+                                    {"definitionId": "shoot_factor_decrement_aff"},
+                                ],
+                            },
+                        },
+                        {
+                            "amount": 1,
+                            "startPrice": 100,
+                            "buyoutPrice": 1200,
+                            "endTime": "2026-10-29T06:00:00Z",
+                            "additional": {
+                                "qlt": 5,
+                                "attributes": [
+                                    {"definitionId": "recoil_suf"},
+                                    {"definitionId": "marksman"},
+                                    {"definitionId": "recoil_pre"},
+                                ],
+                            },
+                        },
+                    ],
+                }
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                self.calls.append(("history", item_id, limit, offset))
+                return {"total": 0, "prices": []}
+
+        client = ModuleClient()
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        result = await plugin._handle_auction("武器模块 粉 抑制器")
+        self.assertIsInstance(result, PluginReply)
+        self.assertIsNotNone(result.auction_view)
+        view = result.auction_view
+        self.assertTrue(view["module_mode"])
+        self.assertEqual(view["quality_filter"], 3)
+        self.assertEqual(view["affix_filter"], "抑制器")
+        self.assertEqual(len(view["active"]), 1)
+        self.assertEqual(view["active"][0]["name"], "稳定 颤抖 抑制器")
+        self.assertIn(("lots", "1pyq", 200), client.calls)
+
     async def test_auction_uses_catalog_id_case(self):
         class RecordingClient(FakeClient):
             calls = []

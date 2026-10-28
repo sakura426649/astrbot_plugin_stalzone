@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.0 - 2026-10-28
+
+### Added
+
+- Weapon modules (`武器模块`, `1pyq`) are named by their three rolled affixes with Chinese translations, e.g. `瞬间 后退 猎人`. The order is add-on, deviation, concept; unknown ids fall back to their readable English key.
+- Module auctions are sorted by buyout price from high to low, keep the existing 30-row head/tail limit, and are not treated as stackable quantity groups.
+- `/sz 拍卖 武器模块` accepts a quality filter, a fuzzy affix filter, or both: `武器模块 粉`, `武器模块 抑制器`, `武器模块 粉 抑制器`. The affix filter matches Chinese, English and definition ids.
+- The card shows the applied quality/affix filter under the active table; text output shows the same filter.
+
+### Tests
+
+- Added module parser, naming, quality/affix filtering and end-to-end handler coverage; 214 tests and 13 visual signatures pass.
+
 ## 1.3.15 - 2026-10-27
 
 ### Changed

@@ -87,6 +87,7 @@ try:  # Package import (normal AstrBot plugin loading).
         item_rank_color,
         auction_day_cutoff,
         auction_quality_of,
+        MODULE_ITEM_ID,
         parse_auction_query,
         parse_auction_time,
     )
@@ -163,6 +164,7 @@ except ImportError:  # Direct execution / flat import fallback.
         item_rank_color,
         auction_day_cutoff,
         auction_quality_of,
+        MODULE_ITEM_ID,
         parse_auction_query,
         parse_auction_time,
     )
@@ -198,7 +200,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.3.15"
+PLUGIN_VERSION = "1.4.0"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -302,11 +304,14 @@ class PendingChoice:
     before: Any = None
     count: int | None = None
     region: str | None = None
+    affix: str | None = None
 
 USAGE = {
     "auction": (
-        "用法：/sz auction <item_id 或 中文/英文物品名> [品质] [日期] [数量]\n"
+        "用法：/sz auction <item_id 或 中文/英文物品名> [品质] [词条] [日期] [数量]\n"
         "示例：/sz 拍卖 寒冰；/sz 拍卖 原子 粉；/sz 拍卖 原子 粉 6.11 20\n"
+        "武器模块：/sz 拍卖 武器模块 粉；/sz 拍卖 武器模块 抑制器；"
+        "/sz 拍卖 武器模块 粉 抑制器\n"
         "日期支持 6.11、6/11、25.6.11、25/6/11；数量需同时有品质和日期，最多 200"
     ),
     "emission": (
@@ -1321,6 +1326,7 @@ class StalzonePlugin(Star):
         before: Any = None,
         count: int | None = None,
         region: str | None = None,
+        affix: str | None = None,
     ) -> None:
         if event is None or len(candidates) <= 1:
             return
@@ -1346,6 +1352,7 @@ class StalzonePlugin(Star):
             before=before,
             count=count,
             region=region,
+            affix=affix,
         )
 
     @staticmethod
@@ -1392,7 +1399,13 @@ class StalzonePlugin(Star):
             result = await self._handle_auction(
                 selected,
                 event=event,
-                parsed=(selected, pending.quality, pending.before, pending.count),
+                parsed=(
+                    selected,
+                    pending.quality,
+                    pending.before,
+                    pending.count,
+                    pending.affix,
+                ),
             )
             return self._with_render_sub(result, "auction")
         return "候选类型无效，请重新发起查询。"
@@ -1613,28 +1626,42 @@ class StalzonePlugin(Star):
         item_query: str,
         *,
         event: Any = None,
-        parsed: tuple[str, int | None, Any, int | None] | None = None,
+        parsed: tuple[str, int | None, Any, int | None, str | None] | None = None,
     ) -> str | PluginReply:
         if parsed is None:
             try:
-                item_query, quality_filter, before_date, history_count = (
-                    parse_auction_query(item_query)
-                )
+                (
+                    item_query,
+                    quality_filter,
+                    before_date,
+                    history_count,
+                    affix_filter,
+                ) = parse_auction_query(item_query)
             except ValueError as exc:
                 return str(exc)
         else:
-            item_query, quality_filter, before_date, history_count = parsed
+            (
+                item_query,
+                quality_filter,
+                before_date,
+                history_count,
+                affix_filter,
+            ) = parsed
         before = auction_day_cutoff(before_date) if before_date is not None else None
         item, matches = await asyncio.to_thread(self._resolve_item, item_query)
         icon_url = None
         non_artifact = False
         item_color = None
+        module_mode = False
         if item:
             item_id = item["id"]
             label = display_name(item)
             icon_url = item.get("icon")
             item_color = item.get("color")
             non_artifact = not str(item.get("cat") or "").startswith("artefact")
+            module_mode = item_id == MODULE_ITEM_ID
+            if module_mode:
+                non_artifact = True
         elif matches:
             candidates = [self._decorate(candidate) for candidate in matches]
             self._remember_choice(
@@ -1645,6 +1672,7 @@ class StalzonePlugin(Star):
                 quality=quality_filter,
                 before=before_date,
                 count=history_count,
+                affix=affix_filter,
             )
             text = format_item_candidates(item_query, candidates)
             if len(candidates) <= 1:
@@ -1667,7 +1695,7 @@ class StalzonePlugin(Star):
         item_name_color = (
             item_rank_color(item_color) if non_artifact else None
         )
-        if non_artifact:
+        if non_artifact and not module_mode:
             quality_filter = None
         short_label = (label or item_id).split(" / ", 1)[0].strip()
 
@@ -1749,7 +1777,9 @@ class StalzonePlugin(Star):
                 else:
                     # Fetch concurrently; one failed side should not hide the other.
                     results = await asyncio.gather(
-                        client.get_auction_lots(item_id, limit=100),
+                        client.get_auction_lots(
+                            item_id, limit=200 if module_mode else 100
+                        ),
                         client.get_auction_history(item_id, limit=100),
                         return_exceptions=True,
                     )
@@ -1790,14 +1820,23 @@ class StalzonePlugin(Star):
                 history_limit=history_count,
                 non_artifact=non_artifact,
                 item_color=item_name_color,
+                module_mode=module_mode,
+                affix_filter=affix_filter,
             )
             text = format_auction_text(view)
             empty_view = None
             if view is None:
+                filtered = module_mode and (
+                    quality_filter is not None or affix_filter
+                )
                 note = (
                     "该物品当前无法通过官方拍卖接口查询，可能不支持拍卖查询或不可交易。"
                     if unavailable
-                    else ""
+                    else (
+                        "没有符合当前品质/词条筛选的在售或成交记录。"
+                        if filtered
+                        else ""
+                    )
                 )
                 if before_date is not None:
                     text = (
@@ -1824,7 +1863,11 @@ class StalzonePlugin(Star):
                                 note += f"；SC CORE 存档覆盖自 {coverage[:10]}"
                         text += "\n" + note
                 else:
-                    text = f"未查到关于「{short_label}」的成交记录。"
+                    text = (
+                        f"未查到关于「{short_label}」符合筛选条件的成交记录。"
+                        if filtered
+                        else f"未查到关于「{short_label}」的成交记录。"
+                    )
                 if unavailable:
                     note = "该物品当前无法通过官方拍卖接口查询，可能不支持拍卖查询或不可交易。"
                     text = f"「{short_label}」暂不支持拍卖查询（可能不可交易）。"

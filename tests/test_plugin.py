@@ -752,28 +752,193 @@ class FormatterTests(unittest.TestCase):
         now = datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc)
         self.assertEqual(
             parse_auction_query("原子 粉 6.11 20", now=now),
-            ("原子", 3, date(2026, 6, 11), 20),
+            ("原子", 3, date(2026, 6, 11), 20, None),
         )
         self.assertEqual(
             parse_auction_query("原子 6/11", now=now),
-            ("原子", None, date(2026, 6, 11), None),
+            ("原子", None, date(2026, 6, 11), None, None),
         )
         self.assertEqual(
             parse_auction_query("原子 粉 25.6.11", now=now),
-            ("原子", 3, date(2025, 6, 11), None),
+            ("原子", 3, date(2025, 6, 11), None, None),
         )
         self.assertEqual(
             parse_auction_query("寒冰 / Chilly 粉 2025/6/11 7", now=now),
-            ("寒冰 / Chilly", 3, date(2025, 6, 11), 7),
+            ("寒冰 / Chilly", 3, date(2025, 6, 11), 7, None),
         )
         self.assertEqual(
             parse_auction_query("原子 粉", now=now),
-            ("原子", 3, None, None),
+            ("原子", 3, None, None, None),
         )
         with self.assertRaises(ValueError):
             parse_auction_query("原子 6.11 20", now=now)
         with self.assertRaises(ValueError):
             parse_auction_query("原子 粉 6.11 201", now=now)
+
+    def test_parse_module_auction_query(self):
+        from datetime import date, datetime, timezone
+
+        now = datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc)
+        self.assertEqual(
+            parse_auction_query("武器模块 粉", now=now),
+            ("武器模块", 3, None, None, None),
+        )
+        self.assertEqual(
+            parse_auction_query("武器模块 抑制器", now=now),
+            ("武器模块", None, None, None, "抑制器"),
+        )
+        self.assertEqual(
+            parse_auction_query("武器模块 粉 抑制器", now=now),
+            ("武器模块", 3, None, None, "抑制器"),
+        )
+        self.assertEqual(
+            parse_auction_query("武器模块 抑制器 粉", now=now),
+            ("武器模块", 3, None, None, "抑制器"),
+        )
+        self.assertEqual(
+            parse_auction_query("weapon module 粉 猎人", now=now),
+            ("武器模块", 3, None, None, "猎人"),
+        )
+        self.assertEqual(
+            parse_auction_query("武器模块 粉 抑制器 6.11 20", now=now),
+            ("武器模块", 3, date(2026, 6, 11), 20, "抑制器"),
+        )
+
+    def test_weapon_module_payload_name_is_translated(self):
+        from formatters import _module_display_name
+
+        entry = {"additional": {"name": "Instant Receding Hunter"}}
+        self.assertEqual(
+            _module_display_name(entry, "武器模块"), "瞬间 后退 猎人"
+        )
+
+    def test_weapon_module_affix_names_and_filters(self):
+        def lot(buyout, quality, attrs):
+            return {
+                "amount": 1,
+                "startPrice": 100,
+                "buyoutPrice": buyout,
+                "endTime": "2026-10-22T16:00:00Z",
+                "additional": {
+                    "qlt": quality,
+                    "attributes": [{"definitionId": key} for key in attrs],
+                },
+            }
+
+        lots = {
+            "lots": [
+                lot(1000, 5, ["recoil_suf", "marksman", "recoil_pre"]),
+                lot(900, 2, ["hip_spread_pre", "aim_switch_time_suf", "shoot_factor_decrement_aff"]),
+                lot(800, 2, ["shoot_factor_decrement_pre", "aim_switch_time_suf", "shoot_factor_decrement_aff"]),
+            ]
+        }
+        history = {
+            "prices": [
+                {
+                    "amount": 1,
+                    "price": 1100,
+                    "time": "2026-10-22T06:00:00Z",
+                    "additional": {
+                        "qlt": 5,
+                        "attributes": [
+                            {"definitionId": "recoil_suf"},
+                            {"definitionId": "recoil_pre"},
+                            {"definitionId": "sadist"},
+                        ],
+                    },
+                },
+                {
+                    "amount": 1,
+                    "price": 950,
+                    "time": "2026-10-22T05:00:00Z",
+                    "additional": {
+                        "qlt": 2,
+                        "attributes": [
+                            {"definitionId": "hip_spread_pre"},
+                            {"definitionId": "aim_switch_time_suf"},
+                            {"definitionId": "shoot_factor_decrement_aff"},
+                        ],
+                    },
+                },
+            ]
+        }
+        view = build_auction_view(
+            "1pyq",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+        )
+        self.assertFalse(view["quantity_mode"])
+        self.assertEqual(
+            [row["name"] for row in view["active"]],
+            ["垂直 后退 狙击手", "稳定 颤抖 抑制器", "稳固 颤抖 抑制器"],
+        )
+        self.assertEqual(view["active"][0]["color"], QUALITY_COLORS[5])
+        self.assertEqual(view["active"][1]["color"], QUALITY_COLORS[2])
+        self.assertEqual(
+            view["recent_groups"][0]["rows"][0]["name"], "垂直 后退 猎人"
+        )
+        self.assertTrue(view["recent_groups"][0]["rows"][-1]["lowest"])
+
+        quality_only = build_auction_view(
+            "1pyq",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+            quality_filter=2,
+        )
+        self.assertEqual(len(quality_only["active"]), 2)
+        affix_only = build_auction_view(
+            "1pyq",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+            affix_filter="抑制",
+        )
+        self.assertEqual(len(affix_only["active"]), 2)
+        combined = build_auction_view(
+            "1pyq",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+            quality_filter=2,
+            affix_filter="抑制器",
+        )
+        self.assertEqual(len(combined["active"]), 2)
+        none_match = build_auction_view(
+            "1pyq",
+            lots,
+            history,
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+            quality_filter=2,
+            affix_filter="猎人",
+        )
+        self.assertIsNone(none_match)
 
     def test_auction_date_filters_history_and_limits(self):
         from datetime import date, datetime, timedelta, timezone

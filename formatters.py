@@ -545,17 +545,259 @@ def auction_day_cutoff(day: date_cls) -> datetime:
     return datetime.combine(day, time_cls.max, tzinfo=CST)
 
 
+MODULE_ITEM_ID = "1pyq"
+
+# Identified weapon modules are named by three rolled components.  The API
+# exposes them as ``additional.attributes`` with definition ids; these are the
+# community English names plus concise Chinese labels.
+MODULE_AFFIX_NAMES: dict[str, tuple[str, str]] = {
+    "ergonomics_pre": ("Comfortable", "舒适"),
+    "draw_time_pre": ("Instant", "瞬间"),
+    "aiming_speed_modifier_pre": ("Focal", "聚焦"),
+    "equipped_speed_modifier_pre": ("Mobile", "机动"),
+    "aim_switch_time_pre": ("Vigilant", "警觉"),
+    "recoil_pre": ("Vertical", "垂直"),
+    "horizontal_recoil_pre": ("Horizontal", "水平"),
+    "shoot_factor_decrement_pre": ("Stable", "稳固"),
+    "wiggle_pre": ("Harmonious", "和谐"),
+    "hip_spread_pre": ("Steady", "稳定"),
+    "recoil_gain_pre": ("Smooth", "平滑"),
+    "spread_pre": ("Summing", "叠加"),
+    "ergonomics_suf": ("Discomfortable", "不适"),
+    "draw_time_suf": ("Inert", "迟钝"),
+    "aiming_speed_modifier_suf": ("Slow", "缓慢"),
+    "equipped_speed_modifier_suf": ("Sluggish", "迟缓"),
+    "aim_switch_time_suf": ("Shivering", "颤抖"),
+    "recoil_suf": ("Receding", "后退"),
+    "horizontal_recoil_suf": ("Shifting", "偏移"),
+    "shoot_factor_decrement_suf": ("Unstable", "失稳"),
+    "wiggle_suf": ("Shaky", "摇晃"),
+    "hip_spread_suf": ("Unsteady", "不稳"),
+    "recoil_gain_suf": ("Sharp", "尖锐"),
+    "spread_suf": ("Denying", "否定"),
+    "inside": ("Compressor", "压缩器"),
+    "inside2": ("Decompressor", "减压器"),
+    "equalizer_op": ("Headsman", "刽子手"),
+    "surge": ("Breacher", "突破者"),
+    "berserk": ("Aggressor", "侵略者"),
+    "concentration": ("Blighter", "枯萎者"),
+    "sadist": ("Hunter", "猎人"),
+    "sledgehammer": ("Perforator", "穿孔器"),
+    "marksman": ("Sniper", "狙击手"),
+    "gyroscope": ("Regulator", "调节器"),
+    "acceleration": ("Thermos", "保温瓶"),
+    "finish": ("Finisher", "终结者"),
+    "ergonomics_aff": ("Biostabilizer", "生物稳定器"),
+    "draw_time_aff": ("Extractor", "提取器"),
+    "aiming_speed_modifier_aff": ("Operator", "操作器"),
+    "equipped_speed_modifier_aff": ("Slider", "滑行器"),
+    "aim_switch_time_aff": ("Shooter", "射手"),
+    "recoil_aff": ("Holder", "保持器"),
+    "horizontal_recoil_aff": ("Fixator", "固定器"),
+    "shoot_factor_decrement_aff": ("Suppressor", "抑制器"),
+    "wiggle_aff": ("Variator", "变化器"),
+    "hip_spread_aff": ("Projector", "投射器"),
+    "recoil_gain_aff": ("Sedator", "镇静器"),
+    "spread_aff": ("Controller", "控制器"),
+    # Older aliases seen in archived auction payloads.
+    "supressor": ("Compressor", "压缩器"),
+    "decompressor": ("Decompressor", "减压器"),
+    "executioner": ("Headsman", "刽子手"),
+    "punch": ("Breacher", "突破者"),
+    "aggressor": ("Aggressor", "侵略者"),
+    "destroyer": ("Blighter", "枯萎者"),
+    "thermos": ("Thermos", "保温瓶"),
+    "first5_damage_bonus": ("Finisher", "终结者"),
+    "last5_damage_bonus": ("Biostabilizer", "生物稳定器"),
+    # Defensive aliases for payloads that carry the readable affix name.
+    "hunter": ("Hunter", "猎人"),
+    "steady": ("Steady", "稳定"),
+    "suppressor": ("Suppressor", "抑制器"),
+    "stabilizer": ("Stabilizer", "稳定器"),
+    "compressor": ("Compressor", "压缩器"),
+}
+
+
+def _module_query_rest(argument: str) -> tuple[str, list[str]] | None:
+    """Split a weapon-module query into its item and trailing filter tokens."""
+    tokens = str(argument or "").split()
+    lower = [token.lower() for token in tokens]
+    patterns: tuple[tuple[tuple[str, ...], int], ...] = (
+        (("武器", "模块"), 2),
+        (("weapon", "module"), 2),
+        (("武器模块",), 1),
+        (("weaponmodule",), 1),
+        ((MODULE_ITEM_ID,), 1),
+    )
+    for pattern, size in patterns:
+        if tuple(lower[:size]) == pattern:
+            return "武器模块", tokens[size:]
+    return None
+
+
+def _module_attributes(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    additional = entry.get("additional")
+    values = (
+        additional.get("attributes")
+        if isinstance(additional, dict)
+        else None
+    )
+    if not isinstance(values, list):
+        values = entry.get("attributes")
+    if not isinstance(values, list):
+        return []
+    return [value for value in values if isinstance(value, dict)]
+
+
+def _module_attribute_rank(attribute: dict[str, Any]) -> int:
+    key = str(attribute.get("definitionId") or "")
+    value = attribute.get("type")
+    if value == 1:
+        return 1
+    if value == 2:
+        return 2
+    if key.endswith("_suf"):
+        return 1
+    if key.endswith("_pre"):
+        return 0
+    return 2
+
+
+def _module_affix_parts(entry: dict[str, Any]) -> list[tuple[str, str, str]]:
+    parts: list[tuple[str, str, str]] = []
+    for attribute in sorted(_module_attributes(entry), key=_module_attribute_rank):
+        key = str(attribute.get("definitionId") or "").strip()
+        if not key:
+            continue
+        english, chinese = MODULE_AFFIX_NAMES.get(
+            key, (key.replace("_", " ").title(), key.replace("_", " "))
+        )
+        parts.append((key, english, chinese))
+    return parts
+
+
+MODULE_EN_TO_ZH = {
+    english.lower(): chinese
+    for english, chinese in MODULE_AFFIX_NAMES.values()
+}
+
+
+def _translate_module_name(value: Any) -> str:
+    tokens = str(value or "").split()
+    if not tokens:
+        return ""
+    translated = [
+        MODULE_EN_TO_ZH.get(token.strip("«»\"'").lower()) for token in tokens
+    ]
+    if not any(translated):
+        return ""
+    return " ".join(
+        chinese or token for token, chinese in zip(tokens, translated)
+    )
+
+
+def _module_payload_name(entry: dict[str, Any]) -> str:
+    additional = entry.get("additional")
+    if isinstance(additional, dict):
+        for field in ("name", "title"):
+            value = additional.get(field)
+            if isinstance(value, str) and value.strip():
+                return value
+    value = entry.get("name")
+    return value if isinstance(value, str) else ""
+
+
+def _module_display_name(entry: dict[str, Any], fallback: str) -> str:
+    names = [chinese for _, _, chinese in _module_affix_parts(entry) if chinese]
+    if names:
+        return " ".join(names)
+    translated = _translate_module_name(_module_payload_name(entry))
+    return translated or fallback
+
+
+def _module_search_text(entry: dict[str, Any]) -> str:
+    values: list[str] = []
+    for key, english, chinese in _module_affix_parts(entry):
+        values.extend((key, english, chinese))
+    payload_name = _module_payload_name(entry)
+    if payload_name:
+        values.extend((payload_name, _translate_module_name(payload_name)))
+    additional = entry.get("additional")
+    if isinstance(additional, dict):
+        value = additional.get("description")
+        if isinstance(value, str):
+            values.append(value)
+    return " ".join(values)
+
+
+def _module_normalize(text: Any) -> str:
+    value = str(text or "").lower().replace("ё", "е")
+    return "".join(
+        ch for ch in value if ch.isalnum() or "\u4e00" <= ch <= "\u9fff"
+    )
+
+
+def _module_matches(entry: dict[str, Any], terms: list[str]) -> bool:
+    if not terms:
+        return True
+    haystack = _module_normalize(_module_search_text(entry))
+    return all(
+        _module_normalize(term) in haystack for term in terms if term
+    )
+
+
+def _parse_module_filters(
+    item: str, tokens: list[str], now: datetime | None
+) -> tuple[str, int | None, date_cls | None, int | None, str | None]:
+    count: int | None = None
+    day: date_cls | None = None
+    remaining = list(tokens)
+
+    if len(remaining) >= 3 and remaining[-1].isdigit():
+        parsed = parse_auction_date(remaining[-2], now=now)
+        if parsed is not None:
+            count = int(remaining[-1])
+            if not 1 <= count <= 200:
+                raise ValueError("数量请填 1–200。")
+            day = parsed
+            remaining = remaining[:-2]
+    if day is None and remaining:
+        parsed = parse_auction_date(remaining[-1], now=now)
+        if parsed is not None:
+            day = parsed
+            remaining = remaining[:-1]
+
+    quality: int | None = None
+    for index, token in enumerate(remaining):
+        candidate = QUALITY_ALIASES.get(token.lower())
+        if candidate is not None:
+            quality = candidate
+            del remaining[index]
+            break
+    if count is not None and quality is None:
+        raise ValueError(
+            "数量需要同时指定品质和时间，例如：/sz 拍卖 武器模块 粉 6.11 20"
+        )
+    affix = " ".join(remaining).strip() or None
+    return item, quality, day, count, affix
+
+
 def parse_auction_query(
     argument: str, *, now: datetime | None = None
-) -> tuple[str, int | None, date_cls | None, int | None]:
-    """Split ``item [quality] [date] [count]`` from an auction argument.
+) -> tuple[str, int | None, date_cls | None, int | None, str | None]:
+    """Split ``item [quality] [affix] [date] [count]`` from an argument.
 
-    The order is fixed, and every trailing part is optional except the item.
+    Every trailing part is optional except the item.  The affix filter only
+    applies to weapon modules; other items keep the original four-part order.
     A count is only accepted together with both a quality and a date.
     """
     text = " ".join(str(argument or "").split())
     if not text:
-        return "", None, None, None
+        return "", None, None, None, None
+    module = _module_query_rest(text)
+    if module is not None:
+        item, rest = module
+        return _parse_module_filters(item, rest, now)
     parts = text.split(" ")
 
     if len(parts) >= 3 and parts[-1].isdigit():
@@ -571,7 +813,7 @@ def parse_auction_query(
             item = " ".join(parts[:-3]).strip()
             if not item:
                 raise ValueError("请填写要查询的物品名或 ID。")
-            return item, QUALITY_ALIASES[parts[-3].lower()], day, count
+            return item, QUALITY_ALIASES[parts[-3].lower()], day, count, None
 
     if len(parts) >= 2:
         day = parse_auction_date(parts[-1], now=now)
@@ -586,15 +828,15 @@ def parse_auction_query(
             item = " ".join(parts[:item_end]).strip()
             if not item:
                 raise ValueError("请填写要查询的物品名或 ID。")
-            return item, quality, day, None
+            return item, quality, day, None, None
 
     if len(parts) >= 2:
         candidate = QUALITY_ALIASES.get(parts[-1].lower())
         if candidate is not None:
             item = " ".join(parts[:-1]).strip()
             if item:
-                return item, candidate, None, None
-    return text, None, None, None
+                return item, candidate, None, None, None
+    return text, None, None, None, None
 
 
 def _lot_price(lot: dict[str, Any]) -> int:
@@ -850,6 +1092,8 @@ def build_auction_view(
     history_limit: int | None = None,
     non_artifact: bool = False,
     item_color: str | None = None,
+    module_mode: bool = False,
+    affix_filter: str | None = None,
 ) -> dict[str, Any] | None:
     lots_payload = lots_payload if isinstance(lots_payload, dict) else {}
     history_payload = history_payload if isinstance(history_payload, dict) else {}
@@ -859,19 +1103,35 @@ def build_auction_view(
     history = [x for x in raw_history if isinstance(x, dict)] if isinstance(raw_history, list) else []
     lots = [lot for lot in lots if _lot_price(lot) > 0]
     history = [entry for entry in history if (_safe_int(entry.get("price")) or 0) > 0]
-    if non_artifact:
+    if module_mode:
+        non_artifact = True
+    if non_artifact and not module_mode:
         quality_filter = None
 
+    affix_terms = [
+        term for term in str(affix_filter or "").split() if term
+    ]
+    if module_mode and affix_terms:
+        lots = [lot for lot in lots if _module_matches(lot, affix_terms)]
+        history = [
+            entry for entry in history if _module_matches(entry, affix_terms)
+        ]
+
     if quality_filter is not None:
+        def _entry_quality(entry: dict[str, Any]) -> int | None:
+            return (
+                _quality_of(entry)
+                if module_mode
+                else _effective_quality(entry, non_artifact)
+            )
+
         lots = [
-            lot
-            for lot in lots
-            if _effective_quality(lot, non_artifact) == quality_filter
+            lot for lot in lots if _entry_quality(lot) == quality_filter
         ]
         history = [
             entry
             for entry in history
-            if _effective_quality(entry, non_artifact) == quality_filter
+            if _entry_quality(entry) == quality_filter
         ]
 
     if before is not None:
@@ -901,6 +1161,8 @@ def build_auction_view(
         unit_value = _unit_price(effective_total, amount)
         sort_price = (buyout or start or _lot_price(lot)) if not non_artifact else (buyout or start or 0)
         name = _auction_level_name(short, lot)
+        if module_mode:
+            name = _module_display_name(lot, name)
         if non_artifact and amount > 1:
             name = f"{name}×{amount}"
         active.append(
@@ -952,7 +1214,7 @@ def build_auction_view(
         for row in active
     }
     distinct_amounts = {amount for amount, _ in quantity_keys}
-    if non_artifact and len(quantity_keys) > 1:
+    if non_artifact and not module_mode and len(quantity_keys) > 1:
         offers_by_key: dict[
             tuple[int, int | None], dict[str, dict[str, Any] | None]
         ] = {}
@@ -1167,6 +1429,20 @@ def build_auction_view(
             "其他品质按 +等级保留最低价，组内按价格倒序"
         )
 
+    if module_mode and (quality_filter is not None or affix_terms):
+        filter_parts: list[str] = []
+        if quality_filter is not None:
+            filter_parts.append(
+                "品质："
+                + quality_label(quality_filter).split("（", 1)[0]
+            )
+        if affix_terms:
+            filter_parts.append("词条：" + " ".join(affix_terms))
+        filter_note = "筛选：" + "｜".join(filter_parts)
+        active_note = (
+            f"{active_note}\n{filter_note}" if active_note else filter_note
+        )
+
     recent: dict[int | None, list[dict[str, Any]]] = {}
     for entry in history:
         group_quality = _effective_quality(entry, non_artifact)
@@ -1177,6 +1453,8 @@ def build_auction_view(
         amount = _safe_int(entry.get("amount")) or 1
         unit_value = _unit_price(price, amount)
         name = _auction_level_name(short, entry)
+        if module_mode:
+            name = _module_display_name(entry, name)
         if non_artifact and amount > 1:
             name = f"{name}×{amount}"
         recent.setdefault(group_quality, []).append(
@@ -1214,9 +1492,12 @@ def build_auction_view(
         recent_qualities = {
             row.get("quality") for row in rows if row.get("quality") is not None
         }
-        if rows and len(recent_qualities) <= 1:
+        recent_grouped_quality = (
+            len(recent_qualities) > 1 and not module_mode
+        )
+        if rows and not recent_grouped_quality:
             # Quality groups already make the cheap rows obvious; the badge
-            # stays only for the ordinary single-quality list.
+            # stays only for a flat list.
             unit_values = [
                 row.get("unit_value", 0) for row in rows if row.get("unit_value", 0) > 0
             ]
@@ -1227,8 +1508,7 @@ def build_auction_view(
                         row["lowest"] = True
                         row["lowest_label"] = "最低单价"
                         break
-        if len(recent_qualities) > 1:
-            recent_grouped_quality = True
+        if recent_grouped_quality:
             groups = []
             for quality in sorted(
                 {row.get("quality") for row in rows},
@@ -1315,6 +1595,8 @@ def build_auction_view(
         "recent_total_limit": total_limit,
         "recent_grouped_quality": recent_grouped_quality,
         "non_artifact": non_artifact,
+        "module_mode": module_mode,
+        "affix_filter": affix_filter or "",
         "history_only": before is not None,
         "before": before_label,
         "history_note": history_note,
@@ -1496,7 +1778,7 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             else:
                 lines.append("当前无在售")
             if view.get("active_note"):
-                lines.append(str(view["active_note"]))
+                lines.extend(str(view["active_note"]).split("\n"))
         if view.get("recent_grouped_quality"):
             recent_heading = (
                 f"最近成交（最多 {view['recent_total_limit']} 条，"
@@ -2902,7 +3184,7 @@ def format_operations(payload: dict[str, Any] | None, map_name: str | None = Non
 def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
-        "/sz auction / 拍卖行 <物品> [品质] [日期] [数量] — 查看在售、成交与成交历史；日期如 6.11、25.6.11",
+        "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史；武器模块可加词条，如 武器模块 粉 抑制器",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
         "/sz item / 物品 <中文名/英文名/ID> — 查看物品属性、描述和 ID",
