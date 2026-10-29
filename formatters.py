@@ -3271,6 +3271,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz operations [地图ID] — 最近行动记录",
         "/sz regions — 官方区服列表",
         "/sz diag / 状态 — 查看运行环境、数据、缓存与存储状态（不包含凭证）",
+        "/sz 版本 / 检查更新 — 只检查 GitHub 最新版本，不执行更新（无需管理员）",
         "/sz 插件更新 / 更新 / update — 检查 GitHub Release 并自更新（管理员；自动更新可在配置开启）",
         "/sz help — 显示本帮助",
     ]

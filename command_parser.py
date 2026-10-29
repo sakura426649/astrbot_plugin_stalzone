@@ -77,6 +77,12 @@ ALIASES = {
     "插件更新": "update",
     "更新插件": "update",
     "插件升级": "update",
+    "version": "check_version",
+    "check": "check_version",
+    "check_version": "check_version",
+    "版本": "check_version",
+    "检查版本": "check_version",
+    "检查更新": "check_version",
 }
 
 

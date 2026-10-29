@@ -2008,6 +2008,9 @@ class ParserTests(unittest.TestCase):
             "/sz 更新插件": ("update", ""),
             "/sz 更新": ("update", ""),
             "/sz update": ("update", ""),
+            "/sz 版本": ("check_version", ""),
+            "/sz 检查版本": ("check_version", ""),
+            "/sz 检查更新": ("check_version", ""),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)

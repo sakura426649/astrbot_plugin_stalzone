@@ -1725,7 +1725,7 @@ def render_help_card(
         (
             "其他",
             "MORE",
-            "/sz 战队列表 · /sz 行动 · /sz 区服 · /sz 帮助",
+            "/sz 战队列表 · /sz 行动 · /sz 区服 · /sz 帮助 · /sz 版本",
             [
                 "战队列表、行动记录、区服列表",
                 "候选 /sz 候选｜诊断 /sz diag｜更新 /sz 更新",

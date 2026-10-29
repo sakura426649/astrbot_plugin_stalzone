@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.4"
+PLUGIN_VERSION = "1.6.5"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1790,6 +1790,21 @@ class StalzonePlugin(Star):
         except asyncio.CancelledError:
             raise
 
+    async def _handle_version_check(self) -> str:
+        try:
+            release = await self._fetch_latest_release()
+        except PluginUpdateError as exc:
+            return f"检查更新失败：{exc}"
+        latest_tag = str(release.get("tag_name") or "").strip()
+        if not _version_key(latest_tag):
+            return "GitHub Release 没有可识别的版本号。"
+        if _version_key(latest_tag) <= _version_key(PLUGIN_VERSION):
+            return f"当前已是最新版本：v{PLUGIN_VERSION}。"
+        return (
+            f"当前版本：v{PLUGIN_VERSION}；最新版本：{latest_tag}。"
+            "可使用 /sz 更新 安装新版本。"
+        )
+
     async def _handle_self_update(self, event: Any) -> str:
         return await self._run_self_update(event, auto=False)
 
@@ -1931,6 +1946,9 @@ class StalzonePlugin(Star):
         except Exception:
             pass
         sub, arg = parse_command(event.message_str)
+        if sub == "check_version":
+            yield event.plain_result(await self._handle_version_check())
+            return
         if sub in UPDATE_COMMANDS or (
             sub == "插件" and arg.strip().lower() in {"更新", "升级", "update"}
         ):

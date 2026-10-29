@@ -423,6 +423,18 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("updater-called", text)
         self.assertEqual(len(called), 1)
 
+    async def test_version_check_does_not_update(self):
+        plugin = self.make_plugin()
+
+        async def latest():
+            return {"tag_name": "v9.9.9", "assets": []}
+
+        plugin._fetch_latest_release = latest  # type: ignore[assignment]
+        text = await plugin._handle_version_check()
+        self.assertIn(f"v{main_module.PLUGIN_VERSION}", text)
+        self.assertIn("v9.9.9", text)
+        self.assertIn("可使用 /sz 更新", text)
+
     async def test_self_update_latest_and_admin_guard(self):
         class AdminEvent(FakeEvent):
             role = "admin"

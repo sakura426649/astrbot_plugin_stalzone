@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.6.4-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.6.5-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -114,6 +114,7 @@
 | 指令 | 作用 | 示例 |
 | --- | --- | --- |
 | `/sz auction <物品> [品质] [词条] [日期] [数量]` | 在售 + 成交；支持品质、日期和数量筛选；武器模块支持词条模糊筛选 | `/sz 拍卖 原子 粉 6.11 20`；`/sz 拍卖 武器模块 粉 抑制器` |
+| `/sz 版本` / `/sz 检查更新` / `/sz 检查版本` | 只检查 GitHub 最新版本，不执行更新，无管理员限制 | `/sz 版本` |
 | `/sz 插件更新` / `/sz 更新` / `/sz update` | 通过 GitHub Release 检查并自更新；管理员默认可用 | `/sz 插件更新` |
 | `/sz emission [区服]` | 距上次风暴时间与当前状态 | `/sz 风暴 ru` |
 | `/sz player <角色名/UUID> [区服]` | 玩家公开资料、战队、PvP 估算分 | `/sz 玩家 Sakura_Akira eu` |
@@ -155,7 +156,7 @@
 
 ## 插件自更新
 
-发送 `/sz 插件更新`、`/sz 更新插件`、`/sz 更新` 或 `/sz update`，插件会通过 GitHub Release API 检查最新版本：
+发送 `/sz 版本`、`/sz 检查版本` 或 `/sz 检查更新` 只查询 GitHub Release 并对比版本，不下载、不备份、不更新，也没有管理员限制。发送 `/sz 插件更新`、`/sz 更新插件`、`/sz 更新` 或 `/sz update` 才会执行自更新：
 
 - 已是最新版：直接提示当前版本。
 - 有新版本：先比较本地 `item_icons` 与新版 `item_index.json`；常用物品图标有缺失才下载 `astrbot_plugin_stalzone_full.zip`（完整包），否则下载 `astrbot_plugin_stalzone.zip`（轻量包）。轻量包覆盖不会删除本地已有的额外图标。
@@ -336,7 +337,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **228 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **229 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

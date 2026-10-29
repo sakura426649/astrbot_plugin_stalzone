@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.5 - 2026-10-29
+
+### Added
+
+- Check-only version commands: `/sz 版本`, `/sz 检查版本`, `/sz 检查更新` (also `version`/`check`). They query the GitHub latest Release, compare it with the running version, and report either "up to date" or the newer version. They never download, back up or update anything, and have no administrator restriction.
+
+### Tests
+
+- Added parser aliases and a no-update version-check test; 229 tests and 13 visual signatures pass.
+
 ## 1.6.4 - 2026-10-29
 
 ### Changed
