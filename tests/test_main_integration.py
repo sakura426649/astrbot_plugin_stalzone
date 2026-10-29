@@ -2085,6 +2085,72 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("@", private_chain.components[0].text)
         self.assertEqual(plugin._emission_subscribers(), {})
 
+    async def test_multiple_group_subscribers_share_one_message(self):
+        class FakeAt:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class FakePlain:
+            def __init__(self, text):
+                self.text = text
+
+        class FakeChain:
+            def __init__(self, components=None):
+                self.components = list(components or [])
+
+            def at(self, name, qq):
+                self.components.append(FakeAt(name=name, qq=qq))
+                return self
+
+            def message(self, text):
+                self.components.append(FakePlain(text))
+                return self
+
+        class RecordingContext(Context):
+            def __init__(self):
+                self.sent = []
+
+            async def send_message(self, target, chain):
+                self.sent.append((target, chain))
+                return True
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        now = datetime.now(timezone.utc)
+        context = RecordingContext()
+        plugin = StalzonePlugin(
+            context,
+            {"region": "eu", "render_mode": "text"},
+        )
+        plugin._auto_state_path = Path(temp.name) / "emission_auto_state.json"
+        subscribers = {}
+        for user_id, name in (("456", "Tester-A"), ("789", "Tester-B")):
+            subscribers[plugin._subscriber_key(self.GROUP_TARGET, user_id)] = {
+                "session": self.GROUP_TARGET,
+                "user_id": user_id,
+                "name": name,
+                "private": False,
+                "created_at": (now - timedelta(hours=1)).isoformat(),
+            }
+        plugin._auto_state = {"subscribers": subscribers}
+        with patch.object(main_module, "MessageChain", FakeChain):
+            sent = await plugin._notify_emission_subscribers(
+                {"currentStart": now.isoformat()}, now
+            )
+        self.assertEqual(sent, 2)
+        self.assertEqual(len(context.sent), 1)
+        target, chain = context.sent[0]
+        self.assertEqual(target, self.GROUP_TARGET)
+        mentions = [
+            component.kwargs["qq"]
+            for component in chain.components
+            if isinstance(component, FakeAt)
+        ]
+        self.assertEqual(mentions, ["456", "789"])
+        self.assertEqual(len(chain.components), 3)
+        self.assertIn("下一场风暴需重新订阅", chain.components[2].text)
+        self.assertEqual(plugin._emission_subscribers(), {})
+
     async def test_storm_subscription_waits_for_next_storm(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

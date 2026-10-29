@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.8.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.8.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -141,7 +141,7 @@ The plugin registers six LLM tools: `stalzone_auction`, `stalzone_item`, `stalzo
 
 ### One-shot storm subscriptions
 
-Any group member or private-chat user can send `/sz 风暴订阅` to subscribe to the next emission. On success the bot @-mentions the user in the group, or replies directly in private chat. When the storm starts, the plugin first sends the allow-list group image, then mentions each subscriber in the session where they subscribed; private subscribers get a direct message. The notice includes the official start time and says the next storm requires a new subscription. Subscriptions are one-shot and are removed after a successful notice. Subscribing while a storm is already active waits for the next one. `/sz 风暴订阅 状态` shows the current subscription and `/sz 风暴订阅 取消` removes it. Records live in `emission_auto_state.json` and survive reloads/restarts; failed sends are retried while the storm is active. OneBot-compatible platforms only; official QQ bots cannot receive proactive mentions.
+Any group member or private-chat user can send `/sz 风暴订阅` to subscribe to the next emission. On success the bot @-mentions the user in the group, or replies directly in private chat. When the storm starts, the plugin first sends the allow-list group image, then notifies subscribers in the session where they subscribed; multiple subscribers in the same group are combined into one message with all mentions, while private subscribers get a direct message. The notice includes the official start time and says the next storm requires a new subscription. Subscriptions are one-shot and are removed after a successful notice. Subscribing while a storm is already active waits for the next one. `/sz 风暴订阅 状态` shows the current subscription and `/sz 风暴订阅 取消` removes it. Records live in `emission_auto_state.json` and survive reloads/restarts; failed sends are retried while the storm is active. OneBot-compatible platforms only; official QQ bots cannot receive proactive mentions.
 
 ## Development
 

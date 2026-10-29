@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.8.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.8.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -238,7 +238,7 @@
 任何群成员或私聊用户都可以发送 `/sz 风暴订阅`，订阅**下一场**风暴：
 
 - 订阅成功时，群聊会 @ 订阅者并提示「已成功订阅下一场风暴，届时会在当前会话提醒您」；私聊直接回复，不 @。
-- 风暴到来时，先向白名单群发送警报图，再逐个提醒订阅用户：群聊 @ 订阅者，私聊直接发消息；提示包含实际开始时间，并说明「下一场风暴需重新订阅」。
+- 风暴到来时，先向白名单群发送警报图，再提醒订阅用户：同一个群会话有多人订阅时，合并成一条消息同时 @ 所有订阅者；私聊直接发消息。提示包含实际开始时间，并说明「下一场风暴需重新订阅」。
 - 订阅是一次性的：成功提醒后自动删除；如果在风暴已经开始后才订阅，不会立刻收到当前风暴的提醒，而是等下一场。
 - 订阅只对 OneBot 等支持主动推送的平台开放；QQ 官方机器人无法主动 @ 或私聊推送，会拒绝订阅。
 - 订阅记录与已提醒状态保存在 `emission_auto_state.json`，插件重载或 Bot 重启后继续有效；发送失败的订阅会保留，在风暴持续期间重试。白名单为空时订阅仍可工作。
@@ -373,7 +373,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **247 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **248 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

@@ -230,7 +230,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.8.0"
+PLUGIN_VERSION = "1.8.1"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -903,17 +903,22 @@ class StalzonePlugin(Star):
             f"@{name or user_id}：{text}" if (name or user_id) else text
         )
 
-    def _subscriber_chain(self, entry: dict[str, Any], text: str) -> Any:
+    def _subscriber_chain(
+        self, entries: list[dict[str, Any]], text: str
+    ) -> Any:
         if MessageChain is None:
             raise RuntimeError("MessageChain unavailable")
+        if not entries:
+            raise RuntimeError("no subscriber entries")
         chain = MessageChain()
-        if not entry.get("private"):
-            name = str(entry.get("name") or entry.get("user_id") or "")
-            user_id = str(entry.get("user_id") or "")
-            try:
-                chain.at(name or user_id, user_id)
-            except Exception:
-                chain.message(f"@{name or user_id} ")
+        if not entries[0].get("private"):
+            for entry in entries:
+                name = str(entry.get("name") or entry.get("user_id") or "")
+                user_id = str(entry.get("user_id") or "")
+                try:
+                    chain.at(name or user_id, user_id)
+                except Exception:
+                    chain.message(f"@{name or user_id} ")
             chain.message(f"：{text}")
         else:
             chain.message(text)
@@ -937,7 +942,12 @@ class StalzonePlugin(Star):
                 start_label = ""
         sent = 0
         changed = False
-        for key, entry in list(subscribers.items()):
+        text = "您订阅的风暴已经开始"
+        if start_label:
+            text += f"（{start_label}）"
+        text += "，下一场风暴需重新订阅。"
+        batches: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        for key, entry in subscribers.items():
             created = parse_auction_time(entry.get("created_at"))
             if (
                 isinstance(start_time, datetime)
@@ -955,18 +965,19 @@ class StalzonePlugin(Star):
                     target,
                 )
                 continue
-            text = "您订阅的风暴已经开始"
-            if start_label:
-                text += f"（{start_label}）"
-            text += "，下一场风暴需重新订阅。"
+            batches.setdefault(target, []).append((key, entry))
+        for target, items in batches.items():
             try:
-                chain = self._subscriber_chain(entry, text)
+                chain = self._subscriber_chain(
+                    [entry for _key, entry in items], text
+                )
                 result = await self.context.send_message(target, chain)
                 if result is False:
                     raise RuntimeError("send_message returned False")
-                subscribers.pop(key, None)
+                for key, _entry in items:
+                    subscribers.pop(key, None)
                 changed = True
-                sent += 1
+                sent += len(items)
             except Exception:
                 logger.warning(
                     "STALZONE subscription notification failed for %s",

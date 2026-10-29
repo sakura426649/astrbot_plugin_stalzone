@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.8.1 - 2026-10-29
+
+### Changed
+
+- Storm subscriber notifications are grouped by session: when several users in the same group subscribed, the storm alert now sends one message mentioning all of them instead of one message per user. Private chats still receive one direct message. Failed grouped sends keep all affected subscriptions for retry.
+
+### Tests
+
+- Added a grouped-mention regression with two subscribers in the same group; 248 tests and 14 visual signatures pass.
+
 ## 1.8.0 - 2026-10-29
 
 ### Added

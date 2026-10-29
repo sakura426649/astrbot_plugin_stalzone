@@ -32,7 +32,7 @@ DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 0.5
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 VALID_REGIONS = frozenset({"ru", "eu", "na", "sea", "nea"})
-USER_AGENT = "astrbot-plugin-stalzone/1.8.0"
+USER_AGENT = "astrbot-plugin-stalzone/1.8.1"
 
 _ITEM_ID_RE = re.compile(r"^[^\x00-\x1f/\\]{1,128}$")
 
