@@ -494,6 +494,38 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(event._has_send_oper)
         self.assertTrue(event.stopped)
 
+    async def test_missing_argument_usage_blocks(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+        plugin = self.make_plugin()
+        for command in (
+            "/sz 拍卖",
+            "/sz 物品",
+            "/sz 玩家",
+            "/sz 调整",
+            "/sz 通行证计算",
+            "/sz 战队",
+            "/sz 候选",
+        ):
+            text = await collect(plugin, command)
+            self.assertIn("用法：", text, command)
+            self.assertIn("示例：", text, command)
+        for command in (
+            "/sz 风暴提醒",
+            "/sz 默认区服",
+            "/sz 拍卖显示模式",
+        ):
+            results = []
+            async for item in plugin.sz(AdminEvent(command)):
+                results.append(item[1])
+            text = "\n".join(results)
+            self.assertIn("用法：", text, command)
+            self.assertIn("参数：", text, command)
+
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
 

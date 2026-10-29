@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.7.0"
+PLUGIN_VERSION = "1.7.1"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -357,32 +357,125 @@ class PendingChoice:
 
 USAGE = {
     "auction": (
-        "用法：/sz auction <item_id 或 中文/英文物品名> [品质] [词条] [日期] [数量]\n"
-        "示例：/sz 拍卖 寒冰；/sz 拍卖 原子 粉；/sz 拍卖 原子 粉 6.11 20\n"
-        "武器模块：/sz 拍卖 武器模块 粉；/sz 拍卖 武器模块 抑制器；"
-        "/sz 拍卖 武器模块 粉 抑制器\n"
-        "日期支持 6.11、6/11、25.6.11、25/6/11；数量需同时有品质和日期，最多 200"
+        "用法：/sz 拍卖 <物品> [品质] [词条] [日期] [数量]\n"
+        "说明：查询物品的在售、最近成交与历史成交\n"
+        "参数：\n"
+        "  物品   必填，中文名 / 英文名 / 物品ID\n"
+        "  品质   可选，白/绿/蓝/粉/红/金 或 常见/罕见/特殊/稀有/独特/传奇\n"
+        "  词条   可选，仅武器模块，如 猎人/抑制器，支持模糊匹配\n"
+        "  日期   可选，6.11、6/11、25.6.11、25/6/11\n"
+        "  数量   可选，需同时有品质和日期，范围 1–200\n"
+        "示例：\n"
+        "  /sz 拍卖 原子\n"
+        "  /sz 拍卖 原子 粉 6.11 20\n"
+        "  /sz 拍卖 武器模块 粉 抑制器"
     ),
     "emission": (
-        "用法：/sz emission [EU/RU/NA/SEA/NEA]\n"
-        "中文：/sz 风暴 [区服]\n"
-        "示例：/sz 风暴；/sz 风暴 ru"
+        "用法：/sz emission / /sz 风暴 [EU/RU/NA/SEA/NEA]\n"
+        "说明：查看上次风暴时间与当前状态\n"
+        "参数：\n"
+        "  区服   可选，默认使用配置区服\n"
+        "示例：\n"
+        "  /sz 风暴\n"
+        "  /sz 风暴 ru"
     ),
-    "item": "用法：/sz item <中文名/英文名/ID>\n示例：/sz item 寒冰 或 /sz item Spectral Crystal",
-    "player": "用法：/sz player <角色名 或 UUID>\n中文：/sz 玩家 <角色名 或 UUID>",
-    "clan": "用法：/sz clan <战队名/标签/ID> [EU/RU/NA/SEA/NEA]",
-    "clans": "用法：/sz clans [页码]",
-    "operations": "用法：/sz operations [地图ID]",
-    "diag": "用法：/sz diag 或 /sz 状态\n查看运行环境、API、数据资产、缓存、存储与渲染状态（不包含凭证）",
-    "balance": "用法：/sz 调整 <武器/神器/装备名或ID>\n示例：/sz 调整 AK-308 或 /sz 调整 多面体",
+    "item": (
+        "用法：/sz 物品 <中文名/英文名/物品ID>\n"
+        "说明：查看物品属性、描述、类别和图标\n"
+        "参数：\n"
+        "  物品   必填，支持中文名、英文名或 ID\n"
+        "示例：\n"
+        "  /sz 物品 寒冰\n"
+        "  /sz 物品 Spectral Crystal"
+    ),
+    "player": (
+        "用法：/sz 玩家 <角色名/UUID> [区服]\n"
+        "说明：查看角色公开资料、战队、PvP 估算分和统计\n"
+        "参数：\n"
+        "  角色名   必填，角色名或 UUID\n"
+        "  区服     可选，EU/RU/NA/SEA/NEA\n"
+        "示例：\n"
+        "  /sz 玩家 Sakura_Akira eu"
+    ),
+    "clan": (
+        "用法：/sz 战队 <战队名/标签/ID> [区服]\n"
+        "说明：查看战队资料；优先匹配名称括号内的标签，标签长度不限\n"
+        "参数：\n"
+        "  战队   必填，名称、标签或 ID\n"
+        "  区服   可选，EU/RU/NA/SEA/NEA\n"
+        "示例：\n"
+        "  /sz 战队 Clan\n"
+        "  /sz 战队 战队名 eu"
+    ),
+    "clans": "用法：/sz 战队列表 [页码]\n说明：查看战队目录；页码可选。",
+    "operations": "用法：/sz 行动 [地图ID]\n说明：查看最近行动记录；地图 ID 可选。",
+    "diag": (
+        "用法：/sz diag 或 /sz 状态\n"
+        "说明：查看运行环境、API 健康、自动提醒、数据资产、缓存、存储和渲染状态（不含凭证）\n"
+        "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员"
+    ),
+    "balance": (
+        "用法：/sz 调整 <武器/神器/装备名或ID>\n"
+        "说明：查看官方 Patch Notes 中的平衡调整记录\n"
+        "参数：\n"
+        "  装备   必填，武器、神器、配件或装备名称/ID\n"
+        "示例：\n"
+        "  /sz 调整 AK-308\n"
+        "  /sz 调整 多面体"
+    ),
     "pass": (
         "用法：/sz 通行证计算 <当前等级> <每日任务>[+超载] <剩余天数> [每周天数=7]\n"
-        "也可：/sz 通行证计算 15 15 2 20 7（等级 每日任务 超载 剩余天数 每周天数，超载可为0）\n"
-        "每周天数只在“+号且四参数”或“五参数”时取最后一个参数；三参数/无+四参数默认7天\n"
-        "示例：/sz 通行证计算 15 15+2 20 7 或 /sz 通行证计算 15 15 2 20"
+        "说明：计算通行证经验与等级预测\n"
+        "参数：\n"
+        "  当前等级   必填，整数\n"
+        "  每日任务   必填，每日任务经验；可用 +N 表示超载任务\n"
+        "  剩余天数   必填，整数\n"
+        "  每周天数   可选，默认 7\n"
+        "示例：\n"
+        "  /sz 通行证计算 15 15+2 20 7\n"
+        "  /sz 通行证计算 15 15 2 20"
+    ),
+    "candidate": (
+        "用法：/sz 候选 <序号>\n"
+        "说明：使用最近一次候选继续原查询，候选有效期 10 分钟\n"
+        "参数：\n"
+        "  序号   必填，从 1 开始的候选编号\n"
+        "示例：\n"
+        "  /sz 候选 1"
+    ),
+    "alert": (
+        "用法：/sz 风暴提醒 白名单 <QQ群号> 或 /sz 风暴提醒 黑名单 <QQ群号>\n"
+        "说明：修改自动风暴提醒白名单，与 WebUI 配置同步\n"
+        "参数：\n"
+        "  白名单   把群加入白名单，并清除该群旧的黑名单记录\n"
+        "  黑名单   把群从白名单移除，不会加入黑名单；之后可再次加白\n"
+        "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
+        "示例：\n"
+        "  /sz 风暴提醒 白名单 123456789\n"
+        "  /sz 风暴提醒 黑名单 123456789"
+    ),
+    "set_region": (
+        "用法：/sz 区服切换 <ru/eu/na/sea/nea>\n"
+        "别名：/sz 默认区服 <区服>\n"
+        "说明：修改默认查询区服，修改后立即生效\n"
+        "参数：\n"
+        "  区服   必填，ru / eu / na / sea / nea\n"
+        "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
+        "示例：\n"
+        "  /sz 区服切换 eu"
+    ),
+    "auction_mode": (
+        "用法：/sz 拍卖显示模式 <0/1/聚合/全部>\n"
+        "说明：切换拍卖在售列表的渲染方式\n"
+        "参数：\n"
+        "  0 / 聚合   聚合显示，同数量同品质保留最低买断，并沿用 30 条限制\n"
+        "  1 / 全部   全部显示，跳过聚合与截断，渲染所有查到的在售条目\n"
+        "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
+        "示例：\n"
+        "  /sz 拍卖显示模式 0\n"
+        "  /sz 拍卖显示模式 全部"
     ),
 }
-
 
 class StalzonePlugin(Star):
     """STALZONE auction / emission / profile / clan / item query plugin."""
@@ -2063,10 +2156,7 @@ class StalzonePlugin(Star):
     async def _handle_alert_setting(self, argument: str, event: Any) -> str:
         parts = str(argument or "").strip().split(maxsplit=1)
         if len(parts) < 2:
-            return (
-                "用法：/sz 风暴提醒 白名单 <QQ群号>，"
-                "或 /sz 风暴提醒 黑名单 <QQ群号>"
-            )
+            return USAGE["alert"]
         action = parts[0].strip().lower()
         raw_groups = parts[1].strip()
         groups = []
@@ -2075,7 +2165,7 @@ class StalzonePlugin(Star):
             if group and group.isdigit() and group not in groups:
                 groups.append(group)
         if not groups:
-            return "请提供 QQ 群号，例如：/sz 风暴提醒 白名单 123456789"
+            return USAGE["alert"]
         whitelist = self._group_values("emission_group_whitelist")
         existing = {self._group_number(value) for value in whitelist}
         if action in {"白名单", "whitelist", "add", "添加"}:
@@ -2098,7 +2188,7 @@ class StalzonePlugin(Star):
             ]
             blacklist = self._group_values("emission_group_blacklist")
         else:
-            return "请使用「白名单」或「黑名单」，例如：/sz 风暴提醒 白名单 123456789"
+            return USAGE["alert"]
         self.config["emission_group_whitelist"] = whitelist
         self.config["emission_group_blacklist"] = blacklist
         platform = str(
@@ -2126,10 +2216,7 @@ class StalzonePlugin(Star):
     def _handle_set_region(self, argument: str) -> str:
         value = str(argument or "").strip().lower()
         if not value:
-            return (
-                f"当前默认区服：{self._region().upper()}。"
-                "用法：/sz 区服切换 eu（或 ru/na/sea/nea）"
-            )
+            return USAGE["set_region"]
         if value not in VALID_REGIONS:
             return "区服只能是 ru / eu / na / sea / nea。"
         self.config["region"] = value
@@ -2150,11 +2237,7 @@ class StalzonePlugin(Star):
             "full": "full",
         }
         if not value:
-            current = str(
-                self._cfg("auction_display_mode", "aggregate")
-            ).strip().lower()
-            label = "全部显示" if current in {"full", "all"} else "聚合显示"
-            return f"当前拍卖显示模式：{label}。用法：/sz 拍卖显示模式 0/1/聚合/全部"
+            return USAGE["auction_mode"]
         mode = modes.get(value)
         if mode is None:
             return "拍卖显示模式只能是 0/聚合 或 1/全部。"
@@ -2281,6 +2364,9 @@ class StalzonePlugin(Star):
                 return
             coro = self._handle_auction(arg, event=event)
         elif sub == "candidate":
+            if not arg:
+                yield event.plain_result(USAGE["candidate"])
+                return
             coro = self._handle_candidate(arg, event)
         elif sub == "emission":
             coro = self._handle_emission(arg)

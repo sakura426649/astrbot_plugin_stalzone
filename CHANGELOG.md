@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.7.1 - 2026-10-29
+
+### Changed
+
+- Commands that require arguments now return a detailed usage block when the argument is missing: purpose, parameter table and examples, with consistent formatting. This covers auction, item, player, balance, pass, clan, candidate, storm-alert whitelist, default region and auction display mode. `/sz emission` was added as an explicit alias in the storm usage text.
+
+### Tests
+
+- Added missing-argument usage coverage; 236 tests and 13 visual signatures pass.
+
 ## 1.7.0 - 2026-10-29
 
 ### Added
