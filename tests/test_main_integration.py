@@ -542,6 +542,20 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("完整包", reason)
         self.assertEqual(main_module._version_key("v1.5.2"), (1, 5, 2))
 
+    def test_prune_update_backups_keeps_latest_three(self):
+        data_dir = Path(tempfile.mkdtemp())
+        root = data_dir / "update_backups"
+        root.mkdir()
+        for index in range(5):
+            path = root / f"1.0.{index}"
+            path.mkdir()
+            os.utime(path, (index + 1, index + 1))
+        StalzonePlugin._prune_update_backups(data_dir)
+        self.assertEqual(
+            sorted(path.name for path in root.iterdir()),
+            ["1.0.2", "1.0.3", "1.0.4"],
+        )
+
     def test_apply_update_zip_installs_and_rolls_back(self):
         import zipfile
 

@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.3"
+PLUGIN_VERSION = "1.6.4"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -213,6 +213,7 @@ UPDATE_LIGHT_ASSET_NAME = "astrbot_plugin_stalzone.zip"
 # These catalog entries have no icon in the official full package either;
 # counting them as "missing" would force a full download on every update.
 ICONLESS_COMMON_IDS = frozenset({"1rk6g", "5lrg1", "96jyz", "3gp95"})
+UPDATE_BACKUP_KEEP = 3
 UPDATE_COMMANDS = frozenset(
     {"update", "插件更新", "更新插件", "更新", "插件升级", "升级"}
 )
@@ -890,6 +891,10 @@ class StalzonePlugin(Star):
     async def initialize(self) -> None:
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
+        try:
+            await asyncio.to_thread(self._prune_update_backups, self._cache_dir())
+        except Exception:
+            logger.exception("STALZONE update-backup cleanup failed")
         self._start_emission_auto()
         self._start_auto_update()
 
@@ -1628,6 +1633,23 @@ class StalzonePlugin(Star):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    @staticmethod
+    def _prune_update_backups(data_dir: Path) -> None:
+        root = data_dir / "update_backups"
+        if not root.is_dir():
+            return
+        backups = [
+            path for path in root.iterdir() if path.is_dir()
+        ]
+        if len(backups) <= UPDATE_BACKUP_KEEP:
+            return
+        backups.sort(
+            key=lambda path: (path.stat().st_mtime_ns, path.name),
+            reverse=True,
+        )
+        for old in backups[UPDATE_BACKUP_KEEP:]:
+            shutil.rmtree(old, ignore_errors=True)
+
     def _schedule_plugin_reload(
         self,
         event: Any = None,
@@ -1851,6 +1873,7 @@ class StalzonePlugin(Star):
                 await asyncio.to_thread(
                     self._backup_plugin_dir, plugin_root, backup_root
                 )
+                await asyncio.to_thread(self._prune_update_backups, data_dir)
                 await self._update_status(event, "备份完成，正在异步解压覆盖…")
                 await asyncio.to_thread(
                     self._apply_update_zip,

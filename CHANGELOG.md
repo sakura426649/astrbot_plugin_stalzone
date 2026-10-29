@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.4 - 2026-10-29
+
+### Changed
+
+- Update backups are now capped at the latest three copies. Pruning runs at plugin startup and after each new backup, so repeated updates no longer accumulate dozens of 40 MB directories. The current backup is always retained for rollback.
+
+### Tests
+
+- Added backup-retention coverage; 228 tests and 13 visual signatures pass.
+
 ## 1.6.3 - 2026-10-29
 
 ### Changed

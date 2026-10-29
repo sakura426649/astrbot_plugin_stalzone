@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.6.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.6.4-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -160,7 +160,7 @@
 - 已是最新版：直接提示当前版本。
 - 有新版本：先比较本地 `item_icons` 与新版 `item_index.json`；常用物品图标有缺失才下载 `astrbot_plugin_stalzone_full.zip`（完整包），否则下载 `astrbot_plugin_stalzone.zip`（轻量包）。轻量包覆盖不会删除本地已有的额外图标。
 - 下载、备份、解压、覆盖均异步执行，并在聊天中逐步反馈“检查版本 → 检查图标 → 下载 → 备份 → 解压覆盖 → 热重载”。
-- 覆盖前会把旧插件目录备份到插件数据目录的 `update_backups/<版本>-<时间>/`；覆盖失败会自动用备份回滚。GitHub API/下载超时会提示网络错误，并保留旧版本。
+- 覆盖前会把旧插件目录备份到插件数据目录的 `update_backups/<版本>-<时间>/`；只保留最近 3 份，启动时和每次新备份后自动清理更旧的，避免几十次更新累积几百 MB。覆盖失败会自动用备份回滚。GitHub API/下载超时会提示网络错误，并保留旧版本。
 - 默认仅管理员可执行（`update_admin_only=true`）。打开 `auto_update` 后，插件每小时自动检查一次，发现新版会走同一套备份/更新/热重载流程；默认关闭。自动更新本身保持静默，只写日志；手动 `/sz 更新` 会在热重载完成后向发起会话补发「已更新到 vX，热重载完成」提醒。
 
 ## 配置
@@ -336,7 +336,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **227 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **228 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 
