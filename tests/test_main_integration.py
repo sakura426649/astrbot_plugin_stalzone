@@ -423,6 +423,77 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("updater-called", text)
         self.assertEqual(len(called), 1)
 
+    async def test_alert_whitelist_commands_share_config(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+        plugin = self.make_plugin()
+        plugin.config["emission_group_blacklist"] = ["111"]
+        added = await plugin._handle_alert_setting("白名单 111", AdminEvent(""))
+        self.assertIn("已加入", added)
+        self.assertEqual(plugin.config["emission_group_whitelist"], ["111"])
+        self.assertEqual(plugin.config["emission_group_blacklist"], [])
+        removed = await plugin._handle_alert_setting("黑名单 111", AdminEvent(""))
+        self.assertIn("移除", removed)
+        self.assertEqual(plugin.config["emission_group_whitelist"], [])
+        readded = await plugin._handle_alert_setting("白名单 111", AdminEvent(""))
+        self.assertIn("已加入", readded)
+        self.assertEqual(plugin.config["emission_group_whitelist"], ["111"])
+
+    async def test_region_and_auction_mode_commands(self):
+        plugin = self.make_plugin()
+        self.assertIn("EU", plugin._handle_set_region("eu"))
+        self.assertEqual(plugin.config["region"], "eu")
+        self.assertIn("全部显示", plugin._handle_auction_mode("1"))
+        self.assertEqual(plugin.config["auction_display_mode"], "full")
+        self.assertIn("聚合显示", plugin._handle_auction_mode("聚合"))
+        self.assertEqual(plugin.config["auction_display_mode"], "aggregate")
+        self.assertIn("只能", plugin._handle_set_region("地心"))
+
+    def test_group_owner_and_admin_are_privileged(self):
+        class RawEvent:
+            role = "member"
+
+            def is_admin(self):
+                return False
+
+            def __init__(self, role):
+                self.message_obj = types.SimpleNamespace(
+                    raw_message={"sender": {"role": role}},
+                    sender=types.SimpleNamespace(user_id="1"),
+                    group=None,
+                )
+
+        self.assertTrue(
+            StalzonePlugin._event_is_admin(RawEvent("owner"))
+        )
+        self.assertTrue(
+            StalzonePlugin._event_is_admin(RawEvent("admin"))
+        )
+        self.assertFalse(
+            StalzonePlugin._event_is_admin(RawEvent("member"))
+        )
+
+    async def test_diag_requires_privilege_and_sz_stops_event(self):
+        class MemberEvent(FakeEvent):
+            role = "member"
+
+            def is_admin(self):
+                return False
+
+            def stop_event(self):
+                self.stopped = True
+
+        plugin = self.make_plugin()
+        event = MemberEvent("/sz diag")
+        results = [item[1] async for item in plugin.sz(event)]
+        self.assertIn("仅 AstrBot 管理员", "\n".join(results))
+        self.assertTrue(event._has_send_oper)
+        self.assertTrue(event.stopped)
+
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
 
@@ -452,7 +523,6 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 return False
 
         plugin = self.make_plugin()
-        plugin.config["update_admin_only"] = True
 
         async def latest():
             return {"tag_name": f"v{main_module.PLUGIN_VERSION}", "assets": []}
@@ -461,7 +531,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         latest_text = await plugin._handle_self_update(AdminEvent("/sz 更新"))
         self.assertIn("已是最新版本", latest_text)
         denied = await plugin._handle_self_update(MemberEvent("/sz 更新"))
-        self.assertIn("仅管理员", denied)
+        self.assertIn("管理员", denied)
 
     async def test_self_update_flow_uses_light_package_and_backs_up(self):
         class AdminEvent(FakeEvent):
@@ -1335,12 +1405,25 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(_looks_like_image(b"<html>not an image</html>"))
 
     async def test_diag_command(self):
-        text = await collect(self.make_plugin(), "/sz diag")
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+        plugin = self.make_plugin()
+        results = []
+        async for item in plugin.sz(AdminEvent("/sz diag")):
+            results.append(item[1])
+        text = "\n".join(results)
         self.assertIn("STALZONE · 运行诊断", text)
         self.assertIn("插件 ", text)
         self.assertIn("凭证：未配置", text)
         self.assertIn("API 缓存", text)
-        alias = await collect(self.make_plugin(), "/sz 状态")
+        alias_results = []
+        async for item in plugin.sz(AdminEvent("/sz 状态")):
+            alias_results.append(item[1])
+        alias = "\n".join(alias_results)
         self.assertIn("STALZONE · 运行诊断", alias)
 
     async def test_diag_image_view(self):

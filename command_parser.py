@@ -83,6 +83,11 @@ ALIASES = {
     "版本": "check_version",
     "检查版本": "check_version",
     "检查更新": "check_version",
+    "风暴提醒": "alert",
+    "区服切换": "set_region",
+    "默认区服": "set_region",
+    "拍卖显示模式": "auction_mode",
+    "显示模式": "auction_mode",
 }
 
 

@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.7.0 - 2026-10-29
+
+### Added
+
+- `/sz 风暴提醒 白名单 <群号>` / `/sz 风暴提醒 黑名单 <群号>`: edit the same `emission_group_whitelist` used by the WebUI. The blacklist form only removes the group from the whitelist (it does not add it to the deny-list), so adding it back works; adding a whitelist group also clears an old blacklist entry.
+- `/sz 区服切换 <ru/eu/na/sea/nea>` (or `/sz 默认区服`) and `/sz 拍卖显示模式 <0/1/聚合/全部>`: persist their changes to the plugin config; the auction-mode command accepts `0`/`聚合` for aggregate and `1`/`全部` for full rendering.
+- These setting commands, `/sz diag` and `/sz 更新` now require AstrBot admin, QQ group owner or QQ group admin. `/sz 版本` remains unrestricted.
+- `sz` replies now mark the event as handled and stop its propagation, preventing AstrBot from answering the same command again as plain text after the image/text reply.
+
+### Tests
+
+- Added whitelist/region/auction-mode, permission and event-stop coverage; 235 tests and 13 visual signatures pass.
+
 ## 1.6.8 - 2026-10-29
 
 ### Changed

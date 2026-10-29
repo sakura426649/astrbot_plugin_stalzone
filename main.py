@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.8"
+PLUGIN_VERSION = "1.7.0"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1500,10 +1500,73 @@ class StalzonePlugin(Star):
         checker = getattr(event, "is_admin", None)
         if callable(checker):
             try:
-                return bool(checker())
+                if bool(checker()):
+                    return True
             except Exception:
-                return False
-        return str(getattr(event, "role", "") or "").lower() == "admin"
+                pass
+        if str(getattr(event, "role", "") or "").lower() == "admin":
+            return True
+        message_obj = getattr(event, "message_obj", None)
+        raw = getattr(message_obj, "raw_message", None)
+        sender = (
+            raw.get("sender")
+            if isinstance(raw, dict)
+            else getattr(raw, "sender", None)
+        )
+        role = (
+            sender.get("role")
+            if isinstance(sender, dict)
+            else getattr(sender, "role", None)
+        )
+        if str(role or "").lower() in {"owner", "admin"}:
+            return True
+        sender_id = ""
+        getter = getattr(event, "get_sender_id", None)
+        if callable(getter):
+            try:
+                sender_id = str(getter())
+            except Exception:
+                sender_id = ""
+        if not sender_id:
+            sender_id = str(
+                getattr(getattr(message_obj, "sender", None), "user_id", "") or ""
+            )
+        group = getattr(message_obj, "group", None)
+        if group is not None and sender_id:
+            owner = str(getattr(group, "group_owner", "") or "")
+            admins = {
+                str(value) for value in (getattr(group, "group_admins", None) or [])
+            }
+            if sender_id == owner or sender_id in admins:
+                return True
+        return False
+
+    def _persist_config(self) -> bool:
+        saver = getattr(self.config, "save_config", None)
+        if not callable(saver):
+            return False
+        try:
+            saver()
+            return True
+        except Exception:
+            logger.exception("STALZONE config save failed")
+            return False
+
+    @staticmethod
+    def _finish_sz_event(event: Any) -> None:
+        # A yielded MessageEventResult is sent by the pipeline, but it does
+        # not set the "sent" flag itself. Set it so the default LLM stage
+        # does not answer the same command again as plain text.
+        try:
+            event._has_send_oper = True
+        except Exception:
+            pass
+        stopper = getattr(event, "stop_event", None)
+        if callable(stopper):
+            try:
+                stopper()
+            except Exception:
+                pass
 
     async def _fetch_latest_release(self) -> dict[str, Any]:
         url = f"https://api.github.com/repos/{PLUGIN_REPO}/releases/latest"
@@ -1887,10 +1950,10 @@ class StalzonePlugin(Star):
         return await self._run_self_update(event, auto=False)
 
     async def _run_self_update(self, event: Any, *, auto: bool = False) -> str:
-        if not auto:
-            require_admin = bool(self._cfg("update_admin_only", True))
-            if require_admin and not self._event_is_admin(event):
-                return "插件更新仅管理员可用；请让管理员执行 /sz 更新。"
+        if not auto and not self._event_is_admin(event):
+            return (
+                "插件更新仅 AstrBot 管理员、QQ 群主或群管理员可用。"
+            )
         if self._update_lock.locked():
             return "已有更新正在进行，请稍后再试。"
         async with self._update_lock:
@@ -1997,18 +2060,124 @@ class StalzonePlugin(Star):
                 logger.exception("STALZONE self-update failed")
                 return f"更新未完成：{type(exc).__name__}: {exc}"
 
+    async def _handle_alert_setting(self, argument: str, event: Any) -> str:
+        parts = str(argument or "").strip().split(maxsplit=1)
+        if len(parts) < 2:
+            return (
+                "用法：/sz 风暴提醒 白名单 <QQ群号>，"
+                "或 /sz 风暴提醒 黑名单 <QQ群号>"
+            )
+        action = parts[0].strip().lower()
+        raw_groups = parts[1].strip()
+        groups = []
+        for token in re.split(r"[,，;；\s]+", raw_groups):
+            group = self._group_number(token)
+            if group and group.isdigit() and group not in groups:
+                groups.append(group)
+        if not groups:
+            return "请提供 QQ 群号，例如：/sz 风暴提醒 白名单 123456789"
+        whitelist = self._group_values("emission_group_whitelist")
+        existing = {self._group_number(value) for value in whitelist}
+        if action in {"白名单", "whitelist", "add", "添加"}:
+            for group in groups:
+                if group not in existing:
+                    whitelist.append(group)
+                    existing.add(group)
+            # Re-adding a whitelist entry must win over an old blacklist entry.
+            blacklist = [
+                value
+                for value in self._group_values("emission_group_blacklist")
+                if self._group_number(value) not in set(groups)
+            ]
+        elif action in {"黑名单", "blacklist", "remove", "删除", "移除"}:
+            remove = set(groups)
+            whitelist = [
+                value
+                for value in whitelist
+                if self._group_number(value) not in remove
+            ]
+            blacklist = self._group_values("emission_group_blacklist")
+        else:
+            return "请使用「白名单」或「黑名单」，例如：/sz 风暴提醒 白名单 123456789"
+        self.config["emission_group_whitelist"] = whitelist
+        self.config["emission_group_blacklist"] = blacklist
+        platform = str(
+            getattr(getattr(event, "platform_meta", None), "id", "") or ""
+        ).strip()
+        if (
+            platform
+            and whitelist
+            and not str(self._cfg("emission_notify_target", "") or "").strip()
+        ):
+            self.config["emission_notify_target"] = (
+                f"{platform}:GroupMessage:{self._group_number(whitelist[0])}"
+            )
+        saved = self._persist_config()
+        suffix = "" if saved else "（配置保存失败，重启后可能失效）"
+        if action in {"白名单", "whitelist", "add", "添加"}:
+            text = f"已加入风暴提醒白名单：{'、'.join(groups)}"
+        else:
+            text = f"已从风暴提醒白名单移除：{'、'.join(groups)}"
+        text += f"。当前白名单 {len(whitelist)} 个群{suffix}"
+        if not whitelist:
+            text += "；白名单为空时不会轮询或发送风暴提醒"
+        return text
+
+    def _handle_set_region(self, argument: str) -> str:
+        value = str(argument or "").strip().lower()
+        if not value:
+            return (
+                f"当前默认区服：{self._region().upper()}。"
+                "用法：/sz 区服切换 eu（或 ru/na/sea/nea）"
+            )
+        if value not in VALID_REGIONS:
+            return "区服只能是 ru / eu / na / sea / nea。"
+        self.config["region"] = value
+        saved = self._persist_config()
+        suffix = "" if saved else "（配置保存失败，重启后可能失效）"
+        return f"默认区服已切换为 {value.upper()}{suffix}。"
+
+    def _handle_auction_mode(self, argument: str) -> str:
+        value = str(argument or "").strip().lower()
+        modes = {
+            "0": "aggregate",
+            "聚合": "aggregate",
+            "聚合显示": "aggregate",
+            "aggregate": "aggregate",
+            "1": "full",
+            "全部": "full",
+            "全部显示": "full",
+            "full": "full",
+        }
+        if not value:
+            current = str(
+                self._cfg("auction_display_mode", "aggregate")
+            ).strip().lower()
+            label = "全部显示" if current in {"full", "all"} else "聚合显示"
+            return f"当前拍卖显示模式：{label}。用法：/sz 拍卖显示模式 0/1/聚合/全部"
+        mode = modes.get(value)
+        if mode is None:
+            return "拍卖显示模式只能是 0/聚合 或 1/全部。"
+        self.config["auction_display_mode"] = mode
+        saved = self._persist_config()
+        suffix = "" if saved else "（配置保存失败，重启后可能失效）"
+        label = "全部显示" if mode == "full" else "聚合显示"
+        return f"拍卖显示模式已切换为：{label}{suffix}，下一次查询生效。"
+
     # --------------------------------------------------------------- commands
     @filter.command("sz")
     async def sz(self, event: AstrMessageEvent):
         """Slash form: /sz ..."""
         async for result in self._dispatch_sz(event):
             yield result
+        self._finish_sz_event(event)
 
     @filter.regex(SZ_BARE_RE)
     async def sz_bare(self, event: AstrMessageEvent):
         """Prefixless form: sz ... / stalzone ..."""
         async for result in self._dispatch_sz(event):
             yield result
+        self._finish_sz_event(event)
 
     async def _dispatch_sz(self, event: AstrMessageEvent):
         """查询 STALZONE 拍卖、辐射爆发、角色、战队与物品数据。"""
@@ -2021,6 +2190,27 @@ class StalzonePlugin(Star):
         sub, arg = parse_command(event.message_str)
         if sub == "check_version":
             yield event.plain_result(await self._handle_version_check())
+            return
+        privileged = self._event_is_admin(event)
+        if sub in {"alert", "set_region", "auction_mode"}:
+            if not privileged:
+                yield event.plain_result(
+                    "该指令仅 AstrBot 管理员、QQ 群主或群管理员可用。"
+                )
+                return
+            if sub == "alert":
+                result = await self._handle_alert_setting(arg, event)
+            elif sub == "set_region":
+                result = self._handle_set_region(arg)
+            else:
+                result = self._handle_auction_mode(arg)
+            if result:
+                yield event.plain_result(result)
+            return
+        if sub == "diag" and not privileged:
+            yield event.plain_result(
+                "该指令仅 AstrBot 管理员、QQ 群主或群管理员可用。"
+            )
             return
         if sub in UPDATE_COMMANDS or (
             sub == "插件" and arg.strip().lower() in {"更新", "升级", "update"}

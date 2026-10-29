@@ -2061,6 +2061,10 @@ class ParserTests(unittest.TestCase):
             "/sz 版本": ("check_version", ""),
             "/sz 检查版本": ("check_version", ""),
             "/sz 检查更新": ("check_version", ""),
+            "/sz 风暴提醒 白名单 123": ("alert", "白名单 123"),
+            "/sz 区服切换 eu": ("set_region", "eu"),
+            "/sz 默认区服 ru": ("set_region", "ru"),
+            "/sz 拍卖显示模式 1": ("auction_mode", "1"),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)

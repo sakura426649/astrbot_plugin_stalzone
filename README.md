@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.6.8-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.7.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -115,6 +115,9 @@
 | --- | --- | --- |
 | `/sz auction <物品> [品质] [词条] [日期] [数量]` | 在售 + 成交；支持品质、日期和数量筛选；武器模块支持词条模糊筛选 | `/sz 拍卖 原子 粉 6.11 20`；`/sz 拍卖 武器模块 粉 抑制器` |
 | `/sz 版本` / `/sz 检查更新` / `/sz 检查版本` | 只检查 GitHub 最新版本，不执行更新，无管理员限制 | `/sz 版本` |
+| `/sz 风暴提醒 白名单/黑名单 <群号>` | 修改自动风暴提醒白名单，与 WebUI 配置共享 | `/sz 风暴提醒 白名单 123456789` |
+| `/sz 区服切换 <ru/eu/na/sea/nea>` | 修改默认查询区服 | `/sz 区服切换 eu` |
+| `/sz 拍卖显示模式 <0/1/聚合/全部>` | 切换拍卖聚合/全部显示 | `/sz 拍卖显示模式 1` |
 | `/sz 插件更新` / `/sz 更新` / `/sz update` | 通过 GitHub Release 检查并自更新；管理员默认可用 | `/sz 插件更新` |
 | `/sz emission [区服]` | 距上次风暴时间与当前状态 | `/sz 风暴 ru` |
 | `/sz player <角色名/UUID> [区服]` | 玩家公开资料、战队、PvP 估算分 | `/sz 玩家 Sakura_Akira eu` |
@@ -126,10 +129,12 @@
 | `/sz clans [页码]` | 战队列表 | `/sz 战队列表 2` |
 | `/sz operations [地图ID]` | 最近行动记录 | `/sz 行动 operation_bigcleanup` |
 | `/sz regions` | 官方区服列表 | `/sz 区服` |
-| `/sz diag` / `/sz 状态` | 运行环境、API 健康与熔断、自动提醒状态、数据资产、缓存、存储和渲染状态（不含凭证） | `/sz 状态` |
+| `/sz diag` / `/sz 状态` | 运行环境、API 健康与熔断、自动提醒状态、数据资产、缓存、存储和渲染状态（不含凭证；需管理员/群主/群管理员） | `/sz 状态` |
 | `/sz help` | 图片帮助菜单 | `/sz help` |
 
 常用中文别名：`拍卖行`、`风暴`/`爆发`、`玩家`/`角色`、`物品`、`战队`、`行动`、`区服`。风暴查询还支持简写 `fb`。
+
+`/sz 风暴提醒 白名单/黑名单`、`/sz 区服切换`、`/sz 拍卖显示模式`、`/sz diag` 和 `/sz 更新` 仅 AstrBot 管理员、QQ 群主或 QQ 群管理员可用；白名单/区服/显示模式的修改会写回 WebUI 配置。
 
 **日期与区服**
 
@@ -163,7 +168,7 @@
 - 下载、备份、解压、覆盖均异步执行。为避免短时间消息过多触发风控，聊天里只在开始更新时提示一次“当前版本 → 新版本（完整/轻量包）”，热重载完成后提示“已更新到 vX，热重载完成”；中间步骤不逐条播报，只有连接超时、下载失败等错误才补发提示。
 - 直连 GitHub 的 API、图标清单或安装包失败/超时/无法连接时，会自动改走 `https://gh-proxy.com/`，再失败再尝试 `https://v4.gh-proxy.org/`，无需手动切换。
 - 覆盖前会把旧插件目录备份到插件数据目录的 `update_backups/<版本>-<时间>/`；只保留最近 3 份，启动时和每次新备份后自动清理更旧的，避免几十次更新累积几百 MB。覆盖失败会自动用备份回滚。GitHub API/下载超时会提示网络错误，并保留旧版本。
-- 默认仅管理员可执行（`update_admin_only=true`）。打开 `auto_update` 后，插件每小时自动检查一次，发现新版会走同一套备份/更新/热重载流程；默认关闭。自动更新本身保持静默，只写日志；手动 `/sz 更新` 会在热重载完成后向发起会话补发「已更新到 vX，热重载完成」提醒。
+- 手动更新固定需要 AstrBot 管理员、QQ 群主或群管理员权限。打开 `auto_update` 后，插件每小时自动检查一次，发现新版会走同一套备份/更新/热重载流程；默认关闭。自动更新本身保持静默，只写日志；手动 `/sz 更新` 会在热重载完成后向发起会话补发「已更新到 vX，热重载完成」提醒。
 
 ## 配置
 
@@ -177,7 +182,6 @@
 | `api_base` | 生产 | 默认 `https://eapi.stalzone.com`；可切 `https://dapi.stalzone.com` 演示环境 |
 | `render_mode` | `auto` | `auto` / `text` / `image` |
 | `auction_display_mode` | `aggregate` | `aggregate`（聚合显示，同数量同品质只留最低买断，沿用 30 条限制）或 `full`（全部显示，跳过聚合与截断，渲染所有查到的在售条目） |
-| `update_admin_only` | `true` | 插件自更新仅管理员可用；关闭后任何成员都能触发，风险较高 |
 | `auto_update` | `false` | 开启后每小时检查一次 GitHub Release；有新版自动异步更新并热重载 |
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
 | `card_background` | `default` | 全局卡片背景；可选内置官方壁纸 `01 仓库小队` … `16 爆炸战场`，所有卡片共享 |
@@ -338,7 +342,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **231 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **235 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 
