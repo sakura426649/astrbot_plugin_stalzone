@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.7.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.7.2-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -143,7 +143,7 @@ coverage run --source=. --omit="tests/*" -m unittest discover -s tests
 coverage report
 ```
 
-Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 13 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
+Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 14 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
 
 The default branch is `master`; pull requests target `master`.
 

@@ -1076,6 +1076,578 @@ def render_notice_card(
     return output
 
 
+USAGE_TITLE_COLOR = "#F2F6FB"
+USAGE_BODY_COLOR = "#C6D3E2"
+USAGE_OPTIONAL_COLOR = "#7FC4FF"
+USAGE_COMMAND_COLOR = "#54D6A1"
+USAGE_TERMINAL_BG = (4, 8, 13, 208)
+
+_USAGE_SECTION_RE = re.compile(
+    r"^(用法|别名|说明|参数|权限|示例|提示)\s*[：:]\s*(.*)$"
+)
+_USAGE_SYNTAX_TOKEN_RE = re.compile(r"<[^>]*>|\[[^\]]*\]|/sz|或|\s+|.", re.S)
+_USAGE_SYNTAX_COLOR_RE = re.compile(r"(<[^>]*>|\[[^\]]*\]|/sz|或)")
+
+
+def _usage_sections(text: str) -> list[tuple[str, list[str]]]:
+    """Split a USAGE block into (section, values) pairs."""
+    sections: list[tuple[str, list[str]]] = []
+    values: list[str] | None = None
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        match = _USAGE_SECTION_RE.match(line)
+        if match:
+            values = [match.group(2).strip()] if match.group(2).strip() else []
+            sections.append((match.group(1), values))
+        elif values is not None:
+            values.append(line)
+    return sections
+
+
+def _usage_param_row(line: str) -> tuple[str, str]:
+    parts = re.split(r"\s{2,}", str(line).strip(), maxsplit=1)
+    if len(parts) == 2 and parts[0].strip():
+        return parts[0].strip(), parts[1].strip()
+    return "", str(line).strip()
+
+
+def _wrap_syntax(text: str, font: Any, max_width: int) -> list[str]:
+    """Wrap a syntax line without breaking <required> or [optional] tokens."""
+    tokens = _USAGE_SYNTAX_TOKEN_RE.findall(str(text or ""))
+    lines: list[str] = []
+    current = ""
+    for token in tokens:
+        if token.isspace():
+            if current:
+                current += token
+            continue
+        candidate = current + token
+        if not current or font.getlength(candidate) <= max_width:
+            current = candidate
+        else:
+            lines.append(current.rstrip())
+            current = token
+    if current.strip():
+        lines.append(current.rstrip())
+    return lines or [""]
+
+
+def _draw_usage_syntax(
+    draw: Any,
+    x: int,
+    y: int,
+    text: str,
+    font: Any,
+    accent: str,
+) -> int:
+    """Draw one syntax line with colored placeholders; returns the end x."""
+    cursor = float(x)
+    for part in _USAGE_SYNTAX_COLOR_RE.split(str(text or "")):
+        if not part:
+            continue
+        if part.startswith("<") and part.endswith(">"):
+            color = accent
+        elif part.startswith("[") and part.endswith("]"):
+            color = USAGE_OPTIONAL_COLOR
+        elif part == "/sz":
+            color = USAGE_COMMAND_COLOR
+        elif part == "或":
+            color = MUTED
+        else:
+            color = USAGE_TITLE_COLOR
+        draw.text((cursor, y), part, font=font, fill=color)
+        cursor += float(draw.textlength(part, font=font))
+    return int(cursor)
+
+
+def _draw_usage_label(
+    draw: Any,
+    x: int,
+    y: int,
+    zh: str,
+    en: str,
+    zh_font: Any,
+    en_font: Any,
+    accent: str,
+) -> None:
+    draw.text((x, y), zh, font=zh_font, fill=accent)
+    draw.text(
+        (x + draw.textlength(zh, font=zh_font) + 10, y + 3),
+        en,
+        font=en_font,
+        fill="#71889A",
+    )
+
+
+def _blend_rgb(
+    color: str,
+    alpha: float,
+    base: tuple[int, int, int] = (9, 15, 23),
+) -> tuple[int, int, int]:
+    """Blend a hex color onto an opaque base for direct RGBA drawing.
+
+    ImageDraw writes alpha values verbatim on an RGBA canvas, so translucent
+    fills become fully opaque again after ``convert("RGB")``. Pre-blending
+    keeps the permission strip and row bands soft.
+    """
+    value = str(color or "").lstrip("#")
+    if len(value) == 3:
+        value = "".join(char * 2 for char in value)
+    try:
+        target = [int(value[index : index + 2], 16) for index in (0, 2, 4)]
+    except (ValueError, StopIteration):
+        target = [255, 180, 84]
+    ratio = max(0.0, min(1.0, float(alpha)))
+    return tuple(
+        int(round(base[index] * (1.0 - ratio) + target[index] * ratio))
+        for index in range(3)
+    )
+
+
+def render_usage_card(
+    text: str,
+    *,
+    title: str = "指令说明",
+    code: str = "COMMAND",
+    accent: str = ACCENT,
+    font_path: str | None = None,
+    width: int = 1080,
+    output: str | Path | None = None,
+) -> Path | None:
+    """Render a USAGE block as a dark command-guide card."""
+    if Image is None or ImageDraw is None or ImageFont is None:
+        return None
+    font_file = find_cjk_font(font_path)
+    if font_file is None:
+        return None
+    display_path = _find_display_font(font_path) or font_file
+    mono_path = find_mono_font(font_path) or font_file
+    try:
+        title_font = ImageFont.truetype(str(display_path), 42)
+        watermark_font = ImageFont.truetype(str(display_path), 62)
+        eyebrow_font = ImageFont.truetype(str(mono_path), 13)
+        subtitle_font = ImageFont.truetype(str(font_file), 16)
+        label_font = ImageFont.truetype(str(font_file), 16)
+        label_en_font = ImageFont.truetype(str(mono_path), 11)
+        syntax_font = ImageFont.truetype(str(font_file), 25)
+        alias_font = ImageFont.truetype(str(font_file), 17)
+        body_font = ImageFont.truetype(str(font_file), 20)
+        param_name_font = ImageFont.truetype(str(font_file), 19)
+        param_desc_font = ImageFont.truetype(str(font_file), 19)
+        permission_font = ImageFont.truetype(str(font_file), 17)
+        example_font = ImageFont.truetype(str(font_file), 21)
+        small_font = ImageFont.truetype(str(font_file), 14)
+        tiny_font = ImageFont.truetype(str(font_file), 12)
+        footer_font = ImageFont.truetype(str(font_file), 15)
+    except Exception:
+        return None
+
+    pad = 56
+    content_w = width - pad * 2
+    sections = _usage_sections(text)
+    if not sections:
+        sections = [("说明", [str(text or "")])]
+
+    layout: list[dict[str, Any]] = []
+    syntax_lines: list[str] = []
+    alias_lines: list[str] = []
+    for name, values in sections:
+        if name == "用法":
+            for value in values:
+                syntax_lines.extend(
+                    _wrap_syntax(value, syntax_font, content_w - 74)
+                )
+        elif name == "别名":
+            for value in values:
+                alias_lines.extend(
+                    _wrap_syntax(value, alias_font, content_w - 148)
+                )
+    if syntax_lines:
+        syntax_h = 22 + len(syntax_lines) * 34 + 22
+        if alias_lines:
+            syntax_h += 10 + len(alias_lines) * 26
+        layout.append(
+            {
+                "kind": "syntax",
+                "lines": syntax_lines,
+                "aliases": alias_lines,
+                "h": 24 + syntax_h,
+            }
+        )
+
+    for name, values in sections:
+        if name in {"用法", "别名"}:
+            continue
+        if name in {"说明", "提示"}:
+            lines: list[str] = []
+            for value in values:
+                lines.extend(_wrap(value, body_font, content_w))
+            layout.append(
+                {
+                    "kind": "text",
+                    "name": name,
+                    "lines": lines,
+                    "h": 34 + len(lines) * 29,
+                }
+            )
+        elif name == "参数":
+            rows = [_usage_param_row(value) for value in values if value]
+            name_widths = [
+                param_name_font.getlength(row[0]) for row in rows if row[0]
+            ]
+            name_col = min(
+                max(120, max(name_widths) + 48) if name_widths else 0,
+                content_w - 250,
+            )
+            measured = []
+            for param_name, desc in rows:
+                desc_w = content_w - (name_col + 22 if param_name else 22) - 10
+                desc_lines = _wrap(desc, param_desc_font, max(120, desc_w))
+                row_h = max(42, len(desc_lines) * 27 + 14)
+                measured.append((param_name, desc_lines, row_h))
+            layout.append(
+                {
+                    "kind": "params",
+                    "rows": measured,
+                    "name_col": name_col,
+                    "h": 34 + sum(row[2] for row in measured),
+                }
+            )
+        elif name == "权限":
+            lines = []
+            for value in values:
+                lines.extend(_wrap(value, permission_font, content_w - 48))
+            layout.append(
+                {
+                    "kind": "permission",
+                    "lines": lines,
+                    "h": 34 + 22 + len(lines) * 25,
+                }
+            )
+        elif name == "示例":
+            example_lines: list[str] = []
+            for value in values:
+                example_lines.extend(
+                    _wrap_syntax(value, example_font, content_w - 96)
+                )
+            layout.append(
+                {
+                    "kind": "examples",
+                    "lines": example_lines,
+                    "h": 34 + 36 + 16 + len(example_lines) * 32 + 16,
+                }
+            )
+
+    if not layout:
+        return None
+
+    top = 206
+    cursor_y = top
+    for block in layout:
+        cursor_y += int(block["h"]) + 30
+    content_bottom = cursor_y - 30
+    footer_y = content_bottom + 26
+    height = max(560, footer_y + SIGNATURE_HEIGHT + 30)
+
+    canvas = _card_canvas(width, height, alpha=238)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+
+    # Header: eyebrow, oversized command code watermark, title and subtitle.
+    draw.text((pad, 32), "STALZONE / COMMAND GUIDE", font=eyebrow_font, fill=accent)
+    draw.text(
+        (width - pad, 38),
+        code,
+        font=watermark_font,
+        fill="#16222E",
+        anchor="ra",
+    )
+    draw.rounded_rectangle((pad, 88, pad + 6, 142), radius=3, fill=accent)
+    draw.text((pad + 24, 82), title, font=title_font, fill=USAGE_TITLE_COLOR)
+    _draw_usage_syntax(
+        draw,
+        pad + 25,
+        140,
+        "参数中 <必填> 高亮、[可选] 标记 · 示例可直接发送",
+        subtitle_font,
+        accent,
+    )
+    draw.line((pad, 178, width - pad, 178), fill="#2A3A4A", width=1)
+
+    y = top
+    for block in layout:
+        kind = block["kind"]
+        if kind == "syntax":
+            _draw_usage_label(
+                draw, pad, y, "用法", "SYNTAX", label_font, label_en_font, accent
+            )
+            box_top = y + 28
+            box_h = int(block["h"]) - 24
+            draw.rounded_rectangle(
+                (pad, box_top, width - pad, box_top + box_h),
+                radius=14,
+                fill=USAGE_TERMINAL_BG,
+                outline="#22303F",
+                width=1,
+            )
+            draw.rounded_rectangle(
+                (pad + 1, box_top + 14, pad + 4, box_top + box_h - 14),
+                radius=2,
+                fill=accent,
+            )
+            line_y = box_top + 22
+            for line in block["lines"]:
+                _draw_usage_syntax(
+                    draw, pad + 28, line_y, line, syntax_font, accent
+                )
+                line_y += 34
+            if block["aliases"]:
+                alias_y = line_y + 6
+                draw.text(
+                    (pad + 28, alias_y + 2),
+                    "别名",
+                    font=small_font,
+                    fill=MUTED,
+                )
+                for alias in block["aliases"]:
+                    _draw_usage_syntax(
+                        draw, pad + 78, alias_y, alias, alias_font, accent
+                    )
+                    alias_y += 26
+            y = box_top + box_h + 30
+        elif kind == "text":
+            name = block["name"]
+            _draw_usage_label(
+                draw,
+                pad,
+                y,
+                name,
+                "DESCRIPTION" if name == "说明" else "NOTE",
+                label_font,
+                label_en_font,
+                accent,
+            )
+            line_y = y + 34
+            for line in block["lines"]:
+                draw.text(
+                    (pad, line_y), line, font=body_font, fill=USAGE_BODY_COLOR
+                )
+                line_y += 29
+            y += int(block["h"]) + 30
+        elif kind == "params":
+            _draw_usage_label(
+                draw,
+                pad,
+                y,
+                "参数",
+                "PARAMETERS",
+                label_font,
+                label_en_font,
+                accent,
+            )
+            row_y = y + 34
+            name_col = int(block["name_col"])
+            for index, (param_name, desc_lines, row_h) in enumerate(
+                block["rows"]
+            ):
+                if index % 2 == 0:
+                    draw.rounded_rectangle(
+                        (
+                            pad - 12,
+                            row_y - 4,
+                            width - pad + 12,
+                            row_y + row_h - 8,
+                        ),
+                        radius=9,
+                        fill="#0A121B",
+                    )
+                if param_name:
+                    desc_text = "".join(desc_lines)
+                    name_color = (
+                        accent
+                        if "必填" in desc_text
+                        else (
+                            USAGE_OPTIONAL_COLOR
+                            if "可选" in desc_text
+                            else USAGE_TITLE_COLOR
+                        )
+                    )
+                    draw.polygon(
+                        (
+                            (pad + 2, row_y + 4),
+                            (pad + 9, row_y + 10),
+                            (pad + 2, row_y + 16),
+                        ),
+                        fill=name_color,
+                    )
+                    draw.text(
+                        (pad + 22, row_y),
+                        param_name,
+                        font=param_name_font,
+                        fill=name_color,
+                    )
+                    desc_x = pad + name_col
+                else:
+                    desc_x = pad + 22
+                desc_y = row_y
+                for desc_line in desc_lines:
+                    draw.text(
+                        (desc_x, desc_y),
+                        desc_line,
+                        font=param_desc_font,
+                        fill=USAGE_BODY_COLOR,
+                    )
+                    desc_y += 27
+                row_y += row_h
+            y = row_y + 30
+        elif kind == "permission":
+            _draw_usage_label(
+                draw,
+                pad,
+                y,
+                "权限",
+                "ACCESS",
+                label_font,
+                label_en_font,
+                accent,
+            )
+            pill_top = y + 30
+            pill_h = 22 + len(block["lines"]) * 25
+            draw.rounded_rectangle(
+                (pad, pill_top, width - pad, pill_top + pill_h),
+                radius=10,
+                fill="#0F1822",
+                outline=_blend_rgb(accent, 0.42, (42, 56, 70)),
+                width=1,
+            )
+            draw.rounded_rectangle(
+                (pad + 1, pill_top + 8, pad + 4, pill_top + pill_h - 8),
+                radius=2,
+                fill=accent,
+            )
+            diamond_x = pad + 24
+            diamond_y = pill_top + pill_h // 2
+            draw.polygon(
+                (
+                    (diamond_x, diamond_y - 5),
+                    (diamond_x + 5, diamond_y),
+                    (diamond_x, diamond_y + 5),
+                    (diamond_x - 5, diamond_y),
+                ),
+                fill=accent,
+            )
+            line_y = pill_top + (pill_h - len(block["lines"]) * 25) // 2 + 1
+            for line in block["lines"]:
+                draw.text(
+                    (pad + 42, line_y),
+                    line,
+                    font=permission_font,
+                    fill=USAGE_BODY_COLOR,
+                )
+                line_y += 25
+            y = pill_top + pill_h + 30
+        elif kind == "examples":
+            _draw_usage_label(
+                draw,
+                pad,
+                y,
+                "示例",
+                "EXAMPLES",
+                label_font,
+                label_en_font,
+                accent,
+            )
+            box_top = y + 28
+            box_h = int(block["h"]) - 24
+            draw.rounded_rectangle(
+                (pad, box_top, width - pad, box_top + box_h),
+                radius=14,
+                fill=USAGE_TERMINAL_BG,
+                outline="#22303F",
+                width=1,
+            )
+            for dot_index, dot_color in enumerate(
+                ("#FF6B6B", "#FFD166", "#54D6A1")
+            ):
+                draw.ellipse(
+                    (
+                        pad + 16 + dot_index * 13,
+                        box_top + 13,
+                        pad + 22 + dot_index * 13,
+                        box_top + 19,
+                    ),
+                    fill=dot_color,
+                )
+            draw.text(
+                (pad + 62, box_top + 9),
+                "COMMAND PREVIEW",
+                font=label_en_font,
+                fill="#71889A",
+            )
+            draw.text(
+                (width - pad - 18, box_top + 9),
+                "可直接发送",
+                font=tiny_font,
+                fill="#71889A",
+                anchor="ra",
+            )
+            line_y = box_top + 38
+            for line in block["lines"]:
+                draw.text(
+                    (pad + 24, line_y),
+                    "›",
+                    font=example_font,
+                    fill=USAGE_COMMAND_COLOR,
+                )
+                _draw_usage_syntax(
+                    draw, pad + 52, line_y, line, example_font, accent
+                )
+                line_y += 32
+            y = box_top + box_h + 30
+
+    draw.line((pad, footer_y, width - pad, footer_y), fill="#2A3A4A", width=1)
+    _draw_signature(
+        draw,
+        width,
+        footer_y + 12,
+        font_file,
+        footer_font,
+        right_margin=pad,
+        max_bottom=height,
+        more_tip=True,
+        tip_x=pad,
+    )
+
+    if output is not None:
+        target = Path(output)
+        temporary: Path | None = None
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_name(target.name + ".tmp")
+            canvas.convert("RGB").save(temporary, "PNG", compress_level=1)
+            temporary.replace(target)
+            return target
+        except OSError:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    target = out_dir / f"sz_usage_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
+    except OSError:
+        return None
+    return target
+
+
 def _fit_text(draw: Any, text: str, font: Any, max_width: int) -> str:
     if draw.textlength(text, font=font) <= max_width:
         return text

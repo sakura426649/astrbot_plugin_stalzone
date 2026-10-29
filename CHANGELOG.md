@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.7.2 - 2026-10-29
+
+### Changed
+
+- Missing-argument help is now sent as a rendered command-guide card instead of plain text, so QQ's newline handling cannot break the layout. The card follows the shared STALZONE visual style: accent label, syntax box with colored `<required>` / `[optional]` placeholders, aligned parameter table, permission strip and a terminal-style example block.
+- Usage cards are generated once per command and cached next to the help image; text output remains the fallback when rendering is disabled or Pillow/CJK fonts are unavailable. This also covers handlers that return their usage block for malformed arguments.
+
+### Tests
+
+- Added usage-card caching/routing and all-command rendering tests, plus a 14th Windows visual signature; 238 tests and 14 visual signatures pass.
+
 ## 1.7.1 - 2026-10-29
 
 ### Changed

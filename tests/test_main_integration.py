@@ -526,6 +526,55 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("用法：", text, command)
             self.assertIn("参数：", text, command)
 
+    async def test_missing_argument_renders_usage_image(self):
+        from image_renderer import find_cjk_font
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+
+        class ImageEvent(FakeEvent):
+            @staticmethod
+            def image_result(path):
+                return ("image", path)
+
+        plugin = self.make_plugin()
+        plugin.config["render_mode"] = "image"
+        cache_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(cache_dir.cleanup)
+        plugin._help_cache_dir = Path(cache_dir.name)
+
+        results = [item async for item in plugin.sz(ImageEvent("/sz 拍卖"))]
+        self.assertEqual(results[0][0], "image")
+        image_path = Path(results[0][1])
+        self.assertTrue(image_path.exists())
+        self.assertGreater(image_path.stat().st_size, 1024)
+        self.assertEqual(image_path.parent.name, "usage")
+
+        cached = await plugin._usage_image("auction")
+        self.assertEqual(cached, image_path)
+        repeated = [item async for item in plugin.sz(ImageEvent("/sz 拍卖"))]
+        self.assertEqual(repeated[0][1], str(image_path))
+
+    def test_all_usage_blocks_render(self):
+        from image_renderer import find_cjk_font, render_usage_card
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        for key, text in main_module.USAGE.items():
+            with self.subTest(command=key):
+                title, code, accent = main_module.USAGE_META.get(
+                    key, ("指令说明", "COMMAND", "#FFB454")
+                )
+                path = render_usage_card(
+                    text, title=title, code=code, accent=accent
+                )
+                self.assertIsNotNone(path)
+                try:
+                    self.assertTrue(path.exists())
+                    self.assertGreater(path.stat().st_size, 1024)
+                finally:
+                    path.unlink(missing_ok=True)
+
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
 

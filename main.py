@@ -109,6 +109,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_pass_card,
         render_profile_card,
         render_text_card,
+        render_usage_card,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -187,6 +188,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_pass_card,
         render_profile_card,
         render_text_card,
+        render_usage_card,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -205,7 +207,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.7.1"
+PLUGIN_VERSION = "1.7.2"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -477,6 +479,21 @@ USAGE = {
     ),
 }
 
+USAGE_META = {
+    "auction": ("拍卖查询", "AUCTION", "#FFB454"),
+    "emission": ("辐射风暴", "EMISSION", "#54D6A1"),
+    "item": ("物品图鉴", "ITEM", "#FFD166"),
+    "player": ("玩家资料", "PLAYER", "#4EA8FF"),
+    "clan": ("战队查询", "CLAN", "#FF6FB5"),
+    "balance": ("调整历史", "BALANCE", "#FF9D5C"),
+    "pass": ("通行证计算", "PASS", "#B69CFF"),
+    "candidate": ("继续候选", "CANDIDATE", "#8FA2B8"),
+    "alert": ("风暴提醒设置", "ALERT", "#FF7A5C"),
+    "set_region": ("默认区服设置", "REGION", "#54D6A1"),
+    "auction_mode": ("拍卖显示模式", "DISPLAY MODE", "#FFB454"),
+}
+
+
 class StalzonePlugin(Star):
     """STALZONE auction / emission / profile / clan / item query plugin."""
 
@@ -485,6 +502,7 @@ class StalzonePlugin(Star):
         self.config = config
         self._help_lock: asyncio.Lock | None = None
         self._help_cache_dir: Path | None = None
+        self._usage_lock: asyncio.Lock | None = None
         self._sc_item_keys: dict[tuple[str, str], str] = {}
         self._pending_choices: dict[str, PendingChoice] = {}
         self._http_client: httpx.AsyncClient | None = None
@@ -1179,6 +1197,84 @@ class StalzonePlugin(Star):
                 except OSError:
                     pass
             return result
+
+    def _usage_cache_path(self, key: str) -> Path:
+        digest = hashlib.sha1(
+            "|".join(
+                [
+                    PLUGIN_VERSION,
+                    key,
+                    str(self._cfg("font_path", "") or ""),
+                    str(self._hide_creator_watermark()),
+                    card_background_stamp(),
+                ]
+            ).encode("utf-8")
+        ).hexdigest()[:10]
+        return self._cache_dir() / "usage" / f"usage_{key}_{digest}.png"
+
+    async def _usage_image(self, key: str) -> Path | None:
+        if self._render_mode() == "text" or key not in USAGE:
+            return None
+        try:
+            cache = self._usage_cache_path(key)
+        except Exception:
+            logger.exception("STALZONE usage cache path failed")
+            return None
+        try:
+            if cache.is_file() and cache.stat().st_size > 1024:
+                return cache
+        except OSError:
+            pass
+        if self._usage_lock is None:
+            self._usage_lock = asyncio.Lock()
+        async with self._usage_lock:
+            try:
+                if cache.is_file() and cache.stat().st_size > 1024:
+                    return cache
+            except OSError:
+                pass
+            title, code, accent = USAGE_META.get(
+                key, ("指令说明", "COMMAND", "#FFB454")
+            )
+            try:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                result = await asyncio.to_thread(
+                    render_usage_card,
+                    USAGE[key],
+                    title=title,
+                    code=code,
+                    accent=accent,
+                    font_path=str(self._cfg("font_path", "") or "").strip()
+                    or None,
+                    output=cache,
+                )
+            except Exception:
+                logger.exception("STALZONE usage card render failed")
+                return None
+            if result:
+                try:
+                    for old in cache.parent.glob(f"usage_{key}_*.png"):
+                        if old != cache:
+                            old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return result
+
+    async def _usage_reply(self, event: Any, key: str) -> Any:
+        """Return the command-guide image, falling back to the text block."""
+        image = await self._usage_image(key)
+        if image is not None:
+            try:
+                if AstrImage is not None and callable(
+                    getattr(event, "chain_result", None)
+                ):
+                    encoded = await asyncio.to_thread(self._image_base64, image)
+                    return event.chain_result([AstrImage.fromBase64(encoded)])
+                if callable(getattr(event, "image_result", None)):
+                    return event.image_result(str(image))
+            except Exception:
+                logger.exception("STALZONE usage image send failed; using text")
+        return event.plain_result(USAGE[key])
 
     def _prune_icon_cache(self) -> None:
         now = time.time()
@@ -2288,7 +2384,10 @@ class StalzonePlugin(Star):
             else:
                 result = self._handle_auction_mode(arg)
             if result:
-                yield event.plain_result(result)
+                if result == USAGE[sub]:
+                    yield await self._usage_reply(event, sub)
+                else:
+                    yield event.plain_result(result)
             return
         if sub == "diag" and not privileged:
             yield event.plain_result(
@@ -2360,39 +2459,39 @@ class StalzonePlugin(Star):
 
         if sub == "auction":
             if not arg:
-                yield event.plain_result(USAGE["auction"])
+                yield await self._usage_reply(event, "auction")
                 return
             coro = self._handle_auction(arg, event=event)
         elif sub == "candidate":
             if not arg:
-                yield event.plain_result(USAGE["candidate"])
+                yield await self._usage_reply(event, "candidate")
                 return
             coro = self._handle_candidate(arg, event)
         elif sub == "emission":
             coro = self._handle_emission(arg)
         elif sub == "player":
             if not arg:
-                yield event.plain_result(USAGE["player"])
+                yield await self._usage_reply(event, "player")
                 return
             coro = self._handle_profile(arg)
         elif sub == "item":
             if not arg:
-                yield event.plain_result(USAGE["item"])
+                yield await self._usage_reply(event, "item")
                 return
             coro = self._handle_item(arg, event=event)
         elif sub == "balance":
             if not arg:
-                yield event.plain_result(USAGE["balance"])
+                yield await self._usage_reply(event, "balance")
                 return
             coro = self._handle_balance(arg, event=event)
         elif sub == "pass":
             if not arg:
-                yield event.plain_result(USAGE["pass"])
+                yield await self._usage_reply(event, "pass")
                 return
             coro = self._handle_pass(arg)
         elif sub == "clan":
             if not arg:
-                yield event.plain_result(USAGE["clan"])
+                yield await self._usage_reply(event, "clan")
                 return
             coro = self._handle_clan(arg, event=event)
         elif sub == "clans":
@@ -2460,6 +2559,9 @@ class StalzonePlugin(Star):
             text = "查询失败，请稍后再试。"
 
         if not text:
+            return
+        if render_sub in USAGE and text == USAGE[render_sub]:
+            yield await self._usage_reply(event, render_sub)
             return
         image = await self._render_image(
             text,

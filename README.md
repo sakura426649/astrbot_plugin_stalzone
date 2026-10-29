@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.7.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.7.2-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -75,6 +75,7 @@
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 171 份 2023–2026 官方补丁公告（含 2026-10-28），按物品列出全部改动，支持武器、神器与配件 |
 | **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；预测等级置顶大字展示，等级变化用颜色区分，不请求游戏 API |
+| **指令说明** | 必须带参数的指令缺参时不再回一段易被 QQ 换行打乱的纯文本，而是发送同风格说明图：`<必填>` / `[可选]` 语法高亮、参数对齐表、权限条和可直接发送的示例；说明图按指令缓存 |
 | **查无结果** | 玩家/物品/拍卖/战队/调整未命中时发送提示图，重复查询名与区服，并给出修改建议 |
 
 ### 平台适配
@@ -336,13 +337,13 @@ astrbot_plugin_stalzone/
 
 ## 开发与测试
 
-测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 13 张主要卡片的视觉快照（Linux 自动跳过）：
+测试不需要真实 API 凭证，使用 mock HTTP 与 AstrBot stub；Windows 下会额外跑 14 张主要卡片的视觉快照（Linux 自动跳过）：
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **236 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **238 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

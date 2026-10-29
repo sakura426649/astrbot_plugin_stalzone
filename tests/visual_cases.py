@@ -28,6 +28,7 @@ from image_renderer import (
     render_pass_card,
     render_profile_card,
     render_text_card,
+    render_usage_card,
 )
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -402,6 +403,29 @@ def _help() -> Path | None:
     return render_help_card(region="EU", version="visual-test")
 
 
+def _usage() -> Path | None:
+    text = (
+        "用法：/sz 拍卖 <物品> [品质] [词条] [日期] [数量]\n"
+        "说明：查询物品的在售、最近成交与历史成交\n"
+        "参数：\n"
+        "  物品   必填，中文名 / 英文名 / 物品ID\n"
+        "  品质   可选，白/绿/蓝/粉/红/金\n"
+        "  词条   可选，仅武器模块，如 猎人/抑制器\n"
+        "  日期   可选，6.11、6/11、25.6.11、25/6/11\n"
+        "  数量   可选，需同时有品质和日期，范围 1–200\n"
+        "示例：\n"
+        "  /sz 拍卖 原子\n"
+        "  /sz 拍卖 原子 粉 6.11 20\n"
+        "  /sz 拍卖 武器模块 粉 抑制器"
+    )
+    return render_usage_card(
+        text,
+        title="拍卖查询",
+        code="AUCTION",
+        accent="#FFB454",
+    )
+
+
 CASES: dict[str, Callable[[], Path | None]] = {
     "profile": _profile,
     "auction": _auction,
@@ -416,4 +440,5 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "emission_alert": _alert,
     "item": _item,
     "help": _help,
+    "usage": _usage,
 }
