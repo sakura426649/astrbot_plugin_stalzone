@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.10.3 - 2026-10-30
+
+### Changed
+
+- `/sz 拍卖历史` now distinguishes an omitted page from page 1: without a page it queries the latest 200 official records (quality filters that official result); with any page number (1/2/3...) it reads SC CORE's third-party archive page. This matches the intended semantics and avoids an explicit page 1 unexpectedly hitting the archive.
+- The LLM `stalzone_auction_history` tool now treats page `0` (default) as the official latest-200 query and page `1+` as third-party archive pages.
+
+### Tests
+
+- Added official quality filtering and explicit page-1 archive coverage; 256 tests and 14 visual signatures pass.
+
 ## 1.10.2 - 2026-10-30
 
 ### Changed

@@ -1168,11 +1168,70 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin = self.make_plugin()
         client = HistoryClient()
         plugin._make_client = lambda: client  # type: ignore[assignment]
+        result = await plugin._handle_auction_history("KS-12")
+        self.assertIsInstance(result, PluginReply)
+        self.assertIsNone(result.auction_view["history_page"])
+        self.assertTrue(result.auction_view["history_official"])
+        self.assertIn("官方最近 200 条", result.text)
+        self.assertEqual(client.calls[0], ("vj2mp", 200, 0))
+
+    async def test_history_official_quality_filter(self):
+        class QualityClient(FakeClient):
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {
+                    "total": 200,
+                    "prices": [
+                        {
+                            "amount": 1,
+                            "price": 1000,
+                            "time": "2026-10-22T05:00:00Z",
+                            "additional": {"qlt": 3},
+                        },
+                        {
+                            "amount": 1,
+                            "price": 2000,
+                            "time": "2026-10-22T04:00:00Z",
+                            "additional": {"qlt": 4},
+                        },
+                    ],
+                }
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: QualityClient()  # type: ignore[assignment]
+        result = await plugin._handle_auction_history("原子 红")
+        self.assertIsInstance(result, PluginReply)
+        self.assertTrue(result.auction_view["history_official"])
+        self.assertEqual(result.auction_view["history_filter_label"], "红")
+        self.assertEqual(result.auction_view["history_total"], 1)
+        self.assertIn("官方最近 200 条", result.text)
+        self.assertIn("筛选后 1 条", result.text)
+
+    async def test_history_page_number_always_uses_sc_core(self):
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
+        calls = []
+
+        async def fake_sc_page(item_id, region, page, quality=None):
+            calls.append((item_id, region, page, quality))
+            return {
+                "prices": [
+                    {
+                        "amount": 1,
+                        "price": 3000,
+                        "time": "2026-10-21T05:00:00Z",
+                        "additional": {},
+                    }
+                ],
+                "total": 401,
+                "source": "sc_core",
+            }
+
+        plugin._fetch_sc_core_history_page = fake_sc_page  # type: ignore[assignment]
         result = await plugin._handle_auction_history("KS-12 1")
         self.assertIsInstance(result, PluginReply)
+        self.assertEqual(calls, [("vj2mp", "eu", 1, None)])
         self.assertEqual(result.auction_view["history_page"], 1)
-        self.assertIn("第 1 页", result.text)
-        self.assertEqual(client.calls[0], ("vj2mp", 200, 0))
+        self.assertIn("SC CORE", result.text)
 
     async def test_auction_history_page_two_uses_sc_core(self):
         class HistoryClient(FakeClient):

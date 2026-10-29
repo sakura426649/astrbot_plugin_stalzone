@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.10.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.10.3-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -116,7 +116,7 @@
 | 指令 | 作用 | 示例 |
 | --- | --- | --- |
 | `/sz auction <物品> [品质] [词条] [日期] [数量]` | 在售 + 成交；支持品质、日期和数量筛选；武器模块支持词条模糊筛选 | `/sz 拍卖 原子 粉 6.11 20`；`/sz 拍卖 武器模块 粉 抑制器` |
-| `/sz 拍卖历史 <物品> [页码] [品质]` | 按成交历史倒序翻页；每页 200 条，可加品质筛选 | `/sz 拍卖历史 KS-12 2`；`/sz 拍卖历史 原子 1 红` |
+| `/sz 拍卖历史 <物品> [页码] [品质]` | 不带页码查官方最近 200 条；带页码查第三方存档；支持品质筛选 | `/sz 拍卖历史 原子 红`；`/sz 拍卖历史 KS-12 2` |
 | `/sz 版本` / `/sz 检查更新` / `/sz 检查版本` | 只检查 GitHub 最新版本，不执行更新，无管理员限制 | `/sz 版本` |
 | `/sz 风暴提醒 白名单/黑名单 <群号>` | 修改自动风暴提醒白名单，与 WebUI 配置共享 | `/sz 风暴提醒 白名单 123456789` |
 | `/sz 区服切换 <ru/eu/na/sea/nea>` | 修改默认查询区服 | `/sz 区服切换 eu` |
@@ -185,10 +185,11 @@
 
 官方拍卖历史接口 `/{region}/auction/{item}/history` 的 `limit` 单次最多返回 **200 条**。插件不再依赖官方 `offset`：第 1 页读取官方最近 200 条，第 2 页起直接按 SC CORE 的 `before` 游标读取旧成交。StalcraftDB 等网站能无限翻页，是因为它们使用自己的后端 `/api/items/{id}/auction-history?page=N`，并不是官方 offset。
 
-- `/sz 拍卖历史 <物品> [页码] [品质]` 直接按 200 条一页读取，页码从 1 开始，例如 `/sz 拍卖历史 KS-12 2`、`/sz 拍卖历史 原子 1 红`。
-- 品质筛选使用 SC CORE 的 `qlt` 参数按品质分页，卡片会标注第三方存档；第 1 页且不筛品质时使用官方接口。
+- `/sz 拍卖历史 <物品> [页码] [品质]`：不带页码时查官方最近 200 条（品质筛选在官方结果上做），例如 `/sz 拍卖历史 原子 红`。
+- 带页码时读 SC CORE 第三方存档的对应页（1/2/3…），例如 `/sz 拍卖历史 KS-12 2`、`/sz 拍卖历史 原子 1 红`。
+- 不带页码时品质筛选直接过滤官方最近 200 条；带页码时使用 SC CORE 的 `qlt` 参数按品质分页。
 - 卡片会显示当前页、每页条数、总条数和 `翻页：/sz 拍卖历史 <物品> <页码>`；可以一直向后翻，直到官方返回该页没有记录。
-- 第 1 页读取官方最近 200 条；第 2 页起直接读取 SC CORE 的 `before` 游标存档（卡片标注「SC CORE 第三方存档」，最多回翻 20 页/4,000 条保护），不再依赖官方 offset。
+- 带页码时从 SC CORE 自己的第 1 页开始按 `before` 游标走到目标页（卡片标注「SC CORE 第三方存档」，最多回翻 20 页/4,000 条保护），不再依赖官方 offset。
 - 普通 `/sz 拍卖` 仍只展示最近成交，避免每次查询都拉取全部历史；带日期的查询会在内部逐页扫描，最多检查 4,000 条作为安全上限。
 - 该功能只读取官方成交历史，不上传或缓存完整历史到第三方。
 
@@ -387,7 +388,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **254 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **256 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

@@ -4027,6 +4027,16 @@ def render_auction_card(
                 )
                 + "，按时间倒序）"
             )
+        elif view.get("history_official"):
+            filter_note = (
+                f"，品质 {view['history_filter_label']}，"
+                f"筛选后 {view.get('history_total') or 0} 条"
+                if view.get("history_filter_label")
+                else f"，共 {view.get('history_total') or 0} 条"
+            )
+            history_heading = (
+                f"历史成交（官方最近 200 条{filter_note}，按时间倒序）"
+            )
         elif view.get("recent_per_quality"):
             history_heading = (
                 f"历史成交（每品质最多 {view.get('recent_limit', 3)} 条，"

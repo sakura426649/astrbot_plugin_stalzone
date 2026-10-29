@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.10.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.10.3-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -69,7 +69,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Command | Purpose |
 | --- | --- |
 | `/sz auction <item> [quality] [affix] [date] [count]` | Active lots and sold history; weapon modules accept fuzzy affix filters and are named by their three rolled affixes |
-| `/sz 拍卖历史 <item> [page] [quality]` | Sale history, newest first, 200 records per page; optional quality filter | `/sz 拍卖历史 KS-12 2`；`/sz 拍卖历史 原子 1 红` |
+| `/sz 拍卖历史 <item> [page] [quality]` | No page: latest 200 official records; with page: third-party archive; optional quality filter | `/sz 拍卖历史 原子 红`；`/sz 拍卖历史 KS-12 2` |
 | `/sz emission [region]` | Time since the last emission and current status |
 | `/sz 风暴订阅 [cancel/status]` | One-shot subscription to the next storm (group mention, private DM) |
 | `/sz player <name/UUID> [region]` | Public profile, clan, PvP estimate and optional Lunar data |
@@ -149,10 +149,11 @@ Any group member or private-chat user can send `/sz 风暴订阅` to subscribe t
 
 The official history endpoint returns at most **200 records per request**. The plugin no longer relies on the official `offset`: page 1 reads the latest 200 official records, and page 2+ reads older sales from SC CORE's `before` cursor. Sites such as StalcraftDB can scroll indefinitely because they use their own backend `/api/items/{id}/auction-history?page=N`, not the official offset.
 
-- `/sz 拍卖历史 <item> [page] [quality]` reads 200 records per page, starting at page 1, e.g. `/sz 拍卖历史 KS-12 2` or `/sz 拍卖历史 原子 1 红`.
-- Quality-filtered pages use SC CORE's `qlt` parameter and are labeled as third-party; page 1 without a quality filter uses the official API.
+- `/sz 拍卖历史 <item> [page] [quality]`: without a page, reads the latest 200 official records (quality is filtered on those); e.g. `/sz 拍卖历史 原子 红`.
+- With a page, reads that page from SC CORE's third-party archive (1/2/3...), e.g. `/sz 拍卖历史 KS-12 2`.
+- Without a page, quality filters the latest 200 official records; with a page, SC CORE's `qlt` parameter filters the archive pages.
 - The card shows the page, page size and total, plus a `翻页：/sz 拍卖历史 <item> <page>` hint; keep increasing the page until the API returns an empty page.
-- Page 1 reads the latest 200 official records; page 2 and later read SC CORE's `before` cursor archive directly (labeled third-party, capped at 20 pages/4,000 records). The plugin no longer relies on the official offset.
+- With a page, the plugin starts from SC CORE's own page 1 and walks its `before` cursor to the target page (labeled third-party, capped at 20 pages/4,000 records). It no longer relies on the official offset.
 - Normal `/sz auction` still shows only recent sales to avoid pulling the entire history on every query. Date-filtered queries scan pages internally with a 4,000-record safety cap.
 - Only official sale history is read; no complete history is uploaded to a third party.
 

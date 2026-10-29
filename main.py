@@ -234,7 +234,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.10.2"
+PLUGIN_VERSION = "1.10.3"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -401,13 +401,14 @@ USAGE = {
     ),
     "auction_history": (
         "用法：/sz 拍卖历史 <物品> [页码] [品质]\n"
-        "说明：按官方成交历史倒序翻页，每页最多 200 条，可一直向前翻\n"
+        "说明：不带页码时查官方最近 200 条；带页码时查 SC CORE 第三方存档\n"
         "参数：\n"
         "  物品   必填，中文名 / 英文名 / 物品ID\n"
-        "  页码   可选，从 1 开始，默认 1\n"
-        "  品质   可选，白/绿/蓝/粉/红/金；筛选后按品质从 SC CORE 存档分页\n"
+        "  页码   可选，不填=官方最近 200 条；1/2/3=第三方存档页\n"
+        "  品质   可选，白/绿/蓝/粉/红/金；官方与第三方都会筛选\n"
         "示例：\n"
         "  /sz 拍卖历史 KS-12\n"
+        "  /sz 拍卖历史 原子 红\n"
         "  /sz 拍卖历史 KS-12 2\n"
         "  /sz 拍卖历史 原子 1 红"
     ),
@@ -1782,24 +1783,24 @@ class StalzonePlugin(Star):
         self,
         event: AstrMessageEvent,
         item: str,
-        page: int = 1,
+        page: int = 0,
         quality: str = "",
     ):
         """浏览 STALZONE 拍卖成交历史并直接发送图片。
 
-        当用户明确要翻看历史成交、旧成交记录或“第几页”时调用；第 1 页读取官方
-        最近 200 条，第 2 页起读取 SC CORE 第三方存档。
+        当用户明确要翻看历史成交、旧成交记录或“第几页”时调用。不传页码时只查
+        官方最近 200 条；传 1/2/3 等页码时读取 SC CORE 第三方存档对应页。
 
         Args:
             item(string): 必填，物品的中文名、英文名或物品 ID
-            page(number): 可选，页码从 1 开始，默认 1
+            page(number): 可选，0（默认）表示官方最近 200 条；1/2/3 表示第三方页码
             quality(string): 可选，品质：白/绿/蓝/粉/红/金
         """
         name = str(item or "").strip()
-        page_value = max(1, self._llm_int(page, 1))
+        page_value = max(0, self._llm_int(page, 0))
         quality_text = str(quality or "").strip()
         pieces = [name]
-        if page_value > 1 or quality_text:
+        if page_value > 0:
             pieces.append(str(page_value))
         if quality_text:
             pieces.append(quality_text)
@@ -3389,9 +3390,9 @@ class StalzonePlugin(Star):
             page = page_override
         if not item_query:
             return USAGE["auction_history"]
-        if page < 1:
+        if page is not None and page < 1:
             return "页码从 1 开始，例如：/sz 拍卖历史 KS-12 1"
-        if page > 10000:
+        if page is not None and page > 10000:
             return "页码过大，请使用更小的页码。"
 
         item, matches = await asyncio.to_thread(self._resolve_item, item_query)
@@ -3431,13 +3432,14 @@ class StalzonePlugin(Star):
             else None
         )
         page_size = 200
-        offset = (page - 1) * page_size
+        page_value = page or 1
+        offset = (page_value - 1) * page_size
         payload: dict[str, Any] | None = None
         prices: list[dict[str, Any]] = []
         total = 0
         async with self._make_client() as client:
             region = client.region
-            if page == 1 and quality_filter is None:
+            if page is None:
                 raw = await client.get_auction_history(
                     item_id, limit=page_size, offset=0
                 )
@@ -3455,6 +3457,18 @@ class StalzonePlugin(Star):
                     total = int(payload.get("total") or 0)
                 except (TypeError, ValueError):
                     total = 0
+                if quality_filter is not None:
+                    prices = [
+                        entry
+                        for entry in prices
+                        if auction_quality_of(entry) == quality_filter
+                    ]
+                    total = len(prices)
+                    payload = {
+                        "prices": prices,
+                        "total": total,
+                        "source": "official",
+                    }
             else:
                 payload = await self._fetch_sc_core_history_page(
                     item_id, region, page, quality_filter
@@ -3468,7 +3482,7 @@ class StalzonePlugin(Star):
         if payload is None:
             note = (
                 f"第 {page} 页需要读取 SC CORE 第三方存档，"
-                "当前第三方存档不可用。第 1 页仍可正常查询。"
+                "当前第三方存档不可用。不带页码时仍可查询官方最近 200 条。"
             )
             empty_view = build_empty_auction_view(
                 item_id,
@@ -3486,8 +3500,18 @@ class StalzonePlugin(Star):
             total = offset + len(prices)
         max_page = max(1, (total + page_size - 1) // page_size)
         if not prices:
-            if quality_filter is not None:
-                quality_short = QUALITY_NAMES.get(quality_filter, ("", ""))[1]
+            quality_short = (
+                QUALITY_NAMES.get(quality_filter, ("", ""))[1]
+                if quality_filter is not None
+                else ""
+            )
+            if page is None:
+                note = (
+                    f"官方最近 200 条中没有符合品质「{quality_short}」的成交记录。"
+                    if quality_filter is not None
+                    else "该物品暂无成交记录。"
+                )
+            elif quality_filter is not None:
                 note = (
                     f"第 {page} 页没有符合品质「{quality_short}」的成交记录。"
                 )
@@ -3524,6 +3548,7 @@ class StalzonePlugin(Star):
             history_page=page,
             history_page_size=page_size,
             history_total=total,
+            history_official=page is None,
         )
         if view is None:
             return "该页没有可显示的成交记录。"

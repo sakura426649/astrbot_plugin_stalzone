@@ -809,23 +809,23 @@ def _parse_module_filters(
     return item, quality, day, count, affix
 
 
-def parse_auction_history_query(argument: str) -> tuple[str, int, int | None]:
-    """Split ``item [page] [quality]``; page defaults to 1."""
+def parse_auction_history_query(
+    argument: str,
+) -> tuple[str, int | None, int | None]:
+    """Split ``item [page] [quality]``; absent page means official 200."""
     text = " ".join(str(argument or "").split())
     if not text:
-        return "", 1, None
+        return "", None, None
     parts = text.split(" ")
-    page = 1
-    page_seen = False
+    page: int | None = None
     quality: int | None = None
     consumed = 0
     for token in reversed(parts):
         if consumed >= 2 or len(parts) - consumed < 2:
             break
         lowered = token.lower()
-        if lowered.isdigit() and not page_seen:
+        if lowered.isdigit() and page is None:
             page = int(lowered)
-            page_seen = True
             consumed += 1
             continue
         tier = QUALITY_ALIASES.get(lowered)
@@ -836,7 +836,7 @@ def parse_auction_history_query(argument: str) -> tuple[str, int, int | None]:
         break
     base = " ".join(parts[:-consumed]).strip() if consumed else text
     if not base:
-        return text, 1, None
+        return text, None, None
     return base, page, quality
 
 def parse_auction_query(
@@ -1156,6 +1156,7 @@ def build_auction_view(
     history_page: int | None = None,
     history_page_size: int | None = None,
     history_total: int | None = None,
+    history_official: bool = False,
 ) -> dict[str, Any] | None:
     lots_payload = lots_payload if isinstance(lots_payload, dict) else {}
     history_payload = history_payload if isinstance(history_payload, dict) else {}
@@ -1718,8 +1719,13 @@ def build_auction_view(
         "affix_filter": affix_filter or "",
         "full_display": full_display,
         "full_show_unit": full_show_unit,
-        "history_only": before is not None or history_page is not None,
+        "history_only": (
+            before is not None
+            or history_page is not None
+            or history_official
+        ),
         "before": before_label,
+        "history_official": history_official,
         "history_page": history_page,
         "history_page_size": history_page_size,
         "history_total": history_total,
@@ -1839,6 +1845,17 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                     f"翻页：/sz 拍卖历史 {view.get('short') or view.get('item_id')} <页码>",
                 ]
             )
+        elif view.get("history_official"):
+            filter_note = (
+                f"，品质 {view['history_filter_label']}，"
+                f"筛选后 {view.get('history_total') or 0} 条"
+                if view.get("history_filter_label")
+                else f"，共 {view.get('history_total') or 0} 条"
+            )
+            history_heading = (
+                f"历史成交（官方最近 200 条{filter_note}，按时间倒序）"
+            )
+            lines.extend(["", history_heading])
         else:
             if (
                 view.get("recent_total_limit") is not None
@@ -3368,7 +3385,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
-        "/sz 拍卖历史 <物品> [页码] [品质] — 按成交历史倒序翻页，每页 200 条，可一直向前翻",
+        "/sz 拍卖历史 <物品> [页码] [品质] — 不带页码查官方最近 200 条；带页码查第三方存档",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
