@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.1 - 2026-10-29
+
+### Changed
+
+- Auction rows for any item with multiple qualities (artifacts, module cores, weapon modules, and other quality-tiered items) no longer show the "最低单价/最低价" badge; quality color/grouping already conveys the cheap row. Single-quality items keep the existing badge.
+
+### Tests
+
+- Updated weapon-module coverage for badge suppression; 227 tests and 13 visual signatures pass.
+
 ## 1.6.0 - 2026-10-29
 
 ### Added

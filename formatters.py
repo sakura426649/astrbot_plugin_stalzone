@@ -1531,9 +1531,16 @@ def build_auction_view(
         )
         if per_quality_mode and not recent_grouped_quality:
             rows = rows[:limit]
-        if rows and not recent_grouped_quality:
-            # Quality groups already make the cheap rows obvious; the badge
-            # stays only for a flat list.
+        multi_quality_item = (
+            (not non_artifact)
+            or module_mode
+            or per_quality_recent
+            or len(recent_qualities) > 1
+            or quantity_quality_count > 1
+        )
+        if rows and not recent_grouped_quality and not multi_quality_item:
+            # A single-quality flat list can still use the badge; any
+            # multi-quality item is self-explanatory by color/group.
             unit_values = [
                 row.get("unit_value", 0) for row in rows if row.get("unit_value", 0) > 0
             ]

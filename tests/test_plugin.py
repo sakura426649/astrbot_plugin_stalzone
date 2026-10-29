@@ -883,7 +883,13 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(
             view["recent_groups"][0]["rows"][0]["name"], "垂直 后退 猎人"
         )
-        self.assertTrue(view["recent_groups"][0]["rows"][-1]["lowest"])
+        self.assertFalse(
+            any(
+                row.get("lowest")
+                for group in view["recent_groups"]
+                for row in group["rows"]
+            )
+        )
 
         quality_only = build_auction_view(
             "1pyq",
