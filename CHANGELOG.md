@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.10.2 - 2026-10-30
+
+### Changed
+
+- `/sz 拍卖历史` now follows the simpler rule: page 1 reads the latest 200 official records; page 2 and later read SC CORE's `before` cursor directly. The official offset/100-item retry detection was removed, because deployments may ignore offset and it produced repeated pages.
+- Added optional quality to `/sz 拍卖历史 <物品> [页码] [品质]`; quality-filtered pages use SC CORE's `qlt` parameter and are labeled as third-party.
+- Added `stalzone_auction_history` LLM tool for natural-language history paging.
+- `sz 1` is now a shorthand for `sz 候选 1`.
+
+### Tests
+
+- Updated history page tests for page-1 official/page-2 SC CORE and quality filtering; 254 tests and 14 visual signatures pass.
+
 ## 1.10.1 - 2026-10-29
 
 ### Fixed

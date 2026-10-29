@@ -2334,7 +2334,7 @@ def render_help_card(
             "/sz 战队列表 · /sz 行动 · /sz 区服 · /sz 帮助 · /sz 版本",
             [
                 "战队列表、行动记录、区服列表",
-                "候选 /sz 候选｜诊断 /sz diag｜更新 /sz 更新",
+                "候选 /sz 候选 或 /sz 1｜诊断 /sz diag｜更新 /sz 更新",
             ],
             "#8FA2B8",
         ),
@@ -4019,7 +4019,13 @@ def render_auction_card(
             history_heading = (
                 f"历史成交 第 {view['history_page']} 页"
                 f"（每页 {view.get('history_page_size') or 200} 条，"
-                f"共 {view.get('history_total') or 0} 条，按时间倒序）"
+                f"共 {view.get('history_total') or 0} 条"
+                + (
+                    f"，品质 {view['history_filter_label']}"
+                    if view.get("history_filter_label")
+                    else ""
+                )
+                + "，按时间倒序）"
             )
         elif view.get("recent_per_quality"):
             history_heading = (

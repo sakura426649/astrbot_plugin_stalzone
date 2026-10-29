@@ -234,7 +234,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.10.1"
+PLUGIN_VERSION = "1.10.2"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -400,14 +400,16 @@ USAGE = {
         "  /sz 拍卖 武器模块 粉 抑制器"
     ),
     "auction_history": (
-        "用法：/sz 拍卖历史 <物品> [页码]\n"
+        "用法：/sz 拍卖历史 <物品> [页码] [品质]\n"
         "说明：按官方成交历史倒序翻页，每页最多 200 条，可一直向前翻\n"
         "参数：\n"
         "  物品   必填，中文名 / 英文名 / 物品ID\n"
         "  页码   可选，从 1 开始，默认 1\n"
+        "  品质   可选，白/绿/蓝/粉/红/金；筛选后按品质从 SC CORE 存档分页\n"
         "示例：\n"
         "  /sz 拍卖历史 KS-12\n"
-        "  /sz 拍卖历史 KS-12 2"
+        "  /sz 拍卖历史 KS-12 2\n"
+        "  /sz 拍卖历史 原子 1 红"
     ),
     "emission": (
         "用法：/sz emission / /sz 风暴 [EU/RU/NA/SEA/NEA]\n"
@@ -479,11 +481,12 @@ USAGE = {
         "  /sz 通行证计算 15 15 2 20"
     ),
     "candidate": (
-        "用法：/sz 候选 <序号>\n"
-        "说明：使用最近一次候选继续原查询，候选有效期 10 分钟\n"
+        "用法：/sz 候选 <序号> 或 /sz <序号>\n"
+        "说明：使用最近一次候选继续原查询，候选有效期 10 分钟；sz 1 是简写\n"
         "参数：\n"
         "  序号   必填，从 1 开始的候选编号\n"
         "示例：\n"
+        "  /sz 1\n"
         "  /sz 候选 1"
     ),
     "alert": (
@@ -1774,6 +1777,41 @@ class StalzonePlugin(Star):
         ):
             yield output
 
+    @_llm_tool_decorator(name="stalzone_auction_history")
+    async def llm_auction_history(
+        self,
+        event: AstrMessageEvent,
+        item: str,
+        page: int = 1,
+        quality: str = "",
+    ):
+        """浏览 STALZONE 拍卖成交历史并直接发送图片。
+
+        当用户明确要翻看历史成交、旧成交记录或“第几页”时调用；第 1 页读取官方
+        最近 200 条，第 2 页起读取 SC CORE 第三方存档。
+
+        Args:
+            item(string): 必填，物品的中文名、英文名或物品 ID
+            page(number): 可选，页码从 1 开始，默认 1
+            quality(string): 可选，品质：白/绿/蓝/粉/红/金
+        """
+        name = str(item or "").strip()
+        page_value = max(1, self._llm_int(page, 1))
+        quality_text = str(quality or "").strip()
+        pieces = [name]
+        if page_value > 1 or quality_text:
+            pieces.append(str(page_value))
+        if quality_text:
+            pieces.append(quality_text)
+        query = " ".join(piece for piece in pieces if piece)
+        async for output in self._llm_execute(
+            event,
+            "auction",
+            self._handle_auction_history(query, event=event),
+            query=query,
+        ):
+            yield output
+
     @_llm_tool_decorator(name="stalzone_item")
     async def llm_item(self, event: AstrMessageEvent, item: str):
         """查询 STALZONE 物品图鉴，并直接发送物品详情图片。
@@ -3008,6 +3046,9 @@ class StalzonePlugin(Star):
         except Exception:
             pass
         sub, arg = parse_command(event.message_str)
+        if sub.isdigit():
+            # Shortcut: ``sz 1`` is equivalent to ``sz 候选 1``.
+            sub, arg = "candidate", sub
         if sub == "check_version":
             yield event.plain_result(await self._handle_version_check())
             return
@@ -3243,35 +3284,17 @@ class StalzonePlugin(Star):
         yield event.plain_result(text)
 
     # --------------------------------------------------------------- handlers
-    @staticmethod
-    def _history_signature(entries: list[dict[str, Any]]) -> tuple[Any, ...]:
-        return tuple(
-            (entry.get("time"), entry.get("price"), entry.get("amount"))
-            for entry in entries[:5]
-        )
-
-    @staticmethod
-    def _oldest_history_time(entries: list[dict[str, Any]]) -> str:
-        oldest: datetime | None = None
-        for entry in entries:
-            timestamp = parse_auction_time(entry.get("time"))
-            if timestamp is None:
-                continue
-            if oldest is None or timestamp < oldest:
-                oldest = timestamp
-        return oldest.strftime("%Y-%m-%dT%H:%M:%SZ") if oldest else ""
-
     async def _fetch_sc_core_history_page(
         self,
         item_id: str,
         region: str,
         page: int,
-        start_cursor: str,
+        quality: int | None = None,
     ) -> dict[str, Any] | None:
-        """Walk SC CORE's ``before`` cursor to the requested 200-row page."""
+        """Walk SC CORE's own cursor to the requested 200-row page."""
         if not self._cfg("sc_core_fallback", True):
             return None
-        if page < 2 or page > 20 or not start_cursor:
+        if page < 1 or page > 20:
             return None
         region = str(region or "").lower()
         cache_key = (region, item_id)
@@ -3283,12 +3306,15 @@ class StalzonePlugin(Star):
                     if not item_key:
                         return None
                     self._sc_item_keys[cache_key] = item_key
-                cursor = start_cursor
+                cursor: str | None = None
                 total = 0
                 selected: list[dict[str, Any]] = []
-                for index in range(2, page + 1):
+                for index in range(1, page + 1):
                     payload = await client.get_history(
-                        item_key, before=cursor, limit=200
+                        item_key,
+                        before=cursor,
+                        limit=200,
+                        quality=quality,
                     )
                     status = payload.get("history_status")
                     if isinstance(status, dict):
@@ -3351,98 +3377,6 @@ class StalzonePlugin(Star):
             )
             return None
 
-    async def _fetch_history_page(
-        self,
-        client: StalzoneAPIClient,
-        item_id: str,
-        page: int,
-        page_size: int = 200,
-    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], int, str]:
-        """Fetch one history page, detecting ignored official offsets."""
-        offset = (page - 1) * page_size
-        payload = await client.get_auction_history(
-            item_id, limit=page_size, offset=offset
-        )
-        prices = (
-            [entry for entry in payload.get("prices", []) if isinstance(entry, dict)]
-            if isinstance(payload, dict)
-            else []
-        )
-        try:
-            total = int(payload.get("total") or 0) if isinstance(payload, dict) else 0
-        except (TypeError, ValueError):
-            total = 0
-        if page == 1 or total <= offset:
-            return payload, prices, total, "official"
-        first_payload = await client.get_auction_history(
-            item_id, limit=page_size, offset=0
-        )
-        first_prices = (
-            [
-                entry
-                for entry in first_payload.get("prices", [])
-                if isinstance(entry, dict)
-            ]
-            if isinstance(first_payload, dict)
-            else []
-        )
-        first_signature = self._history_signature(first_prices)
-        current_signature = self._history_signature(prices)
-        if current_signature and current_signature != first_signature:
-            return payload, prices, total, "official"
-
-        # Some deployments ignore 200-item offsets but honor 100-item pages.
-        expected = min(page_size, max(0, total - offset))
-        combined: list[dict[str, Any]] = []
-        seen: set[tuple[Any, ...]] = set()
-        for half_offset in (offset, offset + 100):
-            try:
-                half = await client.get_auction_history(
-                    item_id, limit=100, offset=half_offset
-                )
-            except Exception:
-                break
-            half_prices = (
-                [entry for entry in half.get("prices", []) if isinstance(entry, dict)]
-                if isinstance(half, dict)
-                else []
-            )
-            for entry in half_prices:
-                key = (entry.get("time"), entry.get("price"), entry.get("amount"))
-                if key in seen:
-                    continue
-                seen.add(key)
-                combined.append(entry)
-        if (
-            len(combined) >= max(1, expected)
-            and self._history_signature(combined) != first_signature
-        ):
-            combined_payload = {
-                "prices": combined[:page_size],
-                "total": total,
-                "source": "official",
-            }
-            return combined_payload, combined[:page_size], total, "official"
-
-        logger.warning(
-            "STALZONE official history offset ignored for %s page %s; "
-            "trying SC CORE cursor",
-            item_id,
-            page,
-        )
-        cursor = self._oldest_history_time(first_prices)
-        sc_payload = await self._fetch_sc_core_history_page(
-            item_id, client.region, page, cursor
-        )
-        if sc_payload:
-            return (
-                sc_payload,
-                list(sc_payload.get("prices") or []),
-                int(sc_payload.get("total") or 0),
-                "sc_core",
-            )
-        return None, [], total, "official"
-
     async def _handle_auction_history(
         self,
         argument: str,
@@ -3450,7 +3384,7 @@ class StalzonePlugin(Star):
         event: Any = None,
         page_override: int | None = None,
     ) -> str | PluginReply:
-        item_query, page = parse_auction_history_query(argument)
+        item_query, page, quality_filter = parse_auction_history_query(argument)
         if page_override is not None:
             page = page_override
         if not item_query:
@@ -3498,15 +3432,43 @@ class StalzonePlugin(Star):
         )
         page_size = 200
         offset = (page - 1) * page_size
+        payload: dict[str, Any] | None = None
+        prices: list[dict[str, Any]] = []
+        total = 0
         async with self._make_client() as client:
-            payload, prices, total, source = await self._fetch_history_page(
-                client, item_id, page, page_size
-            )
             region = client.region
+            if page == 1 and quality_filter is None:
+                raw = await client.get_auction_history(
+                    item_id, limit=page_size, offset=0
+                )
+                payload = raw if isinstance(raw, dict) else {}
+                prices = (
+                    [
+                        entry
+                        for entry in payload.get("prices", [])
+                        if isinstance(entry, dict)
+                    ]
+                    if payload
+                    else []
+                )
+                try:
+                    total = int(payload.get("total") or 0)
+                except (TypeError, ValueError):
+                    total = 0
+            else:
+                payload = await self._fetch_sc_core_history_page(
+                    item_id, region, page, quality_filter
+                )
+                if payload:
+                    prices = list(payload.get("prices") or [])
+                    try:
+                        total = int(payload.get("total") or 0)
+                    except (TypeError, ValueError):
+                        total = 0
         if payload is None:
             note = (
-                f"官方接口没有返回第 {page} 页（offset 可能被忽略），"
-                "且 SC CORE 第三方存档不可用。请稍后重试。"
+                f"第 {page} 页需要读取 SC CORE 第三方存档，"
+                "当前第三方存档不可用。第 1 页仍可正常查询。"
             )
             empty_view = build_empty_auction_view(
                 item_id,
@@ -3524,12 +3486,18 @@ class StalzonePlugin(Star):
             total = offset + len(prices)
         max_page = max(1, (total + page_size - 1) // page_size)
         if not prices:
-            note = (
-                f"第 {page} 页没有更多成交记录；共 {total} 条，"
-                f"最多第 {max_page} 页。"
-                if total
-                else "该物品暂无成交记录。"
-            )
+            if quality_filter is not None:
+                quality_short = QUALITY_NAMES.get(quality_filter, ("", ""))[1]
+                note = (
+                    f"第 {page} 页没有符合品质「{quality_short}」的成交记录。"
+                )
+            else:
+                note = (
+                    f"第 {page} 页没有更多成交记录；共 {total} 条，"
+                    f"最多第 {max_page} 页。"
+                    if total
+                    else "该物品暂无成交记录。"
+                )
             empty_view = build_empty_auction_view(
                 item_id,
                 label,
@@ -3552,12 +3520,17 @@ class StalzonePlugin(Star):
             history_limit=page_size,
             non_artifact=non_artifact,
             item_color=item_color,
+            quality_filter=quality_filter,
             history_page=page,
             history_page_size=page_size,
             history_total=total,
         )
         if view is None:
             return "该页没有可显示的成交记录。"
+        if quality_filter is not None:
+            view["history_filter_label"] = QUALITY_NAMES.get(
+                quality_filter, ("", "")
+            )[1]
         return PluginReply(
             format_auction_text(view),
             icon_url=item.get("icon"),

@@ -809,18 +809,35 @@ def _parse_module_filters(
     return item, quality, day, count, affix
 
 
-def parse_auction_history_query(argument: str) -> tuple[str, int]:
-    """Split ``item [page]`` for the history browser; page defaults to 1."""
+def parse_auction_history_query(argument: str) -> tuple[str, int, int | None]:
+    """Split ``item [page] [quality]``; page defaults to 1."""
     text = " ".join(str(argument or "").split())
     if not text:
-        return "", 1
+        return "", 1, None
     parts = text.split(" ")
     page = 1
-    if len(parts) >= 2 and parts[-1].isdigit():
-        page = int(parts[-1])
-        parts = parts[:-1]
-    return " ".join(parts).strip(), page
-
+    page_seen = False
+    quality: int | None = None
+    consumed = 0
+    for token in reversed(parts):
+        if consumed >= 2 or len(parts) - consumed < 2:
+            break
+        lowered = token.lower()
+        if lowered.isdigit() and not page_seen:
+            page = int(lowered)
+            page_seen = True
+            consumed += 1
+            continue
+        tier = QUALITY_ALIASES.get(lowered)
+        if tier is not None and quality is None:
+            quality = tier
+            consumed += 1
+            continue
+        break
+    base = " ".join(parts[:-consumed]).strip() if consumed else text
+    if not base:
+        return text, 1, None
+    return base, page, quality
 
 def parse_auction_query(
     argument: str, *, now: datetime | None = None
@@ -1807,7 +1824,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             history_heading = (
                 f"历史成交 第 {view['history_page']} 页"
                 f"（每页 {view.get('history_page_size') or 200} 条，"
-                f"共 {view.get('history_total') or 0} 条，按时间倒序）"
+                f"共 {view.get('history_total') or 0} 条"
+                + (
+                    f"，品质 {view['history_filter_label']}"
+                    if view.get("history_filter_label")
+                    else ""
+                )
+                + "，按时间倒序）"
             )
             lines.extend(
                 [
@@ -3345,12 +3368,12 @@ def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
-        "/sz 拍卖历史 <物品> [页码] — 按官方成交历史倒序翻页，每页 200 条，可一直向前翻",
+        "/sz 拍卖历史 <物品> [页码] [品质] — 按成交历史倒序翻页，每页 200 条，可一直向前翻",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
         "/sz item / 物品 <中文名/英文名/ID> [品质] [类型] — 查看物品属性、描述和 ID；如 准镜 红 瞄具",
-        "/sz 候选 <序号> — 使用最近一次候选继续查询",
+        "/sz 候选 <序号> / sz <序号> — 使用最近一次候选继续查询；sz 1 是简写",
         "/sz 调整 / 平衡 <武器/神器> — 查看 2023-2026 官方平衡调整记录",
         "/sz 通行证计算 <等级> <每日任务>[+超载] <剩余天数> [每周天数] — 计算通行证经验与等级预测",
         "/sz clan / 战队 <战队名/标签/ID> [EU/RU/NA/SEA/NEA] — 查看战队资料；优先匹配名称括号内标签，长度不限",
