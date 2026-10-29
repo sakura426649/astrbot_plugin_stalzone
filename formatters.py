@@ -809,6 +809,19 @@ def _parse_module_filters(
     return item, quality, day, count, affix
 
 
+def parse_auction_history_query(argument: str) -> tuple[str, int]:
+    """Split ``item [page]`` for the history browser; page defaults to 1."""
+    text = " ".join(str(argument or "").split())
+    if not text:
+        return "", 1
+    parts = text.split(" ")
+    page = 1
+    if len(parts) >= 2 and parts[-1].isdigit():
+        page = int(parts[-1])
+        parts = parts[:-1]
+    return " ".join(parts).strip(), page
+
+
 def parse_auction_query(
     argument: str, *, now: datetime | None = None
 ) -> tuple[str, int | None, date_cls | None, int | None, str | None]:
@@ -1123,6 +1136,9 @@ def build_auction_view(
     affix_filter: str | None = None,
     per_quality_recent: bool = False,
     full_display: bool = False,
+    history_page: int | None = None,
+    history_page_size: int | None = None,
+    history_total: int | None = None,
 ) -> dict[str, Any] | None:
     lots_payload = lots_payload if isinstance(lots_payload, dict) else {}
     history_payload = history_payload if isinstance(history_payload, dict) else {}
@@ -1685,8 +1701,11 @@ def build_auction_view(
         "affix_filter": affix_filter or "",
         "full_display": full_display,
         "full_show_unit": full_show_unit,
-        "history_only": before is not None,
+        "history_only": before is not None or history_page is not None,
         "before": before_label,
+        "history_page": history_page,
+        "history_page_size": history_page_size,
+        "history_total": history_total,
         "history_note": history_note,
         "history_source": source,
         "data_note": data_note,
@@ -1784,26 +1803,43 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
 
     lines.append(SEP)
     if view.get("history_only"):
-        if view.get("recent_total_limit") is not None or view["quality_filter"] is not None:
-            scope = "最多"
+        if view.get("history_page"):
+            history_heading = (
+                f"历史成交 第 {view['history_page']} 页"
+                f"（每页 {view.get('history_page_size') or 200} 条，"
+                f"共 {view.get('history_total') or 0} 条，按时间倒序）"
+            )
+            lines.extend(
+                [
+                    "",
+                    history_heading,
+                    f"翻页：/sz 拍卖历史 {view.get('short') or view.get('item_id')} <页码>",
+                ]
+            )
         else:
-            scope = "每品质最多"
-        if view.get("recent_per_quality"):
-            history_heading = (
-                f"历史成交（截至 {view['before']}，每品质最多 "
-                f"{view['recent_limit']} 条，按时间倒序）"
-            )
-        elif view.get("recent_grouped_quality"):
-            history_heading = (
-                f"历史成交（截至 {view['before']}，最多 "
-                f"{view['recent_limit']} 条，按品质分组，组内时间倒序）"
-            )
-        else:
-            history_heading = (
-                f"历史成交（截至 {view['before']}，{scope} "
-                f"{view['recent_limit']} 条，按时间倒序）"
-            )
-        lines.extend(["", history_heading])
+            if (
+                view.get("recent_total_limit") is not None
+                or view["quality_filter"] is not None
+            ):
+                scope = "最多"
+            else:
+                scope = "每品质最多"
+            if view.get("recent_per_quality"):
+                history_heading = (
+                    f"历史成交（截至 {view['before']}，每品质最多 "
+                    f"{view['recent_limit']} 条，按时间倒序）"
+                )
+            elif view.get("recent_grouped_quality"):
+                history_heading = (
+                    f"历史成交（截至 {view['before']}，最多 "
+                    f"{view['recent_limit']} 条，按品质分组，组内时间倒序）"
+                )
+            else:
+                history_heading = (
+                    f"历史成交（截至 {view['before']}，{scope} "
+                    f"{view['recent_limit']} 条，按时间倒序）"
+                )
+            lines.extend(["", history_heading])
         if is_non_artifact:
             lines.append("  名称  成交价  单价  时间")
     else:
@@ -1880,7 +1916,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 lines.append("当前无在售")
             if view.get("active_note"):
                 lines.extend(str(view["active_note"]).split("\n"))
-        if view.get("recent_per_quality"):
+        if view.get("history_page"):
+            recent_heading = (
+                f"历史成交 第 {view['history_page']} 页"
+                f"（每页 {view.get('history_page_size') or 200} 条，"
+                f"共 {view.get('history_total') or 0} 条，按时间倒序）"
+            )
+        elif view.get("recent_per_quality"):
             recent_heading = (
                 f"最近成交（每品质最多 {view['recent_limit']} 条，按时间倒序）"
             )
@@ -1905,6 +1947,10 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                 f"最近成交（每品质最多 {view['recent_limit']} 条，按时间倒序）"
             )
         lines.extend(["", SEP, recent_heading])
+        if view.get("history_page"):
+            lines.append(
+                f"翻页：/sz 拍卖历史 {view.get('short') or view.get('item_id')} <页码>"
+            )
         if is_non_artifact:
             lines.append("  名称  成交价  单价  时间")
     if view["recent_groups"]:
@@ -3299,6 +3345,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
+        "/sz 拍卖历史 <物品> [页码] — 按官方成交历史倒序翻页，每页 200 条，可一直向前翻",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",

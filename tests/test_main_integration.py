@@ -1145,6 +1145,40 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(empty.sub, "notice")
         self.assertIn("没有符合", empty.notice_view["note"])
 
+    async def test_auction_history_pages_with_offset(self):
+        class HistoryClient(FakeClient):
+            def __init__(self):
+                self.calls = []
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                self.calls.append((item_id, limit, offset))
+                prices = []
+                if offset < 400:
+                    prices = [
+                        {
+                            "amount": 1,
+                            "price": 1000,
+                            "time": "2026-10-22T05:00:00Z",
+                            "additional": {},
+                        }
+                    ]
+                return {"total": 401, "prices": prices}
+
+        plugin = self.make_plugin()
+        client = HistoryClient()
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        result = await plugin._handle_auction_history("KS-12 2")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.auction_view["history_page"], 2)
+        self.assertIn("第 2 页", result.text)
+        self.assertIn("共 401 条", result.text)
+        self.assertIn("翻页：/sz 拍卖历史", result.text)
+        self.assertEqual(client.calls[0], ("vj2mp", 200, 200))
+        beyond = await plugin._handle_auction_history("KS-12 4")
+        self.assertIsInstance(beyond, PluginReply)
+        self.assertIn("没有更多成交记录", beyond.text)
+        self.assertIn("最多第 3 页", beyond.text)
+
     async def test_auction_premium_chinese_name(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]

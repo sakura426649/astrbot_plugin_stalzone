@@ -99,6 +99,7 @@ try:  # Package import (normal AstrBot plugin loading).
         auction_quality_of,
         MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
+        parse_auction_history_query,
         parse_auction_query,
         parse_auction_time,
     )
@@ -179,6 +180,7 @@ except ImportError:  # Direct execution / flat import fallback.
         auction_quality_of,
         MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
+        parse_auction_history_query,
         parse_auction_query,
         parse_auction_time,
     )
@@ -232,7 +234,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.9.0"
+PLUGIN_VERSION = "1.10.0"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -397,6 +399,16 @@ USAGE = {
         "  /sz 拍卖 原子 粉 6.11 20\n"
         "  /sz 拍卖 武器模块 粉 抑制器"
     ),
+    "auction_history": (
+        "用法：/sz 拍卖历史 <物品> [页码]\n"
+        "说明：按官方成交历史倒序翻页，每页最多 200 条，可一直向前翻\n"
+        "参数：\n"
+        "  物品   必填，中文名 / 英文名 / 物品ID\n"
+        "  页码   可选，从 1 开始，默认 1\n"
+        "示例：\n"
+        "  /sz 拍卖历史 KS-12\n"
+        "  /sz 拍卖历史 KS-12 2"
+    ),
     "emission": (
         "用法：/sz emission / /sz 风暴 [EU/RU/NA/SEA/NEA]\n"
         "说明：查看上次风暴时间与当前状态\n"
@@ -510,6 +522,7 @@ USAGE = {
 
 USAGE_META = {
     "auction": ("拍卖查询", "AUCTION", "#FFB454"),
+    "auction_history": ("拍卖历史", "HISTORY", "#FFB454"),
     "emission": ("辐射风暴", "EMISSION", "#54D6A1"),
     "item": ("物品图鉴", "ITEM", "#FFD166"),
     "player": ("玩家资料", "PLAYER", "#4EA8FF"),
@@ -2289,6 +2302,13 @@ class StalzonePlugin(Star):
         if pending.kind == "balance":
             result = await self._handle_balance(selected, event=event)
             return self._with_render_sub(result, "balance")
+        if pending.kind == "auction_history":
+            result = await self._handle_auction_history(
+                selected,
+                event=event,
+                page_override=int(pending.count or 1),
+            )
+            return self._with_render_sub(result, "auction")
         if pending.kind == "auction":
             result = await self._handle_auction(
                 selected,
@@ -3031,6 +3051,7 @@ class StalzonePlugin(Star):
             self._pending_choices.pop(self._choice_scope(event), None)
         if sub in {
             "auction",
+            "auction_history",
             "emission",
             "player",
             "item",
@@ -3086,6 +3107,8 @@ class StalzonePlugin(Star):
                 yield await self._usage_reply(event, "auction")
                 return
             coro = self._handle_auction(arg, event=event)
+        elif sub == "auction_history":
+            coro = self._handle_auction_history(arg, event=event)
         elif sub == "candidate":
             if not arg:
                 yield await self._usage_reply(event, "candidate")
@@ -3220,6 +3243,121 @@ class StalzonePlugin(Star):
         yield event.plain_result(text)
 
     # --------------------------------------------------------------- handlers
+    async def _handle_auction_history(
+        self,
+        argument: str,
+        *,
+        event: Any = None,
+        page_override: int | None = None,
+    ) -> str | PluginReply:
+        item_query, page = parse_auction_history_query(argument)
+        if page_override is not None:
+            page = page_override
+        if not item_query:
+            return USAGE["auction_history"]
+        if page < 1:
+            return "页码从 1 开始，例如：/sz 拍卖历史 KS-12 1"
+        if page > 10000:
+            return "页码过大，请使用更小的页码。"
+
+        item, matches = await asyncio.to_thread(self._resolve_item, item_query)
+        if not item and matches:
+            candidates = [self._decorate(candidate) for candidate in matches]
+            self._remember_choice(
+                event,
+                "auction_history",
+                item_query,
+                candidates,
+                count=page,
+            )
+            text = format_item_candidates(item_query, candidates)
+            if len(candidates) <= 1:
+                return text
+            return PluginReply(
+                text,
+                candidate_view=build_item_candidate_view(item_query, candidates),
+                sub="candidates",
+            )
+        if not item:
+            return self._not_found(
+                "auction",
+                item_query,
+                note=(
+                    "没有找到该物品，无法浏览拍卖历史；"
+                    "请检查物品名/ID，或先查看候选。"
+                ),
+            )
+
+        item_id = str(item.get("id") or "")
+        label = display_name(item)
+        non_artifact = not str(item.get("cat") or "").startswith("artefact")
+        item_color = (
+            item_rank_color(item.get("color"))
+            if non_artifact
+            else None
+        )
+        page_size = 200
+        offset = (page - 1) * page_size
+        async with self._make_client() as client:
+            payload = await client.get_auction_history(
+                item_id, limit=page_size, offset=offset
+            )
+            region = client.region
+        prices = (
+            [entry for entry in payload.get("prices", []) if isinstance(entry, dict)]
+            if isinstance(payload, dict)
+            else []
+        )
+        raw_total = payload.get("total") if isinstance(payload, dict) else 0
+        try:
+            total = int(raw_total or 0)
+        except (TypeError, ValueError):
+            total = 0
+        if total <= 0:
+            total = offset + len(prices)
+        max_page = max(1, (total + page_size - 1) // page_size)
+        if not prices:
+            note = (
+                f"第 {page} 页没有更多成交记录；共 {total} 条，"
+                f"最多第 {max_page} 页。"
+                if total
+                else "该物品暂无成交记录。"
+            )
+            empty_view = build_empty_auction_view(
+                item_id,
+                label,
+                region,
+                note=note,
+            )
+            return PluginReply(
+                format_auction_text(empty_view),
+                icon_url=item.get("icon"),
+                auction_view=empty_view,
+                sub="auction",
+            )
+
+        view = build_auction_view(
+            item_id,
+            {},
+            payload,
+            region,
+            item_label=label,
+            history_limit=page_size,
+            non_artifact=non_artifact,
+            item_color=item_color,
+            history_page=page,
+            history_page_size=page_size,
+            history_total=total,
+        )
+        if view is None:
+            return "该页没有可显示的成交记录。"
+        return PluginReply(
+            format_auction_text(view),
+            icon_url=item.get("icon"),
+            auction_view=view,
+            sub="auction",
+        )
+
     async def _handle_auction(
         self,
         item_query: str,

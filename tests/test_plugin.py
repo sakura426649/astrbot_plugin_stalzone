@@ -2068,6 +2068,7 @@ class ParserTests(unittest.TestCase):
             "/sz 区服切换 eu": ("set_region", "eu"),
             "/sz 默认区服 ru": ("set_region", "ru"),
             "/sz 拍卖显示模式 1": ("auction_mode", "1"),
+            "/sz 拍卖历史 KS-12 2": ("auction_history", "KS-12 2"),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)
@@ -2235,6 +2236,8 @@ class ItemIndexTests(unittest.TestCase):
         self.assertEqual(full["id"], "2ony6")
         variant, _ = self.index.resolve("X95 (A)")
         self.assertEqual(variant["id"], "lyv9k")
+        ks12, _ = self.index.resolve("KS-12")
+        self.assertEqual(ks12["id"], "vj2mp")
 
     def test_short_ambiguous_weapon_token_shows_candidates(self):
         mk47, mk47_matches = self.index.resolve("mk47")

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.9.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.10.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -69,6 +69,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Command | Purpose |
 | --- | --- |
 | `/sz auction <item> [quality] [affix] [date] [count]` | Active lots and sold history; weapon modules accept fuzzy affix filters and are named by their three rolled affixes |
+| `/sz 拍卖历史 <item> [page]` | Official sale history, newest first, 200 records per page; page back indefinitely | `/sz 拍卖历史 KS-12 2` |
 | `/sz emission [region]` | Time since the last emission and current status |
 | `/sz 风暴订阅 [cancel/status]` | One-shot subscription to the next storm (group mention, private DM) |
 | `/sz player <name/UUID> [region]` | Public profile, clan, PvP estimate and optional Lunar data |
@@ -143,6 +144,15 @@ The plugin registers six LLM tools: `stalzone_auction`, `stalzone_item`, `stalzo
 ### One-shot storm subscriptions
 
 Any group member or private-chat user can send `/sz 风暴订阅` to subscribe to the next emission. On success the bot @-mentions the user in the group, or replies directly in private chat. When the storm starts, the plugin first sends the allow-list group image, then notifies subscribers in the session where they subscribed; multiple subscribers in the same group are combined into one message with all mentions, while private subscribers get a direct message. The notice includes the official start time and says the next storm requires a new subscription. Subscriptions are one-shot and are removed after a successful notice. Subscribing while a storm is already active waits for the next one. `/sz 风暴订阅 状态` shows the current subscription and `/sz 风暴订阅 取消` removes it. Records live in `emission_auto_state.json` and survive reloads/restarts; failed sends are retried while the storm is active. OneBot-compatible platforms only; official QQ bots cannot receive proactive mentions.
+
+## Auction history paging
+
+The official history endpoint accepts `limit` up to **200 per request** and an unbounded `offset`, and returns a `total`. History is therefore not capped at 200 records; clients page through it with offset.
+
+- `/sz 拍卖历史 <item> [page]` reads 200 records per page, starting at page 1, e.g. `/sz 拍卖历史 KS-12 2`.
+- The card shows the page, page size and total, plus a `翻页：/sz 拍卖历史 <item> <page>` hint; keep increasing the page until the API returns an empty page.
+- Normal `/sz auction` still shows only recent sales to avoid pulling the entire history on every query. Date-filtered queries scan pages internally with a 4,000-record safety cap.
+- Only official sale history is read; no complete history is uploaded to a third party.
 
 ## Development
 

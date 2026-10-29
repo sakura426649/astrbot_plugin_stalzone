@@ -2281,7 +2281,7 @@ def render_help_card(
             "AUCTION",
             "/sz 拍卖 <物品> [品质] [词条]",
             [
-                "在售、成交与历史；日期/数量可追加",
+                "在售/历史；翻页 /sz 拍卖历史",
                 "武器模块：粉 抑制器；模块核心：蓝",
             ],
             ACCENT,
@@ -4015,7 +4015,13 @@ def render_auction_card(
     y = header_h
     draw.line((PAD, y - 18, width - PAD, y - 18), fill=BORDER, width=1)
     if history_only:
-        if view.get("recent_per_quality"):
+        if view.get("history_page"):
+            history_heading = (
+                f"历史成交 第 {view['history_page']} 页"
+                f"（每页 {view.get('history_page_size') or 200} 条，"
+                f"共 {view.get('history_total') or 0} 条，按时间倒序）"
+            )
+        elif view.get("recent_per_quality"):
             history_heading = (
                 f"历史成交（每品质最多 {view.get('recent_limit', 3)} 条，"
                 "按时间倒序）"
@@ -4027,6 +4033,9 @@ def render_auction_card(
         draw.text((left, y), history_heading, font=head_font, fill=ACCENT)
         y += 28
         note = str(view.get("history_note") or "")
+        if view.get("history_page"):
+            page_item = str(view.get("short") or view.get("item_id") or "")
+            note = f"翻页：/sz 拍卖历史 {page_item} <页码>"
         if note:
             draw.text((left, y), note, font=small_font, fill=MUTED)
         y += 26

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.10.0 - 2026-10-29
+
+### Added
+
+- `/sz 拍卖历史 <物品> [页码]` browses official auction sale history newest-first, 200 records per page. The official endpoint limits `limit` to 200 per request but has an unbounded `offset` and returns `total`, so pages can keep going back until an empty page. The card shows page/page-size/total and a paging hint; candidates from ambiguous item names replay the same page.
+- `/sz 拍卖历史` also reports an out-of-range page with the maximum available page instead of a generic empty result.
+- A unique English weapon prefix now resolves directly (`KS-12` -> `KS-12 Komrad`), while parenthesized variants still require a candidate choice.
+
+### Tests
+
+- Added history paging/offset, out-of-range page and KS-12 prefix resolution coverage; 252 tests and 14 visual signatures pass.
+
 ## 1.9.0 - 2026-10-29
 
 ### Added

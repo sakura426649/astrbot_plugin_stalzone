@@ -554,6 +554,20 @@ class ItemIndex:
             ]
             if len(suffix) == 1:
                 return suffix[0], matches
+            # A unique English name beginning with the query is the intended
+            # weapon ("KS-12" -> "KS-12 Komrad"), while parenthesized variants
+            # such as "AK-12 (A)" must still require a choice.
+            prefix_match = [
+                item
+                for item in weapons
+                if len(q) >= 3
+                and q
+                and _normalize(item.get("en")).startswith(q)
+                and _normalize(item.get("en")) != q
+                and not _PAREN_RE.search(str(item.get("en") or ""))
+            ]
+            if len(prefix_match) == 1:
+                return prefix_match[0], matches
             chinese = [
                 item
                 for item in matches
