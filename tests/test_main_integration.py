@@ -410,6 +410,158 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_update_command_dispatches_to_updater(self):
+        plugin = self.make_plugin()
+        called = []
+
+        async def fake_update(event):
+            called.append(event)
+            return "updater-called"
+
+        plugin._handle_self_update = fake_update  # type: ignore[assignment]
+        text = await collect(plugin, "/sz 更新")
+        self.assertIn("updater-called", text)
+        self.assertEqual(len(called), 1)
+
+    async def test_self_update_latest_and_admin_guard(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+            async def send(self, chain):
+                return None
+
+        class MemberEvent(FakeEvent):
+            role = "member"
+
+            def is_admin(self):
+                return False
+
+        plugin = self.make_plugin()
+        plugin.config["update_admin_only"] = True
+
+        async def latest():
+            return {"tag_name": f"v{main_module.PLUGIN_VERSION}", "assets": []}
+
+        plugin._fetch_latest_release = latest  # type: ignore[assignment]
+        latest_text = await plugin._handle_self_update(AdminEvent("/sz 更新"))
+        self.assertIn("已是最新版本", latest_text)
+        denied = await plugin._handle_self_update(MemberEvent("/sz 更新"))
+        self.assertIn("仅管理员", denied)
+
+    async def test_self_update_flow_uses_light_package_and_backs_up(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+            async def send(self, chain):
+                return None
+
+        plugin = self.make_plugin()
+        calls = []
+
+        async def latest():
+            return {
+                "tag_name": "v9.9.9",
+                "assets": [
+                    {
+                        "name": main_module.UPDATE_LIGHT_ASSET_NAME,
+                        "browser_download_url": "https://example.invalid/light.zip",
+                    },
+                    {
+                        "name": main_module.UPDATE_ASSET_NAME,
+                        "browser_download_url": "https://example.invalid/full.zip",
+                    },
+                ],
+            }
+
+        async def index(_tag):
+            return {"items": []}
+
+        async def download(_url, destination):
+            destination.write_bytes(b"x" * 2048)
+
+        plugin._fetch_latest_release = latest  # type: ignore[assignment]
+        plugin._fetch_release_item_index = index  # type: ignore[assignment]
+        plugin._download_update_asset = download  # type: ignore[assignment]
+        plugin._backup_plugin_dir = lambda root, backup: calls.append(
+            ("backup", root, backup)
+        )  # type: ignore[assignment]
+        plugin._apply_update_zip = lambda *args: calls.append(
+            ("apply", *args)
+        )  # type: ignore[assignment]
+        plugin._schedule_plugin_reload = lambda: False  # type: ignore[assignment]
+        text = await plugin._handle_self_update(AdminEvent("/sz 更新"))
+        self.assertIn("更新完成", text)
+        self.assertIn("轻量包", text)
+        self.assertTrue(any(call[0] == "backup" for call in calls))
+        self.assertTrue(any(call[0] == "apply" for call in calls))
+
+    async def test_self_update_package_choice(self):
+        plugin = self.make_plugin()
+        light, missing, _reason = plugin._choose_update_asset(
+            {
+                "items": [
+                    {"id": "g4v2p", "cat": "weapon/melee"},
+                ]
+            }
+        )
+        self.assertFalse(light)
+        self.assertEqual(missing, 0)
+        full, missing, reason = plugin._choose_update_asset(
+            {
+                "items": [
+                    {"id": "not-an-icon", "cat": "weapon/rifle"},
+                ]
+            }
+        )
+        self.assertTrue(full)
+        self.assertEqual(missing, 1)
+        self.assertIn("完整包", reason)
+        self.assertEqual(main_module._version_key("v1.5.2"), (1, 5, 2))
+
+    def test_apply_update_zip_installs_and_rolls_back(self):
+        import zipfile
+
+        plugin_root = Path(tempfile.mkdtemp()) / "plugin"
+        plugin_root.mkdir()
+        (plugin_root / "main.py").write_text("OLD", encoding="utf-8")
+        (plugin_root / "metadata.yaml").write_text("version: 1.0.0\n", encoding="utf-8")
+        backup_root = plugin_root.parent / "backup"
+        backup_root.mkdir()
+        (backup_root / "main.py").write_text("OLD", encoding="utf-8")
+        (backup_root / "metadata.yaml").write_text("version: 1.0.0\n", encoding="utf-8")
+
+        archive_path = plugin_root.parent / "update.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr(
+                "astrbot_plugin_stalzone/main.py", "NEW"
+            )
+            archive.writestr(
+                "astrbot_plugin_stalzone/metadata.yaml",
+                "version: 9.9.9\n",
+            )
+        StalzonePlugin._apply_update_zip(
+            archive_path, plugin_root, backup_root, "v9.9.9"
+        )
+        self.assertEqual((plugin_root / "main.py").read_text(), "NEW")
+
+        bad_archive = plugin_root.parent / "bad.zip"
+        with zipfile.ZipFile(bad_archive, "w") as archive:
+            archive.writestr("astrbot_plugin_stalzone/main.py", "BROKEN")
+            archive.writestr(
+                "astrbot_plugin_stalzone/metadata.yaml", "version: 9.9.9\n"
+            )
+        with self.assertRaises(main_module.PluginUpdateError):
+            StalzonePlugin._apply_update_zip(
+                bad_archive, plugin_root, backup_root, "v1.0.0"
+            )
+        self.assertEqual((plugin_root / "main.py").read_text(), "OLD")
+
     async def test_auction_full_display_config_wires_through(self):
         plugin = self.make_plugin()
         plugin.config["auction_display_mode"] = "full"

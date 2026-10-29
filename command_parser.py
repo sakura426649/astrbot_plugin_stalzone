@@ -70,6 +70,13 @@ ALIASES = {
     "运行状态": "diag",
     "candidate": "candidate",
     "候选": "candidate",
+    "update": "update",
+    "upgrade": "update",
+    "更新": "update",
+    "升级": "update",
+    "插件更新": "update",
+    "更新插件": "update",
+    "插件升级": "update",
 }
 
 

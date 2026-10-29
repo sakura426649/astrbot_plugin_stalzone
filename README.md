@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.5.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.6.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -67,6 +67,7 @@
 | **拍卖行** | 当前在售、最近成交与按日期查询；神器只对非红/金品质应用 30 条限制，红/金全部显示，触发时按品质分组、其他品质每个 +0/+N 等级显示最低价且组内价格倒序；可堆叠非神器按实际数量聚合，每个数量显示最低买断价；若最低竞拍价更低则再并列一条（买断列显示「—」）；按旧版单列显示名称/起拍/买断/单价/剩余时间，全部渲染，不再分双列；非堆叠非神器不显示单价，只显示起拍/买断；超过 30 条显示前 15 条和后 15 条；武器模块按三个词条命名（如「瞬间 后退 猎人」），按买断价从高到低，并可用品质或词条模糊筛选；模块核心支持品质筛选（如「模块核心 蓝」），不筛选时最近成交每品质最多 3 条，筛选后该品质最多 10 条 |
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **自动风暴提醒** | 仅 OneBot 群可用；白名单非空时才工作；上一场结束后的 2–4 小时窗口内每分钟查询，其他时间每 3 分钟低频率探测，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询。QQ 官方机器人受被动回复限制，不参与自动提醒 |
+| **插件自更新** | `/sz 插件更新` / `/sz 更新` / `/sz update`：检查 GitHub Release，按本地图标缺失情况自动选择完整包或轻量包，异步下载、备份、覆盖并热重载；可选每小时自动检查 |
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；优先匹配名称括号内的标签，标签长度不限、不区分大小写；支持战队列表 |
@@ -113,6 +114,7 @@
 | 指令 | 作用 | 示例 |
 | --- | --- | --- |
 | `/sz auction <物品> [品质] [词条] [日期] [数量]` | 在售 + 成交；支持品质、日期和数量筛选；武器模块支持词条模糊筛选 | `/sz 拍卖 原子 粉 6.11 20`；`/sz 拍卖 武器模块 粉 抑制器` |
+| `/sz 插件更新` / `/sz 更新` / `/sz update` | 通过 GitHub Release 检查并自更新；管理员默认可用 | `/sz 插件更新` |
 | `/sz emission [区服]` | 距上次风暴时间与当前状态 | `/sz 风暴 ru` |
 | `/sz player <角色名/UUID> [区服]` | 玩家公开资料、战队、PvP 估算分 | `/sz 玩家 Sakura_Akira eu` |
 | `/sz item <中文名/英文名/ID>` | 物品属性、描述、类别和图标 | `/sz 物品 寒冰` |
@@ -151,6 +153,16 @@
 
 候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 828 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 
+## 插件自更新
+
+发送 `/sz 插件更新`、`/sz 更新插件`、`/sz 更新` 或 `/sz update`，插件会通过 GitHub Release API 检查最新版本：
+
+- 已是最新版：直接提示当前版本。
+- 有新版本：先比较本地 `item_icons` 与新版 `item_index.json`；常用物品图标有缺失才下载 `astrbot_plugin_stalzone_full.zip`（完整包），否则下载 `astrbot_plugin_stalzone.zip`（轻量包）。轻量包覆盖不会删除本地已有的额外图标。
+- 下载、备份、解压、覆盖均异步执行，并在聊天中逐步反馈“检查版本 → 检查图标 → 下载 → 备份 → 解压覆盖 → 热重载”。
+- 覆盖前会把旧插件目录备份到插件数据目录的 `update_backups/<版本>-<时间>/`；覆盖失败会自动用备份回滚。GitHub API/下载超时会提示网络错误，并保留旧版本。
+- 默认仅管理员可执行（`update_admin_only=true`）。打开 `auto_update` 后，插件每小时自动检查一次，发现新版会走同一套备份/更新/热重载流程；默认关闭。
+
 ## 配置
 
 在 AstrBot WebUI → 插件 → `STALZONE 数据查询` 中配置：
@@ -163,6 +175,8 @@
 | `api_base` | 生产 | 默认 `https://eapi.stalzone.com`；可切 `https://dapi.stalzone.com` 演示环境 |
 | `render_mode` | `auto` | `auto` / `text` / `image` |
 | `auction_display_mode` | `aggregate` | `aggregate`（聚合显示，同数量同品质只留最低买断，沿用 30 条限制）或 `full`（全部显示，跳过聚合与截断，渲染所有查到的在售条目） |
+| `update_admin_only` | `true` | 插件自更新仅管理员可用；关闭后任何成员都能触发，风险较高 |
+| `auto_update` | `false` | 开启后每小时检查一次 GitHub Release；有新版自动异步更新并热重载 |
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
 | `card_background` | `default` | 全局卡片背景；可选内置官方壁纸 `01 仓库小队` … `16 爆炸战场`，所有卡片共享 |
 | `card_background_custom` | 空 | 自定义背景图片绝对路径（或以插件目录为基准的相对路径），支持 jpg/png/webp；非空且文件存在时优先于预设 |
@@ -322,7 +336,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **222 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 82%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **227 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

@@ -15,14 +15,17 @@ import hashlib
 import os
 import platform
 import re
+import shutil
 import sys
 import tempfile
 import time
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+from pathlib import PurePosixPath
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
@@ -202,7 +205,14 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.5.1"
+PLUGIN_VERSION = "1.6.0"
+PLUGIN_NAME = "astrbot_plugin_stalzone"
+PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
+UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
+UPDATE_LIGHT_ASSET_NAME = "astrbot_plugin_stalzone.zip"
+UPDATE_COMMANDS = frozenset(
+    {"update", "插件更新", "更新插件", "更新", "插件升级", "升级"}
+)
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -296,6 +306,17 @@ class PluginReply:
     sub: str | None = None
 
 
+class PluginUpdateError(Exception):
+    """Friendly, user-facing failure during the self-update flow."""
+
+
+def _version_key(value: str) -> tuple[int, ...]:
+    match = re.search(r"\d+(?:\.\d+)*", str(value or ""))
+    if not match:
+        return ()
+    return tuple(int(part) for part in match.group(0).split("."))
+
+
 @dataclass
 class PendingChoice:
     kind: str
@@ -367,6 +388,9 @@ class StalzonePlugin(Star):
         self._auto_state_path = data_dir / "emission_auto_state.json"
         self._auto_state = self._load_auto_state()
         self._auto_task: asyncio.Task | None = None
+        self._update_lock = asyncio.Lock()
+        self._reload_task: asyncio.Task | None = None
+        self._update_auto_task: asyncio.Task | None = None
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
 
@@ -863,6 +887,10 @@ class StalzonePlugin(Star):
     async def initialize(self) -> None:
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
+        self._start_emission_auto()
+        self._start_auto_update()
+
+    def _start_emission_auto(self) -> None:
         if not self._auto_notify_enabled():
             return
         if not str(self._cfg("client_id", "") or "").strip():
@@ -890,6 +918,15 @@ class StalzonePlugin(Star):
             "STALZONE automatic emission enabled for region %s",
             self._region().upper(),
         )
+
+    def _start_auto_update(self) -> None:
+        # Keep the hourly loop alive even while the option is off, so enabling
+        # it in the WebUI does not require a plugin reload.
+        if self._update_auto_task is not None and not self._update_auto_task.done():
+            return
+        self._update_auto_task = asyncio.create_task(self._update_auto_loop())
+        if bool(self._cfg("auto_update", False)):
+            logger.info("STALZONE automatic plugin update enabled (hourly)")
 
     def _cache_get(self, key: str) -> Any:
         item = self._api_cache.get(key)
@@ -1427,6 +1464,391 @@ class StalzonePlugin(Star):
             return self._with_render_sub(result, "auction")
         return "候选类型无效，请重新发起查询。"
 
+    # --------------------------------------------------------------- self update
+    @staticmethod
+    def _event_is_admin(event: Any) -> bool:
+        checker = getattr(event, "is_admin", None)
+        if callable(checker):
+            try:
+                return bool(checker())
+            except Exception:
+                return False
+        return str(getattr(event, "role", "") or "").lower() == "admin"
+
+    async def _fetch_latest_release(self) -> dict[str, Any]:
+        url = f"https://api.github.com/repos/{PLUGIN_REPO}/releases/latest"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                follow_redirects=True,
+                headers=headers,
+            ) as client:
+                response = await client.get(url)
+        except httpx.TimeoutException as exc:
+            raise PluginUpdateError(
+                "连接 GitHub 超时，请检查服务器网络/代理后重试。"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise PluginUpdateError(
+                "无法连接 GitHub（网络错误），请检查网络/代理后重试。"
+            ) from exc
+        if response.status_code != 200:
+            raise PluginUpdateError(
+                f"GitHub API 返回 HTTP {response.status_code}，"
+                "可能触发限流，请稍后重试。"
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise PluginUpdateError("GitHub Release 返回了无法解析的数据。") from exc
+        if not isinstance(payload, dict):
+            raise PluginUpdateError("GitHub Release 返回格式异常。")
+        return payload
+
+    async def _download_update_asset(self, url: str, destination: Path) -> None:
+        headers = {
+            "Accept": "application/octet-stream",
+            "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(180.0, connect=20.0),
+                follow_redirects=True,
+                headers=headers,
+            ) as client:
+                async with client.stream("GET", url) as response:
+                    if response.status_code != 200:
+                        raise PluginUpdateError(
+                            f"下载更新包失败（HTTP {response.status_code}），"
+                            "请稍后重试。"
+                        )
+                    with destination.open("wb") as handle:
+                        async for chunk in response.aiter_bytes():
+                            if chunk:
+                                handle.write(chunk)
+        except PluginUpdateError:
+            destination.unlink(missing_ok=True)
+            raise
+        except httpx.TimeoutException as exc:
+            destination.unlink(missing_ok=True)
+            raise PluginUpdateError(
+                "下载更新包超时，请检查网络/代理后重试。"
+            ) from exc
+        except httpx.RequestError as exc:
+            destination.unlink(missing_ok=True)
+            raise PluginUpdateError(
+                "下载更新包时网络连接失败，请检查网络/代理后重试。"
+            ) from exc
+        if not destination.is_file() or destination.stat().st_size < 1024:
+            destination.unlink(missing_ok=True)
+            raise PluginUpdateError("下载的更新包为空或损坏，请稍后重试。")
+
+    @staticmethod
+    def _backup_plugin_dir(plugin_root: Path, backup_root: Path) -> None:
+        if backup_root.exists():
+            raise PluginUpdateError("备份目录已存在，请稍后重试。")
+        backup_root.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(
+                plugin_root,
+                backup_root,
+                ignore=shutil.ignore_patterns(
+                    ".git", "__pycache__", ".pytest_cache", "dist"
+                ),
+            )
+        except OSError as exc:
+            raise PluginUpdateError(
+                f"备份旧插件失败（{exc}），未修改任何文件。"
+            ) from exc
+
+    @staticmethod
+    def _apply_update_zip(
+        zip_path: Path,
+        plugin_root: Path,
+        backup_root: Path,
+        expected_version: str,
+    ) -> None:
+        temp_dir = zip_path.with_name(zip_path.stem + "_extract")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(zip_path) as archive:
+                bad = archive.testzip()
+                if bad is not None:
+                    raise PluginUpdateError(f"更新包损坏：{bad}")
+                for info in archive.infolist():
+                    name = info.filename.replace("\\", "/")
+                    pure = PurePosixPath(name)
+                    if pure.is_absolute() or ".." in pure.parts:
+                        raise PluginUpdateError("更新包包含非法路径，已拒绝安装。")
+                    if name != PLUGIN_NAME and not name.startswith(
+                        PLUGIN_NAME + "/"
+                    ):
+                        raise PluginUpdateError("更新包目录结构不正确。")
+                archive.extractall(temp_dir)
+            new_root = temp_dir / PLUGIN_NAME
+            if not (new_root / "main.py").is_file():
+                raise PluginUpdateError("更新包缺少 main.py。")
+            metadata_path = new_root / "metadata.yaml"
+            if not metadata_path.is_file():
+                raise PluginUpdateError("更新包缺少 metadata.yaml。")
+            metadata = metadata_path.read_text(encoding="utf-8")
+            version_match = re.search(
+                r"^version:\s*([^\s]+)", metadata, re.MULTILINE
+            )
+            if version_match is None:
+                raise PluginUpdateError("更新包没有版本号。")
+            if _version_key(version_match.group(1)) != _version_key(
+                expected_version
+            ):
+                raise PluginUpdateError(
+                    "更新包版本与 Release 不一致，已拒绝安装。"
+                )
+            shutil.copytree(new_root, plugin_root, dirs_exist_ok=True)
+            shutil.rmtree(plugin_root / "__pycache__", ignore_errors=True)
+        except Exception as exc:
+            try:
+                shutil.copytree(backup_root, plugin_root, dirs_exist_ok=True)
+                rollback = "已回滚旧版本"
+            except Exception as rollback_exc:
+                logger.exception(
+                    "STALZONE self-update rollback failed: %s", rollback_exc
+                )
+                rollback = f"自动回滚失败，请手动恢复备份：{backup_root}"
+            if isinstance(exc, PluginUpdateError):
+                raise PluginUpdateError(f"{exc}；{rollback}") from exc
+            raise PluginUpdateError(f"覆盖更新失败：{exc}；{rollback}") from exc
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _schedule_plugin_reload(self) -> bool:
+        manager = getattr(self.context, "_star_manager", None)
+        if manager is None:
+            return False
+
+        async def _reload() -> None:
+            await asyncio.sleep(1.2)
+            try:
+                result = await manager.reload(PLUGIN_NAME)
+                if isinstance(result, tuple) and not result[0]:
+                    logger.error(
+                        "STALZONE self-update reload failed: %s", result[1]
+                    )
+            except Exception:
+                logger.exception("STALZONE self-update reload failed")
+
+        self._reload_task = asyncio.create_task(_reload())
+        return True
+
+    async def _update_status(self, event: Any, text: str) -> None:
+        logger.info("STALZONE self-update: %s", text)
+        if event is None or MessageChain is None:
+            return
+        sender = getattr(event, "send", None)
+        if not callable(sender):
+            return
+        try:
+            await sender(MessageChain().message(text))
+        except Exception:
+            logger.debug("STALZONE self-update status message failed", exc_info=True)
+
+    async def _fetch_release_item_index(
+        self, tag: str
+    ) -> dict[str, Any] | None:
+        url = (
+            f"https://raw.githubusercontent.com/{PLUGIN_REPO}/"
+            f"{quote(tag, safe='')}/item_index.json"
+        )
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(60.0, connect=15.0),
+                follow_redirects=True,
+                headers=headers,
+            ) as client:
+                response = await client.get(url)
+                if response.status_code != 200:
+                    logger.warning(
+                        "STALZONE update index HTTP %s", response.status_code
+                    )
+                    return None
+                payload = response.json()
+        except Exception as exc:
+            logger.warning("STALZONE update index unavailable: %s", exc)
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _choose_update_asset(
+        self, index_payload: dict[str, Any] | None
+    ) -> tuple[bool, int, str]:
+        if not isinstance(index_payload, dict):
+            return True, 0, "无法读取新版图标清单，改用完整包"
+        items = index_payload.get("items")
+        if not isinstance(items, list):
+            return True, 0, "新版图标清单格式异常，改用完整包"
+        icon_dir = Path(__file__).with_name("item_icons")
+        common_prefixes = (
+            "weapon",
+            "armor",
+            "artefact",
+            "bullet",
+            "attachment",
+            "containers",
+            "backpacks",
+            "device",
+            "weapon_modules",
+        )
+        missing = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get("id") or "").strip()
+            category = str(item.get("cat") or "")
+            if not item_id or not category.startswith(common_prefixes):
+                continue
+            if not (icon_dir / f"{item_id}.png").is_file():
+                missing += 1
+        if missing:
+            return (
+                True,
+                missing,
+                f"检测到 {missing} 个常用物品图标缺失，使用完整包",
+            )
+        return False, 0, "本地常用物品图标完整，使用轻量包"
+
+    async def _update_auto_loop(self) -> None:
+        try:
+            await asyncio.sleep(60)
+            while True:
+                if bool(self._cfg("auto_update", False)):
+                    try:
+                        result = await self._run_self_update(None, auto=True)
+                        logger.info("STALZONE automatic update: %s", result)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.exception("STALZONE automatic update failed")
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+
+    async def _handle_self_update(self, event: Any) -> str:
+        return await self._run_self_update(event, auto=False)
+
+    async def _run_self_update(self, event: Any, *, auto: bool = False) -> str:
+        if not auto:
+            require_admin = bool(self._cfg("update_admin_only", True))
+            if require_admin and not self._event_is_admin(event):
+                return "插件更新仅管理员可用；请让管理员执行 /sz 更新。"
+        if self._update_lock.locked():
+            return "已有更新正在进行，请稍后再试。"
+        async with self._update_lock:
+            data_dir = self._cache_dir()
+            updates_dir = data_dir / "updates"
+            updates_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                await self._update_status(event, "正在检查 GitHub 最新版本…")
+                release = await self._fetch_latest_release()
+                latest_tag = str(release.get("tag_name") or "").strip()
+                latest_key = _version_key(latest_tag)
+                current_key = _version_key(PLUGIN_VERSION)
+                if not latest_key:
+                    return "GitHub Release 没有可识别的版本号。"
+                if latest_key <= current_key:
+                    return f"当前已是最新版本：v{PLUGIN_VERSION}。"
+                await self._update_status(
+                    event,
+                    f"发现新版本 {latest_tag}，正在检查本地物品图标完整性…",
+                )
+                index_payload = await self._fetch_release_item_index(latest_tag)
+                need_full, missing, reason = self._choose_update_asset(
+                    index_payload
+                )
+                await self._update_status(event, reason)
+                asset_name = (
+                    UPDATE_ASSET_NAME if need_full else UPDATE_LIGHT_ASSET_NAME
+                )
+                assets = release.get("assets")
+                by_name = {
+                    str(asset.get("name")): asset
+                    for asset in assets
+                    if isinstance(asset, dict)
+                } if isinstance(assets, list) else {}
+                asset = by_name.get(asset_name)
+                if asset is None:
+                    fallback = (
+                        UPDATE_LIGHT_ASSET_NAME
+                        if need_full
+                        else UPDATE_ASSET_NAME
+                    )
+                    asset = by_name.get(fallback)
+                    if asset is not None:
+                        asset_name = fallback
+                        need_full = not need_full
+                        await self._update_status(
+                            event,
+                            f"Release 中没有目标包，改用 {asset_name}",
+                        )
+                asset_url = (
+                    str(asset.get("browser_download_url") or "")
+                    if isinstance(asset, dict)
+                    else ""
+                )
+                if not asset_url:
+                    return (
+                        f"发现新版本 {latest_tag}，但 Release 中没有 "
+                        f"{UPDATE_ASSET_NAME} 或 {UPDATE_LIGHT_ASSET_NAME}，"
+                        "请稍后重试或手动安装。"
+                    )
+                package_label = "完整包" if need_full else "轻量包"
+                await self._update_status(
+                    event, f"正在下载{package_label}（{asset_name}）…"
+                )
+                stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
+                zip_path = updates_dir / f"update-{latest_tag}-{stamp}.zip"
+                backup_root = (
+                    data_dir / "update_backups" / f"{PLUGIN_VERSION}-{stamp}"
+                )
+                plugin_root = Path(__file__).resolve().parent
+                await self._download_update_asset(asset_url, zip_path)
+                await self._update_status(event, "下载完成，正在备份旧版本…")
+                await asyncio.to_thread(
+                    self._backup_plugin_dir, plugin_root, backup_root
+                )
+                await self._update_status(event, "备份完成，正在异步解压覆盖…")
+                await asyncio.to_thread(
+                    self._apply_update_zip,
+                    zip_path,
+                    plugin_root,
+                    backup_root,
+                    latest_tag,
+                )
+                zip_path.unlink(missing_ok=True)
+                await self._update_status(event, "覆盖完成，正在热重载…")
+                scheduled = self._schedule_plugin_reload()
+                tail = (
+                    "正在热重载插件，请稍候…"
+                    if scheduled
+                    else "文件已覆盖，请手动在 AstrBot 中重载插件。"
+                )
+                return (
+                    f"更新完成：v{PLUGIN_VERSION} → {latest_tag}（"
+                    f"{package_label}）。\n"
+                    f"旧版本备份：{backup_root}\n{tail}"
+                )
+            except PluginUpdateError as exc:
+                return f"更新未完成：{exc}"
+            except Exception as exc:
+                logger.exception("STALZONE self-update failed")
+                return f"更新未完成：{type(exc).__name__}: {exc}"
+
     # --------------------------------------------------------------- commands
     @filter.command("sz")
     async def sz(self, event: AstrMessageEvent):
@@ -1449,6 +1871,11 @@ class StalzonePlugin(Star):
         except Exception:
             pass
         sub, arg = parse_command(event.message_str)
+        if sub in UPDATE_COMMANDS or (
+            sub == "插件" and arg.strip().lower() in {"更新", "升级", "update"}
+        ):
+            yield event.plain_result(await self._handle_self_update(event))
+            return
         if sub:
             self._remember_notify_target(event)
         if sub and sub != "candidate":
@@ -2690,6 +3117,16 @@ class StalzonePlugin(Star):
             except Exception:
                 logger.exception("STALZONE automatic emission task shutdown failed")
         self._save_auto_state()
+        update_task = self._update_auto_task
+        self._update_auto_task = None
+        if update_task is not None and not update_task.done():
+            update_task.cancel()
+            try:
+                await update_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("STALZONE automatic update task shutdown failed")
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None

@@ -1998,6 +1998,10 @@ class ParserTests(unittest.TestCase):
             "/sz 通行证 15 15+2 20": ("pass", "15 15+2 20"),
             "/sz 通行证计算器 15 15 20": ("pass", "15 15 20"),
             "/sz 战队 Clan": ("clan", "Clan"),
+            "/sz 插件更新": ("update", ""),
+            "/sz 更新插件": ("update", ""),
+            "/sz 更新": ("update", ""),
+            "/sz update": ("update", ""),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)

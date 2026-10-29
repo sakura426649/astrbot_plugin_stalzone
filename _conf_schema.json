@@ -78,6 +78,18 @@
     ],
     "hint": "聚合显示：同数量同品质只显示最低买断，并沿用 30 条限制；全部显示：跳过聚合与截断，渲染所有查到的在售条目，图片可能很长。切换后下一次拍卖查询生效。"
   },
+  "update_admin_only": {
+    "description": "插件自更新仅管理员可用",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后只有 AstrBot 管理员/群管理员能执行 /sz 更新；关闭后任何群成员都可触发更新，风险较高，不建议关闭。"
+  },
+  "auto_update": {
+    "description": "每小时自动检查插件更新",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。"
+  },
   "font_path": {
     "description": "中文字体路径（可选）",
     "type": "string",

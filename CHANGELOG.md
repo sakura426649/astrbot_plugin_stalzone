@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.0 - 2026-10-29
+
+### Added
+
+- Self-update commands: `/sz 插件更新`, `/sz 更新插件`, `/sz 更新`, `/sz update` (also `插件 更新`). The plugin queries the GitHub latest Release, compares `tag_name`, downloads the full or light zip, backs up the current plugin directory, applies the update asynchronously, and hot-reloads through AstrBot's plugin manager.
+- The updater checks the release `item_index.json` against local `item_icons`: missing common item icons select `astrbot_plugin_stalzone_full.zip`; otherwise the light package is used. A light overlay keeps existing extra icons.
+- Every step (version check, icon check, download, backup, unzip/overwrite, reload) is reported in the chat when triggered by a user. Download/backup/copy operations run off the event loop.
+- New config `auto_update` (default false): an hourly background check updates automatically when a newer Release exists; the loop stays alive so the WebUI toggle needs no reload. New config `update_admin_only` (default true) restricts manual updates to administrators.
+- On GitHub timeout/network/API errors the bot reports a friendly message and leaves the current version untouched. Failed overwrites restore the backup and report the backup path.
+
+### Tests
+
+- Added command aliases, latest-version/admin guard, package-selection, zip install/rollback and update-flow coverage; 227 tests and 13 visual signatures pass.
+
 ## 1.5.1 - 2026-10-29
 
 ### Added
