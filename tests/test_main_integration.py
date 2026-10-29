@@ -554,6 +554,21 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("完整包", reason)
         self.assertEqual(main_module._version_key("v1.5.2"), (1, 5, 2))
 
+    def test_github_proxy_url_candidates(self):
+        url = "https://github.com/x/y/releases/download/v1/a.zip"
+        self.assertEqual(
+            main_module._github_url_candidates(url),
+            [
+                url,
+                "https://gh-proxy.com/" + url,
+                "https://v4.gh-proxy.org/" + url,
+            ],
+        )
+        self.assertEqual(
+            main_module._github_url_candidates("https://example.com/a.zip"),
+            ["https://example.com/a.zip"],
+        )
+
     def test_prune_update_backups_keeps_latest_three(self):
         data_dir = Path(tempfile.mkdtemp())
         root = data_dir / "update_backups"

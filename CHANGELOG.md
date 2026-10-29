@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.7 - 2026-10-29
+
+### Added
+
+- GitHub fallback proxy support for release API, item-index and package downloads: direct URLs are tried first, then `https://gh-proxy.com/`, then `https://v4.gh-proxy.org/`. This covers hosts that cannot reach GitHub directly or time out mid-download; proxy URLs use the `proxy/https://github.com/...` form.
+- Downloaded archives are checked with `zipfile.is_zipfile` before backup/overwrite, so a proxy error page cannot replace the plugin.
+
+### Tests
+
+- Added proxy URL construction coverage; 231 tests and 13 visual signatures pass.
+
 ## 1.6.6 - 2026-10-29
 
 ### Added

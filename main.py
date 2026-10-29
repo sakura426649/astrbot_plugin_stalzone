@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.6"
+PLUGIN_VERSION = "1.6.7"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -214,6 +214,10 @@ UPDATE_LIGHT_ASSET_NAME = "astrbot_plugin_stalzone.zip"
 # counting them as "missing" would force a full download on every update.
 ICONLESS_COMMON_IDS = frozenset({"1rk6g", "5lrg1", "96jyz", "3gp95"})
 UPDATE_BACKUP_KEEP = 3
+GITHUB_PROXY_PREFIXES = (
+    "https://gh-proxy.com/",
+    "https://v4.gh-proxy.org/",
+)
 UPDATE_COMMANDS = frozenset(
     {"update", "插件更新", "更新插件", "更新", "插件升级", "升级"}
 )
@@ -319,6 +323,24 @@ def _version_key(value: str) -> tuple[int, ...]:
     if not match:
         return ()
     return tuple(int(part) for part in match.group(0).split("."))
+
+
+def _github_url_candidates(url: str) -> list[str]:
+    """Direct GitHub URL first, then gh-proxy mirrors as fallbacks."""
+    value = str(url or "").strip()
+    if not value:
+        return []
+    if not value.startswith(
+        (
+            "https://github.com/",
+            "https://api.github.com/",
+            "https://raw.githubusercontent.com/",
+        )
+    ):
+        return [value]
+    return [value] + [
+        prefix.rstrip("/") + "/" + value for prefix in GITHUB_PROXY_PREFIXES
+    ]
 
 
 @dataclass
@@ -1489,71 +1511,118 @@ class StalzonePlugin(Star):
             "Accept": "application/vnd.github+json",
             "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
         }
+        timed_out = False
+        network_error = False
+        last_status = 0
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
                 follow_redirects=True,
                 headers=headers,
             ) as client:
-                response = await client.get(url)
-        except httpx.TimeoutException as exc:
+                for candidate in _github_url_candidates(url):
+                    try:
+                        response = await client.get(candidate)
+                    except httpx.TimeoutException:
+                        timed_out = True
+                        continue
+                    except httpx.RequestError:
+                        network_error = True
+                        continue
+                    if response.status_code != 200:
+                        last_status = response.status_code
+                        continue
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        continue
+                    if isinstance(payload, dict):
+                        if candidate != url:
+                            logger.info(
+                                "STALZONE GitHub API via proxy: %s",
+                                candidate.split("/https://", 1)[0],
+                            )
+                        return payload
+        except httpx.RequestError:
+            network_error = True
+        if timed_out:
             raise PluginUpdateError(
-                "连接 GitHub 超时，请检查服务器网络/代理后重试。"
-            ) from exc
-        except httpx.RequestError as exc:
+                "连接 GitHub 超时，直连与代理均失败，请检查服务器网络/代理后重试。"
+            )
+        if last_status:
             raise PluginUpdateError(
-                "无法连接 GitHub（网络错误），请检查网络/代理后重试。"
-            ) from exc
-        if response.status_code != 200:
-            raise PluginUpdateError(
-                f"GitHub API 返回 HTTP {response.status_code}，"
+                f"GitHub API 返回 HTTP {last_status}，直连与代理均失败，"
                 "可能触发限流，请稍后重试。"
             )
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise PluginUpdateError("GitHub Release 返回了无法解析的数据。") from exc
-        if not isinstance(payload, dict):
-            raise PluginUpdateError("GitHub Release 返回格式异常。")
-        return payload
+        if network_error:
+            raise PluginUpdateError(
+                "无法连接 GitHub（直连与代理均失败），请检查网络/代理后重试。"
+            )
+        raise PluginUpdateError("GitHub Release 返回格式异常。")
 
     async def _download_update_asset(self, url: str, destination: Path) -> None:
         headers = {
             "Accept": "application/octet-stream",
             "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
         }
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(180.0, connect=20.0),
-                follow_redirects=True,
-                headers=headers,
-            ) as client:
-                async with client.stream("GET", url) as response:
-                    if response.status_code != 200:
-                        raise PluginUpdateError(
-                            f"下载更新包失败（HTTP {response.status_code}），"
-                            "请稍后重试。"
+        timed_out = False
+        network_error = False
+        last_status = 0
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(180.0, connect=20.0),
+            follow_redirects=True,
+            headers=headers,
+        ) as client:
+            for candidate in _github_url_candidates(url):
+                destination.unlink(missing_ok=True)
+                try:
+                    async with client.stream("GET", candidate) as response:
+                        if response.status_code != 200:
+                            last_status = response.status_code
+                            continue
+                        with destination.open("wb") as handle:
+                            async for chunk in response.aiter_bytes():
+                                if chunk:
+                                    handle.write(chunk)
+                except httpx.TimeoutException:
+                    timed_out = True
+                    destination.unlink(missing_ok=True)
+                    continue
+                except httpx.RequestError:
+                    network_error = True
+                    destination.unlink(missing_ok=True)
+                    continue
+                except OSError as exc:
+                    destination.unlink(missing_ok=True)
+                    raise PluginUpdateError(
+                        f"写入更新包失败：{exc}"
+                    ) from exc
+                if (
+                    destination.is_file()
+                    and destination.stat().st_size >= 1024
+                    and zipfile.is_zipfile(destination)
+                ):
+                    if candidate != url:
+                        logger.info(
+                            "STALZONE update download via proxy: %s",
+                            candidate.split("/https://", 1)[0],
                         )
-                    with destination.open("wb") as handle:
-                        async for chunk in response.aiter_bytes():
-                            if chunk:
-                                handle.write(chunk)
-        except PluginUpdateError:
-            destination.unlink(missing_ok=True)
-            raise
-        except httpx.TimeoutException as exc:
-            destination.unlink(missing_ok=True)
+                    return
+                destination.unlink(missing_ok=True)
+        if timed_out:
             raise PluginUpdateError(
-                "下载更新包超时，请检查网络/代理后重试。"
-            ) from exc
-        except httpx.RequestError as exc:
-            destination.unlink(missing_ok=True)
+                "下载更新包超时，直连与代理均失败，请检查网络/代理后重试。"
+            )
+        if last_status:
             raise PluginUpdateError(
-                "下载更新包时网络连接失败，请检查网络/代理后重试。"
-            ) from exc
-        if not destination.is_file() or destination.stat().st_size < 1024:
-            destination.unlink(missing_ok=True)
-            raise PluginUpdateError("下载的更新包为空或损坏，请稍后重试。")
+                f"下载更新包失败（HTTP {last_status}），直连与代理均失败，"
+                "请稍后重试。"
+            )
+        if network_error:
+            raise PluginUpdateError(
+                "下载更新包时网络连接失败（直连与代理均失败），请检查网络/代理后重试。"
+            )
+        raise PluginUpdateError("下载的更新包为空或损坏，请稍后重试。")
 
     @staticmethod
     def _backup_plugin_dir(plugin_root: Path, backup_root: Path) -> None:
@@ -1720,17 +1789,26 @@ class StalzonePlugin(Star):
                 follow_redirects=True,
                 headers=headers,
             ) as client:
-                response = await client.get(url)
-                if response.status_code != 200:
-                    logger.warning(
-                        "STALZONE update index HTTP %s", response.status_code
-                    )
-                    return None
-                payload = response.json()
+                for candidate in _github_url_candidates(url):
+                    try:
+                        response = await client.get(candidate)
+                    except httpx.RequestError:
+                        continue
+                    if response.status_code != 200:
+                        logger.warning(
+                            "STALZONE update index HTTP %s",
+                            response.status_code,
+                        )
+                        continue
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        continue
+                    if isinstance(payload, dict):
+                        return payload
         except Exception as exc:
             logger.warning("STALZONE update index unavailable: %s", exc)
-            return None
-        return payload if isinstance(payload, dict) else None
+        return None
 
     def _choose_update_asset(
         self, index_payload: dict[str, Any] | None
