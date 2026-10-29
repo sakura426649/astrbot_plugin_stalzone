@@ -575,6 +575,81 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 finally:
                     path.unlink(missing_ok=True)
 
+    async def test_llm_tools_render_query_images(self):
+        from image_renderer import find_cjk_font
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+
+        class ImageEvent(FakeEvent):
+            @staticmethod
+            def image_result(path):
+                return ("image", path)
+
+        plugin = self.make_plugin()
+        plugin.config["render_mode"] = "image"
+        plugin._make_client = lambda region=None: FakeClient()  # type: ignore[assignment]
+        cache_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(cache_dir.cleanup)
+        plugin._help_cache_dir = Path(cache_dir.name)
+        calls = (
+            ("llm_auction", ("原子",), {}),
+            ("llm_item", ("原子",), {}),
+            ("llm_player", ("Test-1",), {}),
+            ("llm_emission", (), {}),
+            ("llm_balance", ("AK-308",), {}),
+            ("llm_pass", (15, 15, 20), {}),
+        )
+        for name, args, kwargs in calls:
+            with self.subTest(tool=name):
+                results = [
+                    item
+                    async for item in getattr(plugin, name)(
+                        ImageEvent("/sz"), *args, **kwargs
+                    )
+                ]
+                self.assertEqual(results[0][0], "image")
+                self.assertTrue(Path(results[0][1]).exists())
+
+    async def test_llm_auction_composes_parameters(self):
+        class ImageEvent(FakeEvent):
+            @staticmethod
+            def image_result(path):
+                return ("image", path)
+
+        plugin = self.make_plugin()
+        plugin.config["render_mode"] = "image"
+        captured = []
+
+        async def fake_auction(query, **kwargs):
+            captured.append(query)
+            return f"拍卖参数：{query}"
+
+        plugin._handle_auction = fake_auction  # type: ignore[assignment]
+        [item async for item in plugin.llm_auction(
+            ImageEvent("/sz"),
+            "原子",
+            quality="粉",
+            affix="抑制器",
+            date="2026-10-28",
+            quantity=20,
+        )]
+        self.assertEqual(captured, ["原子 粉 抑制器 2026.10.28 20"])
+
+    async def test_llm_tools_can_be_disabled(self):
+        class ImageEvent(FakeEvent):
+            @staticmethod
+            def image_result(path):
+                return ("image", path)
+
+        plugin = self.make_plugin()
+        plugin.config["llm_tools_enabled"] = False
+        results = [
+            item async for item in plugin.llm_item(ImageEvent("/sz"), "原子")
+        ]
+        self.assertEqual(results[0][0], "plain")
+        self.assertIn("已关闭", results[0][1])
+
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
 

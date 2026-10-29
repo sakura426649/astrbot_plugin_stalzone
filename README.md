@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.7.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.7.3-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -67,6 +67,7 @@
 | **拍卖行** | 当前在售、最近成交与按日期查询；神器只对非红/金品质应用 30 条限制，红/金全部显示，触发时按品质分组、其他品质每个 +0/+N 等级显示最低价且组内价格倒序；可堆叠非神器按实际数量聚合，每个数量显示最低买断价；若最低竞拍价更低则再并列一条（买断列显示「—」）；按旧版单列显示名称/起拍/买断/单价/剩余时间，全部渲染，不再分双列；非堆叠非神器不显示单价，只显示起拍/买断；超过 30 条显示前 15 条和后 15 条；武器模块按三个词条命名（如「瞬间 后退 猎人」），三个词条按各自品质着色；按买断价从高到低，并可用品质或词条模糊筛选；模块核心支持品质筛选（如「模块核心 蓝」），不筛选时最近成交每品质最多 3 条，筛选后该品质最多 10 条 |
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **自动风暴提醒** | 仅 OneBot 群可用；白名单非空时才工作；上一场结束后的 2–4 小时窗口内每分钟查询，其他时间每 3 分钟低频率探测，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空则不发也不轮询。QQ 官方机器人受被动回复限制，不参与自动提醒 |
+| **AI 函数调用** | 注册 6 个 LLM 工具（拍卖、物品、玩家、风暴、调整、通行证），模型可从自然语言中自行提取参数并直接发送查询图片；需模型支持函数调用，可在配置中关闭 |
 | **插件自更新** | `/sz 插件更新` / `/sz 更新` / `/sz update`：检查 GitHub Release，按本地图标缺失情况自动选择完整包或轻量包，异步下载、备份、覆盖并热重载；可选每小时自动检查 |
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
@@ -160,6 +161,23 @@
 
 候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 828 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 
+## AI 函数调用（LLM 工具）
+
+插件向 AstrBot 注册了 6 个函数调用工具，模型支持 Function Calling 时，可以直接在聊天里说“帮我看看原子拍卖行情”“查一下 AK-308 的调整”“通行证 15 级每天 15 点还剩 20 天”，由模型自行抽取参数并调用：
+
+| 工具名 | 对应查询 |
+| --- | --- |
+| `stalzone_auction` | 拍卖行行情，支持品质、词条、日期、数量 |
+| `stalzone_item` | 物品图鉴 |
+| `stalzone_player` | 玩家资料，支持区服 |
+| `stalzone_emission` | 辐射风暴状态，支持区服 |
+| `stalzone_balance` | 官方平衡调整历史 |
+| `stalzone_pass` | 通行证等级与经验预测 |
+
+工具会直接发送与 `/sz` 相同的图片，不会把图片交给模型二次转述，因此不会出现“图片 + 重复文字”的双回复。首次使用前需要在 AstrBot 的模型服务中开启函数调用；模型不支持时会提示 `tool call is not supported`。弱模型可能漏参数或填错参数，精确查询仍建议直接用 `/sz`。
+
+配置项 `llm_tools_enabled` 默认开启，可在 WebUI 关闭；也可以在 AstrBot 用 `/tool ls` 查看工具、用 `/tool off <工具名>` 单独关闭。工具与 `/sz` 共用查询缓存、区服和冷却配置。
+
 ## 插件自更新
 
 发送 `/sz 版本`、`/sz 检查版本` 或 `/sz 检查更新` 只查询 GitHub Release 并对比版本，不下载、不备份、不更新，也没有管理员限制。发送 `/sz 插件更新`、`/sz 更新插件`、`/sz 更新` 或 `/sz update` 才会执行自更新：
@@ -183,6 +201,7 @@
 | `api_base` | 生产 | 默认 `https://eapi.stalzone.com`；可切 `https://dapi.stalzone.com` 演示环境 |
 | `render_mode` | `auto` | `auto` / `text` / `image` |
 | `auction_display_mode` | `aggregate` | `aggregate`（聚合显示，同数量同品质只留最低买断，沿用 30 条限制）或 `full`（全部显示，跳过聚合与截断，渲染所有查到的在售条目） |
+| `llm_tools_enabled` | `true` | 允许大模型通过函数调用主动查询并发送图片；需在 AstrBot 模型服务中启用函数调用 |
 | `auto_update` | `false` | 开启后每小时检查一次 GitHub Release；有新版自动异步更新并热重载 |
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
 | `card_background` | `default` | 全局卡片背景；可选内置官方壁纸 `01 仓库小队` … `16 爆炸战场`，所有卡片共享 |
@@ -343,7 +362,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **238 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **241 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

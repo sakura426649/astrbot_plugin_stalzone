@@ -7,7 +7,7 @@
 Auction 路 Emissions 路 Players 路 Clans 路 Items 路 Candidates 路 Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.7.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.7.3-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -134,6 +134,10 @@ The automatic card shares the doomsday emission style but leads with "椋庢毚宸插
 - UserAuth-only endpoints (character list, friends, clan members) are intentionally not implemented.
 
 See [docs/maintenance.md](docs/maintenance.md) for aliases, balance updates and new-item workflows.
+
+## AI function calling
+
+The plugin registers six LLM tools: `stalzone_auction`, `stalzone_item`, `stalzone_player`, `stalzone_emission`, `stalzone_balance` and `stalzone_pass`. When the configured model supports function calling, users can ask naturally ("show me the Atom auction market") and the model can fill the parameters and call the matching query. Results are sent as the same image cards as `/sz`; the tool sends the image directly instead of returning it to the model, avoiding a duplicated text answer. Enable function calling in the AstrBot provider first. Set `llm_tools_enabled` to `false` to disable all six tools; AstrBot's `/tool ls` and `/tool off` commands also work.
 
 ## Development
 

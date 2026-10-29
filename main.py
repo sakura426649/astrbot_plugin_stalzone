@@ -203,11 +203,28 @@ except ImportError:  # Direct execution / flat import fallback.
     from sc_core_client import ScCoreClient, ScCoreError  # type: ignore[no-redef]
 
 
+def _llm_tool_decorator(*args: Any, **kwargs: Any) -> Any:
+    """Use AstrBot's llm_tool decorator when available; no-op otherwise."""
+    decorator = getattr(filter, "llm_tool", None)
+    if decorator is None:
+        try:
+            from astrbot.api.event.filter import llm_tool as imported
+
+            decorator = imported
+        except Exception:
+            decorator = None
+    if decorator is None:
+        if len(args) == 1 and not kwargs and callable(args[0]):
+            return args[0]
+        return lambda func: func
+    return decorator(*args, **kwargs)
+
+
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.7.2"
+PLUGIN_VERSION = "1.7.3"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1275,6 +1292,322 @@ class StalzonePlugin(Star):
             except Exception:
                 logger.exception("STALZONE usage image send failed; using text")
         return event.plain_result(USAGE[key])
+
+    def _llm_enabled(self) -> bool:
+        value = self._cfg("llm_tools_enabled", True)
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    @staticmethod
+    def _llm_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _llm_date_token(value: Any) -> str:
+        text = str(value or "").strip()
+        match = re.fullmatch(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)
+        if match:
+            return f"{match.group(1)}.{int(match.group(2))}.{int(match.group(3))}"
+        return text
+
+    async def _llm_deliver(
+        self,
+        event: Any,
+        result: Any,
+        default_sub: str,
+    ):
+        """Render a handler result as the same image card used by /sz."""
+        icon_url = None
+        auction_view = None
+        candidate_view = None
+        emission_view = None
+        item_meta = None
+        profile_view = None
+        notice_view = None
+        diag_view = None
+        pass_view = None
+        faction = None
+        sub = default_sub
+        if isinstance(result, PluginReply):
+            text = result.text
+            sub = result.sub or default_sub
+            icon_url = result.icon_url
+            auction_view = result.auction_view
+            candidate_view = result.candidate_view
+            emission_view = result.emission_view
+            item_meta = result.item_meta
+            profile_view = result.profile_view
+            notice_view = result.notice_view
+            diag_view = result.diag_view
+            pass_view = result.pass_view
+            faction = result.faction
+        else:
+            text = "" if result is None else str(result)
+        if not text:
+            return
+        if sub in USAGE and text == USAGE[sub]:
+            async for output in self._usage_reply(event, sub):
+                yield output
+            return
+        image = await self._render_image(
+            text,
+            sub,
+            icon_url,
+            auction_view,
+            candidate_view,
+            emission_view,
+            item_meta,
+            profile_view,
+            faction,
+            notice_view,
+            diag_view,
+            pass_view,
+        )
+        if image is not None:
+            try:
+                if AstrImage is not None and callable(
+                    getattr(event, "chain_result", None)
+                ):
+                    encoded = await asyncio.to_thread(self._image_base64, image)
+                    yield event.chain_result([AstrImage.fromBase64(encoded)])
+                    return
+                if callable(getattr(event, "image_result", None)):
+                    yield event.image_result(str(image))
+                    return
+            except Exception:
+                logger.exception(
+                    "STALZONE LLM tool image send failed; using text"
+                )
+        yield event.plain_result(text)
+
+    async def _llm_execute(
+        self,
+        event: Any,
+        sub: str,
+        coro: Any,
+        query: str = "",
+    ):
+        """Run one query coroutine with the shared error and image path."""
+        if not self._llm_enabled():
+            closer = getattr(coro, "close", None)
+            if callable(closer):
+                closer()
+            yield event.plain_result(
+                "AI 查询工具已关闭（可在 STALZONE 配置中开启）。"
+            )
+            return
+        try:
+            async with self._api_gate():
+                result = await coro
+        except StalzoneAPIError as exc:
+            logger.warning(
+                "STALZONE LLM query failed (%s): %s",
+                exc.__class__.__name__,
+                exc,
+            )
+            notice_view = {
+                "error": True,
+                "kind_label": "查询服务",
+                "query": query or "AI 查询",
+                "region": self._region().upper(),
+                "now": datetime.now(CST).strftime("%Y-%m-%d %H:%M"),
+                "note": exc.user_message,
+                "headline": "这次查询没有完成",
+                "hint": "请稍后重新查询；连续失败请等待约 30 秒。",
+                "accent": "#FFB454",
+                "footer": "STALZONE · 服务提示",
+            }
+            result = PluginReply(
+                exc.user_message, notice_view=notice_view, sub="notice"
+            )
+        except Exception:
+            logger.exception("STALZONE LLM tool query failed")
+            result = "查询失败，请稍后再试。"
+        async for output in self._llm_deliver(event, result, sub):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_auction")
+    async def llm_auction(
+        self,
+        event: AstrMessageEvent,
+        item: str,
+        quality: str = "",
+        affix: str = "",
+        date: str = "",
+        quantity: int = 0,
+    ):
+        """查询 STALZONE 拍卖行的在售、最近成交和历史成交，并直接发送图片。
+
+        当用户询问某物品的市场价、行情、在售数量、成交价或历史价格时调用。
+
+        Args:
+            item(string): 必填，物品的中文名、英文名或物品 ID
+            quality(string): 可选，品质：白/绿/蓝/粉/红/金
+            affix(string): 可选，仅武器模块的词条，如 猎人/抑制器
+            date(string): 可选，日期，如 6.11 或 2026.10.28
+            quantity(number): 可选，堆叠数量 1-200，必须同时有品质和日期
+        """
+        pieces = [str(item or "").strip()]
+        if str(quality or "").strip():
+            pieces.append(str(quality).strip())
+        if str(affix or "").strip():
+            pieces.append(str(affix).strip())
+        date_token = self._llm_date_token(date)
+        if date_token:
+            pieces.append(date_token)
+        count = self._llm_int(quantity)
+        if count > 0:
+            pieces.append(str(count))
+        query = " ".join(piece for piece in pieces if piece)
+        async for output in self._llm_execute(
+            event,
+            "auction",
+            self._handle_auction(query, event=event),
+            query=query,
+        ):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_item")
+    async def llm_item(self, event: AstrMessageEvent, item: str):
+        """查询 STALZONE 物品图鉴，并直接发送物品详情图片。
+
+        当用户询问物品属性、描述、类别、ID 或物品图标时调用。
+
+        Args:
+            item(string): 必填，物品的中文名、英文名或物品 ID
+        """
+        query = str(item or "").strip()
+        async for output in self._llm_execute(
+            event,
+            "item",
+            self._handle_item(query, event=event),
+            query=query,
+        ):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_player")
+    async def llm_player(
+        self,
+        event: AstrMessageEvent,
+        player: str,
+        region: str = "",
+    ):
+        """查询 STALZONE 玩家公开资料，并直接发送战术档案图片。
+
+        当用户询问角色资料、战队、PvP 估算分或战斗统计时调用。
+
+        Args:
+            player(string): 必填，角色名或 UUID
+            region(string): 可选，区服 ru/eu/na/sea/nea，默认使用配置区服
+        """
+        query = str(player or "").strip()
+        region_token = str(region or "").strip().lower()
+        if region_token:
+            query = f"{query} {region_token}"
+        async for output in self._llm_execute(
+            event,
+            "player",
+            self._handle_profile(query),
+            query=query,
+        ):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_emission")
+    async def llm_emission(
+        self,
+        event: AstrMessageEvent,
+        region: str = "",
+    ):
+        """查询 STALZONE 辐射风暴状态，并直接发送风暴计时图片。
+
+        当用户询问上次风暴、下次风暴、风暴时间或当前风暴状态时调用。
+
+        Args:
+            region(string): 可选，区服 ru/eu/na/sea/nea，默认使用配置区服
+        """
+        token = str(region or "").strip().lower()
+        async for output in self._llm_execute(
+            event,
+            "emission",
+            self._handle_emission(token),
+            query=token or "风暴",
+        ):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_balance")
+    async def llm_balance(self, event: AstrMessageEvent, item: str):
+        """查询 STALZONE 官方平衡调整历史，并直接发送调整记录图片。
+
+        当用户询问武器、神器或装备的数值改动、加强削弱或补丁记录时调用。
+
+        Args:
+            item(string): 必填，武器、神器、配件或装备名称/ID
+        """
+        query = str(item or "").strip()
+        async for output in self._llm_execute(
+            event,
+            "balance",
+            self._handle_balance(query, event=event),
+            query=query,
+        ):
+            yield output
+
+    @_llm_tool_decorator(name="stalzone_pass")
+    async def llm_pass(
+        self,
+        event: AstrMessageEvent,
+        level: int,
+        daily_exp: int,
+        days: int,
+        overload: int = 0,
+        weekly_days: int = 7,
+    ):
+        """计算 STALZONE 通行证等级与经验，并直接发送预测图片。
+
+        当用户询问通行证能否满级、还剩多少经验或需要多少天时调用。
+
+        Args:
+            level(number): 必填，当前通行证等级
+            daily_exp(number): 必填，每日任务经验（不含超载）
+            days(number): 必填，剩余活动天数
+            overload(number): 可选，超载任务经验，默认 0
+            weekly_days(number): 可选，每周可完成任务天数，默认 7
+        """
+        level_value = self._llm_int(level)
+        daily_value = max(0, self._llm_int(daily_exp))
+        days_value = max(1, self._llm_int(days, 1))
+        overload_value = max(0, self._llm_int(overload))
+        weekly_value = self._llm_int(weekly_days, 7)
+        if weekly_value <= 0:
+            weekly_value = 7
+        if overload_value > 0 and weekly_value == 7:
+            argument = (
+                f"{level_value} {daily_value}+{overload_value} {days_value}"
+            )
+        elif overload_value > 0:
+            argument = (
+                f"{level_value} {daily_value} {overload_value} "
+                f"{days_value} {weekly_value}"
+            )
+        elif weekly_value == 7:
+            argument = f"{level_value} {daily_value} {days_value}"
+        else:
+            argument = (
+                f"{level_value} {daily_value} {days_value} {weekly_value}"
+            )
+        async for output in self._llm_execute(
+            event,
+            "pass",
+            self._handle_pass(argument),
+            query="通行证计算",
+        ):
+            yield output
 
     def _prune_icon_cache(self) -> None:
         now = time.time()

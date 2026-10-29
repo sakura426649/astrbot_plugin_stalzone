@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.7.3 - 2026-10-29
+
+### Added
+
+- Six AstrBot LLM tools for natural-language queries: `stalzone_auction`, `stalzone_item`, `stalzone_player`, `stalzone_emission`, `stalzone_balance` and `stalzone_pass`. The model extracts parameters from chat and the plugin sends the normal image card directly, without returning the image to the model or producing a duplicate text answer.
+- `llm_tools_enabled` config switch (default on) and documentation for enabling function calling in AstrBot. Tools can also be managed with AstrBot's `/tool` commands.
+
+### Tests
+
+- Added all-tool image routing, auction parameter composition and disabled-tool coverage; 241 tests and 14 visual signatures pass.
+
 ## 1.7.2 - 2026-10-29
 
 ### Changed
