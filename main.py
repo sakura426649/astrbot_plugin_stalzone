@@ -205,11 +205,14 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.2"
+PLUGIN_VERSION = "1.6.3"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
 UPDATE_LIGHT_ASSET_NAME = "astrbot_plugin_stalzone.zip"
+# These catalog entries have no icon in the official full package either;
+# counting them as "missing" would force a full download on every update.
+ICONLESS_COMMON_IDS = frozenset({"1rk6g", "5lrg1", "96jyz", "3gp95"})
 UPDATE_COMMANDS = frozenset(
     {"update", "插件更新", "更新插件", "更新", "插件升级", "升级"}
 )
@@ -611,28 +614,6 @@ class StalzonePlugin(Star):
             # suffix so the proactive alert targets the group, not a member.
             targets.append(f"{platform}:GroupMessage:{group}")
         return targets
-
-    def _update_notify_targets(self) -> list[str]:
-        raw = str(self._cfg("update_notify_target", "") or "").strip()
-        if not raw:
-            return self._notify_targets()
-        prefix = self._platform_prefix()
-        targets: list[str] = []
-        seen: set[str] = set()
-        for value in re.split(r"[,，;；\s]+", raw):
-            group = self._group_number(value)
-            if not group or not group.isdigit() or group in seen:
-                continue
-            platform = (
-                self._platform_from_target(value)
-                if self._has_group_umo(value)
-                else ""
-            ) or prefix
-            if not self._is_auto_supported_platform(platform):
-                continue
-            seen.add(group)
-            targets.append(f"{platform}:GroupMessage:{group}")
-        return targets or self._notify_targets()
 
     def _auto_target_allowed(self, target: str) -> bool:
         group = self._group_key(target)
@@ -1649,8 +1630,7 @@ class StalzonePlugin(Star):
 
     def _schedule_plugin_reload(
         self,
-        *,
-        notify_targets: list[str] | None = None,
+        event: Any = None,
         notify_text: str = "",
     ) -> bool:
         manager = getattr(self.context, "_star_manager", None)
@@ -1670,27 +1650,21 @@ class StalzonePlugin(Star):
             except Exception as exc:
                 error = str(exc)
                 logger.exception("STALZONE self-update reload failed")
-            if not notify_targets or MessageChain is None:
+            if event is None or MessageChain is None:
                 return
             if ok:
                 text = notify_text or "STALZONE 插件热重载完成。"
             else:
                 text = (
-                    f"STALZONE 自动更新已覆盖文件，但热重载失败：{error}。"
+                    f"STALZONE 插件更新已覆盖文件，但热重载失败：{error}。"
                     "请在 AstrBot 中手动重载插件。"
                 )
-            for target in dict.fromkeys(
-                str(item).strip() for item in notify_targets if str(item).strip()
-            ):
+            sender = getattr(event, "send", None)
+            if callable(sender):
                 try:
-                    await self.context.send_message(
-                        target, MessageChain().message(text)
-                    )
+                    await sender(MessageChain().message(text))
                 except Exception:
-                    logger.warning(
-                        "STALZONE self-update reload notice failed for %s",
-                        target,
-                    )
+                    logger.warning("STALZONE self-update reload notice failed")
 
         self._reload_task = asyncio.create_task(_reload())
         return True
@@ -1762,7 +1736,11 @@ class StalzonePlugin(Star):
                 continue
             item_id = str(item.get("id") or "").strip()
             category = str(item.get("cat") or "")
-            if not item_id or not category.startswith(common_prefixes):
+            if (
+                not item_id
+                or item_id in ICONLESS_COMMON_IDS
+                or not category.startswith(common_prefixes)
+            ):
                 continue
             if not (icon_dir / f"{item_id}.png").is_file():
                 missing += 1
@@ -1883,14 +1861,13 @@ class StalzonePlugin(Star):
                 )
                 zip_path.unlink(missing_ok=True)
                 await self._update_status(event, "覆盖完成，正在热重载…")
-                notify_targets = self._update_notify_targets() if auto else []
                 notify_text = (
-                    f"STALZONE 插件已自动更新到 {latest_tag}，热重载完成。"
-                    if auto
+                    f"STALZONE 插件已更新到 {latest_tag}，热重载完成。"
+                    if not auto
                     else ""
                 )
                 scheduled = self._schedule_plugin_reload(
-                    notify_targets=notify_targets,
+                    event=event,
                     notify_text=notify_text,
                 )
                 tail = (

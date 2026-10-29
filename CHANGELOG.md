@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.3 - 2026-10-29
+
+### Changed
+
+- Automatic updates are silent again: no group notices and no coupling to the emission allow-list; the hourly task only checks, updates and writes logs.
+- Manual `/sz 更新` now sends a separate completion message to the initiating session after the hot reload finishes (or a failure message asking for a manual reload if the reload fails). The removed `update_notify_target` option is no longer used.
+- Icon-completeness checks ignore the four catalog entries that have no icon in the official full package (`1rk6g`, `5lrg1`, `96jyz`, `3gp95`), so an installation already using the full package no longer downloads the full package on every update.
+
+### Tests
+
+- Updated the update-flow test to assert the post-reload notice targets the command event; 227 tests and 13 visual signatures pass.
+
 ## 1.6.2 - 2026-10-29
 
 ### Added

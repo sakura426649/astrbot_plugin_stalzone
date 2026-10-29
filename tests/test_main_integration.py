@@ -423,19 +423,6 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("updater-called", text)
         self.assertEqual(len(called), 1)
 
-    async def test_update_notify_target_explicit_groups(self):
-        plugin = self.make_plugin()
-        plugin.config["update_notify_target"] = (
-            "aiocqhttp:GroupMessage:111, aiocqhttp:GroupMessage:222"
-        )
-        self.assertEqual(
-            plugin._update_notify_targets(),
-            [
-                "aiocqhttp:GroupMessage:111",
-                "aiocqhttp:GroupMessage:222",
-            ],
-        )
-
     async def test_self_update_latest_and_admin_guard(self):
         class AdminEvent(FakeEvent):
             role = "admin"
@@ -507,12 +494,18 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._apply_update_zip = lambda *args: calls.append(
             ("apply", *args)
         )  # type: ignore[assignment]
-        plugin._schedule_plugin_reload = lambda **kwargs: False  # type: ignore[assignment]
-        text = await plugin._handle_self_update(AdminEvent("/sz 更新"))
+        scheduled = []
+        plugin._schedule_plugin_reload = lambda **kwargs: scheduled.append(
+            kwargs
+        ) or False  # type: ignore[assignment]
+        event = AdminEvent("/sz 更新")
+        text = await plugin._handle_self_update(event)
         self.assertIn("更新完成", text)
         self.assertIn("轻量包", text)
         self.assertTrue(any(call[0] == "backup" for call in calls))
         self.assertTrue(any(call[0] == "apply" for call in calls))
+        self.assertIs(scheduled[0]["event"], event)
+        self.assertIn("热重载完成", scheduled[0]["notify_text"])
 
     async def test_self_update_package_choice(self):
         plugin = self.make_plugin()
@@ -525,6 +518,18 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(light)
         self.assertEqual(missing, 0)
+        known_iconless, known_missing, _reason = plugin._choose_update_asset(
+            {
+                "items": [
+                    {"id": "1rk6g", "cat": "armor/clothes"},
+                    {"id": "5lrg1", "cat": "armor/combined"},
+                    {"id": "96jyz", "cat": "attachment/accessory"},
+                    {"id": "3gp95", "cat": "attachment/mag"},
+                ]
+            }
+        )
+        self.assertFalse(known_iconless)
+        self.assertEqual(known_missing, 0)
         full, missing, reason = plugin._choose_update_asset(
             {
                 "items": [
