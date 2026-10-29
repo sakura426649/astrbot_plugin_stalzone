@@ -1097,6 +1097,7 @@ def build_auction_view(
     module_mode: bool = False,
     affix_filter: str | None = None,
     per_quality_recent: bool = False,
+    full_display: bool = False,
 ) -> dict[str, Any] | None:
     lots_payload = lots_payload if isinstance(lots_payload, dict) else {}
     history_payload = history_payload if isinstance(history_payload, dict) else {}
@@ -1215,7 +1216,17 @@ def build_auction_view(
         for row in active
     }
     distinct_amounts = {amount for amount, _ in quantity_keys}
-    if non_artifact and not module_mode and len(quantity_keys) > 1:
+    full_show_unit = bool(
+        full_display
+        and non_artifact
+        and any(int(row.get("amount") or 1) > 1 for row in active)
+    )
+    if full_display:
+        active_note = (
+            f"全部显示：共 {active_total:,} 条在售，按买断价从高到低"
+        )
+        active_truncated = False
+    elif non_artifact and not module_mode and len(quantity_keys) > 1:
         offers_by_key: dict[
             tuple[int, int | None], dict[str, dict[str, Any] | None]
         ] = {}
@@ -1628,6 +1639,8 @@ def build_auction_view(
         "non_artifact": non_artifact,
         "module_mode": module_mode,
         "affix_filter": affix_filter or "",
+        "full_display": full_display,
+        "full_show_unit": full_show_unit,
         "history_only": before is not None,
         "before": before_label,
         "history_note": history_note,
@@ -1790,7 +1803,10 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             lines.extend(["", active_heading])
             if view["active"]:
                 if is_non_artifact:
-                    lines.append("  名称  起拍  买断  剩余时间")
+                    header = "  名称  起拍  买断"
+                    if view.get("full_show_unit"):
+                        header += "  单价"
+                    lines.append(header + "  剩余时间")
                 display_index = 0
                 for row in view["active"]:
                     if row.get("quality_header"):
@@ -1803,8 +1819,13 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
                     badges = [] if is_non_artifact else _auction_badges(row)
                     marker = f" [{'/'.join(badges)}]" if badges else ""
                     if is_non_artifact:
+                        unit = (
+                            f"  {row['unit_price']}"
+                            if view.get("full_show_unit")
+                            else ""
+                        )
                         lines.append(
-                            f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}  "
+                            f"{display_index}. {row['name']}{marker}  {row['start']}  {row['buyout']}{unit}  "
                             f"{row['remaining']}"
                         )
                     else:

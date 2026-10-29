@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.5.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.5.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -93,6 +93,7 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `region` | `ru` | `ru` / `eu` / `na` / `sea` / `nea` |
 | `api_base` | production | `https://eapi.stalzone.com`; use `https://dapi.stalzone.com` for the demo environment |
 | `render_mode` | `auto` | `auto`, `text` or `image` |
+| `auction_display_mode` | `aggregate` | `aggregate` (quantities grouped, 30-row limits) or `full` (render every fetched active lot, no aggregation/truncation) |
 | `font_path` | empty | Optional CJK font path for Linux |
 | `card_background` | `default` | Shared card wallpaper; choose one of the 16 bundled official wallpapers (`01`–`16`) |
 | `card_background_custom` | empty | Optional custom background image path (absolute, or relative to the plugin directory); jpg/png/webp; takes priority when the file exists |

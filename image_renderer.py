@@ -3143,7 +3143,9 @@ def render_auction_card(
     # That keeps short names close to the prices instead of stranded at the
     # left edge of a fixed 960px table.
     non_artifact = bool(view.get("non_artifact"))
-    show_unit = bool(view.get("quantity_mode"))
+    show_unit = bool(
+        view.get("quantity_mode") or view.get("full_show_unit")
+    )
     badge_extra = (
         58.0
         if non_artifact
@@ -3345,7 +3347,7 @@ def render_auction_card(
         height = header_h + active_h + 35 + recent_h + tail_h
     max_height = (
         12000
-        if view.get("quantity_mode")
+        if view.get("quantity_mode") or view.get("full_display")
         else (8000 if history_only else 6000)
     )
     height = max(460, min(height, max_height))

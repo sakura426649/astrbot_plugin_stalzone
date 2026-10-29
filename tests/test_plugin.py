@@ -1147,6 +1147,67 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("共 40 条，显示前 15 条和后 15 条", text)
         self.assertIn("中间省略 10 条", text)
 
+    def test_full_display_renders_every_fetched_lot(self):
+        lots = {
+            "total": 40,
+            "lots": [
+                {
+                    "amount": i % 5 + 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                }
+                for i in range(40)
+            ],
+        }
+        view = build_auction_view(
+            "cig",
+            lots,
+            {},
+            "ru",
+            now=self.NOW,
+            item_label="香烟",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            full_display=True,
+        )
+        self.assertIsNotNone(view)
+        self.assertTrue(view["full_display"])
+        self.assertTrue(view["full_show_unit"])
+        self.assertFalse(view["quantity_mode"])
+        self.assertFalse(view["active_truncated"])
+        self.assertEqual(len(view["active"]), 40)
+        self.assertFalse(any(row.get("ellipsis") for row in view["active"]))
+        text = format_auction_text(view)
+        self.assertIn("全部显示", text)
+        self.assertIn("单价", text)
+
+        artifacts = build_auction_view(
+            "wg53",
+            {
+                "lots": [
+                    {
+                        "amount": 1,
+                        "startPrice": 1000 + i,
+                        "buyoutPrice": 2000 + i,
+                        "endTime": "2026-10-25T06:00:00Z",
+                        "additional": {"qlt": 3, "ptn": i % 10},
+                    }
+                    for i in range(40)
+                ]
+            },
+            {},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+            full_display=True,
+        )
+        self.assertIsNotNone(artifacts)
+        self.assertFalse(artifacts["active_grouped"])
+        self.assertEqual(len(artifacts["active"]), 40)
+        self.assertFalse(any(row.get("quality_header") for row in artifacts["active"]))
+
     def test_artifact_cap_keeps_cheapest_row_per_level(self):
         lots = {
             "total": 40,

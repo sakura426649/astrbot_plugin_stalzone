@@ -64,6 +64,20 @@
     ],
     "hint": "auto 最稳：Pillow 和中文字体可用时发图片，否则发纯文本。"
   },
+  "auction_display_mode": {
+    "description": "拍卖在售显示模式",
+    "type": "string",
+    "default": "aggregate",
+    "options": [
+      "aggregate",
+      "full"
+    ],
+    "labels": [
+      "聚合显示（推荐）",
+      "全部显示"
+    ],
+    "hint": "聚合显示：同数量同品质只显示最低买断，并沿用 30 条限制；全部显示：跳过聚合与截断，渲染所有查到的在售条目，图片可能很长。切换后下一次拍卖查询生效。"
+  },
   "font_path": {
     "description": "中文字体路径（可选）",
     "type": "string",

@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.5.1 - 2026-10-29
+
+### Added
+
+- New WebUI option `auction_display_mode`: `aggregate` (default, same quantity/quality grouping and 30-row limits as before) or `full` (render every fetched active lot, skipping aggregation, quality grouping and head/tail truncation). The mode can be switched at any time and applies to the next auction query.
+- Full mode fetches up to 200 lots, keeps buyout-descending order, shows the unit-price column for stackable items, and keeps the recent-trades limits unchanged.
+
+### Performance
+
+- Full-mode cards reuse the wallpaper/background and normalized-icon caches, keep `compress_level=1`, and cap the canvas at 12000px; a 200-row card renders in about 0.25s warm on the test machine.
+
+### Tests
+
+- Added full-display aggregation/truncation coverage and handler wiring; 222 tests and 13 visual signatures pass.
+
 ## 1.5.0 - 2026-10-29
 
 ### Added

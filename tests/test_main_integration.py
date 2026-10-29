@@ -410,6 +410,14 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("history", 200, 0), dated.calls)
         self.assertNotIn(("lots", 100), dated.calls)
 
+    async def test_auction_full_display_config_wires_through(self):
+        plugin = self.make_plugin()
+        plugin.config["auction_display_mode"] = "full"
+        plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
+        result = await plugin._handle_auction("wg53")
+        self.assertIsInstance(result, PluginReply)
+        self.assertTrue(result.auction_view["full_display"])
+
     async def test_module_core_recent_uses_per_quality_limit(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]

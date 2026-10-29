@@ -202,7 +202,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.5.0"
+PLUGIN_VERSION = "1.5.1"
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -1716,6 +1716,9 @@ class StalzonePlugin(Star):
         )
         if non_artifact and not module_mode and not per_quality_recent:
             quality_filter = None
+        full_display = str(
+            self._cfg("auction_display_mode", "aggregate")
+        ).strip().lower() in {"full", "all", "全部显示", "全部渲染"}
         short_label = (label or item_id).split(" / ", 1)[0].strip()
 
         async with self._make_client() as client:
@@ -1813,6 +1816,7 @@ class StalzonePlugin(Star):
                                 200
                                 if (
                                     module_mode
+                                    or full_display
                                     or (
                                         per_quality_recent
                                         and quality_filter is not None
@@ -1866,6 +1870,7 @@ class StalzonePlugin(Star):
                 module_mode=module_mode,
                 affix_filter=affix_filter,
                 per_quality_recent=per_quality_recent,
+                full_display=full_display,
             )
             text = format_auction_text(view)
             empty_view = None
