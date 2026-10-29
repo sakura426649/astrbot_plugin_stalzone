@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.6 - 2026-10-29
+
+### Added
+
+- Weapon-module auction names now draw each of the three affixes in its own component quality color (white/green/blue/pink/red/gold), so a module with blue/white/green parts shows three colors while the row's overall quality still drives the quality filter and row color. Missing component quality falls back to the module's overall `qlt`.
+
+### Tests
+
+- Added per-component affix color coverage; 230 tests and 13 visual signatures pass.
+
 ## 1.6.5 - 2026-10-29
 
 ### Added

@@ -1110,6 +1110,40 @@ def _fit_auction_name(
     return f"{fitted}{suffix}"
 
 
+def _draw_colored_name(
+    draw: Any,
+    parts: Any,
+    x: int,
+    y: int,
+    font: Any,
+    max_width: int,
+) -> bool:
+    """Draw per-affix colored module name segments when they fit."""
+    if not isinstance(parts, list) or not parts:
+        return False
+    values: list[tuple[str, str]] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        text = str(part.get("text") or "")
+        if text:
+            values.append((text, str(part.get("color") or TEXT)))
+    if not values:
+        return False
+    space = float(draw.textlength(" ", font=font))
+    total = sum(float(draw.textlength(text, font=font)) for text, _ in values)
+    total += space * max(0, len(values) - 1)
+    if total > max_width:
+        return False
+    offset = float(x)
+    for index, (text, color) in enumerate(values):
+        if index:
+            offset += space
+        draw.text((offset, y), text, font=font, fill=color)
+        offset += float(draw.textlength(text, font=font))
+    return True
+
+
 def _auction_name_column_width(
     active_width: float,
     recent_width: float,
@@ -3464,14 +3498,22 @@ def render_auction_card(
                     )
                     y += line_h
                     continue
-                name = _fit_auction_name(
+                color = str(row.get("color") or TEXT)
+                if not _draw_colored_name(
                     draw,
-                    str(row.get("name", "")),
+                    row.get("name_parts"),
+                    left,
+                    y,
                     body_font,
                     name_right - left - 12,
-                )
-                color = str(row.get("color") or TEXT)
-                draw.text((left, y), name, font=body_font, fill=color)
+                ):
+                    name = _fit_auction_name(
+                        draw,
+                        str(row.get("name", "")),
+                        body_font,
+                        name_right - left - 12,
+                    )
+                    draw.text((left, y), name, font=body_font, fill=color)
                 values = [
                     (row.get("start", "—"), start_right),
                     (row.get("buyout", "—"), buyout_right),
@@ -3548,14 +3590,25 @@ def render_auction_card(
             else:
                 y += 4
             for row in group.get("rows") or []:
-                name = _fit_auction_name(
+                name = str(row.get("name", ""))
+                name_color = str(row.get("color") or color)
+                if not _draw_colored_name(
                     draw,
-                    str(row.get("name", "")),
+                    row.get("name_parts"),
+                    left + 16,
+                    y,
                     body_font,
                     max(60, int(name_w) - 28),
-                )
-                name_color = str(row.get("color") or color)
-                draw.text((left + 16, y), name, font=body_font, fill=name_color)
+                ):
+                    name = _fit_auction_name(
+                        draw,
+                        name,
+                        body_font,
+                        max(60, int(name_w) - 28),
+                    )
+                    draw.text(
+                        (left + 16, y), name, font=body_font, fill=name_color
+                    )
                 if row.get("lowest"):
                     _draw_lowest_badge(
                         left + 16 + int(draw.textlength(name, font=body_font)) + 6,

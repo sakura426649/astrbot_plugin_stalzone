@@ -812,6 +812,56 @@ class FormatterTests(unittest.TestCase):
             _module_display_name(entry, "武器模块"), "瞬间 后退 猎人"
         )
 
+    def test_weapon_module_affix_colors_follow_each_component(self):
+        view = build_auction_view(
+            "1pyq",
+            {
+                "lots": [
+                    {
+                        "amount": 1,
+                        "startPrice": 100,
+                        "buyoutPrice": 1000,
+                        "endTime": "2026-10-29T06:00:00Z",
+                        "additional": {
+                            "qlt": 3,
+                            "attributes": [
+                                {
+                                    "definitionId": "recoil_pre",
+                                    "quality": 2,
+                                },
+                                {
+                                    "definitionId": "recoil_suf",
+                                    "quality": 0,
+                                },
+                                {
+                                    "definitionId": "sadist",
+                                    "quality": 1,
+                                },
+                            ],
+                        },
+                    }
+                ]
+            },
+            {},
+            "eu",
+            now=self.NOW,
+            item_label="武器模块 / Weapon Module",
+            non_artifact=True,
+            item_color="#E7EDF5",
+            module_mode=True,
+        )
+        row = view["active"][0]
+        self.assertEqual(row["name"], "垂直 后退 猎人")
+        self.assertEqual(
+            [part["color"] for part in row["name_parts"]],
+            [
+                QUALITY_COLORS[2],
+                QUALITY_COLORS[0],
+                QUALITY_COLORS[1],
+            ],
+        )
+        self.assertEqual(row["color"], QUALITY_COLORS[3])
+
     def test_weapon_module_affix_names_and_filters(self):
         def lot(buyout, quality, attrs):
             return {

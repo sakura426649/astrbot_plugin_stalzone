@@ -665,8 +665,10 @@ def _module_attribute_rank(attribute: dict[str, Any]) -> int:
     return 2
 
 
-def _module_affix_parts(entry: dict[str, Any]) -> list[tuple[str, str, str]]:
-    parts: list[tuple[str, str, str]] = []
+def _module_affix_parts(
+    entry: dict[str, Any],
+) -> list[tuple[str, str, str, int | None]]:
+    parts: list[tuple[str, str, str, int | None]] = []
     for attribute in sorted(_module_attributes(entry), key=_module_attribute_rank):
         key = str(attribute.get("definitionId") or "").strip()
         if not key:
@@ -674,7 +676,7 @@ def _module_affix_parts(entry: dict[str, Any]) -> list[tuple[str, str, str]]:
         english, chinese = MODULE_AFFIX_NAMES.get(
             key, (key.replace("_", " ").title(), key.replace("_", " "))
         )
-        parts.append((key, english, chinese))
+        parts.append((key, english, chinese, _safe_int(attribute.get("quality"))))
     return parts
 
 
@@ -710,16 +712,39 @@ def _module_payload_name(entry: dict[str, Any]) -> str:
 
 
 def _module_display_name(entry: dict[str, Any], fallback: str) -> str:
-    names = [chinese for _, _, chinese in _module_affix_parts(entry) if chinese]
+    names = [
+        chinese
+        for _, _, chinese, _quality in _module_affix_parts(entry)
+        if chinese
+    ]
     if names:
         return " ".join(names)
     translated = _translate_module_name(_module_payload_name(entry))
     return translated or fallback
 
 
+def _module_name_segments(
+    entry: dict[str, Any],
+    overall_quality: int | None,
+    item_color: str | None,
+) -> list[dict[str, str]]:
+    segments: list[dict[str, str]] = []
+    for _key, _english, chinese, quality in _module_affix_parts(entry):
+        if not chinese:
+            continue
+        effective = quality if quality is not None else overall_quality
+        color = (
+            _quality_color(effective)
+            if effective is not None
+            else (item_color or "#E7EDF5")
+        )
+        segments.append({"text": chinese, "color": color})
+    return segments
+
+
 def _module_search_text(entry: dict[str, Any]) -> str:
     values: list[str] = []
-    for key, english, chinese in _module_affix_parts(entry):
+    for key, english, chinese, _quality in _module_affix_parts(entry):
         values.extend((key, english, chinese))
     payload_name = _module_payload_name(entry)
     if payload_name:
@@ -1167,9 +1192,15 @@ def build_auction_view(
             name = _module_display_name(lot, name)
         if non_artifact and amount > 1:
             name = f"{name}×{amount}"
+        name_parts = (
+            _module_name_segments(lot, quality, item_color)
+            if module_mode
+            else []
+        )
         active.append(
             {
                 "name": name,
+                "name_parts": name_parts,
                 "level": _level_of(lot),
                 "quality": quality,
                 "color": _auction_name_color(lot, non_artifact, item_color),
@@ -1471,9 +1502,15 @@ def build_auction_view(
             name = _module_display_name(entry, name)
         if non_artifact and amount > 1:
             name = f"{name}×{amount}"
+        name_parts = (
+            _module_name_segments(entry, row_quality, item_color)
+            if module_mode
+            else []
+        )
         recent.setdefault(group_quality, []).append(
             {
                 "name": name,
+                "name_parts": name_parts,
                 "quality": row_quality,
                 "color": _auction_name_color(entry, non_artifact, item_color),
                 "price": f"{price:,}" if price is not None else "未知",
