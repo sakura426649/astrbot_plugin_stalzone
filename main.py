@@ -234,7 +234,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.10.0"
+PLUGIN_VERSION = "1.10.1"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -3243,6 +3243,206 @@ class StalzonePlugin(Star):
         yield event.plain_result(text)
 
     # --------------------------------------------------------------- handlers
+    @staticmethod
+    def _history_signature(entries: list[dict[str, Any]]) -> tuple[Any, ...]:
+        return tuple(
+            (entry.get("time"), entry.get("price"), entry.get("amount"))
+            for entry in entries[:5]
+        )
+
+    @staticmethod
+    def _oldest_history_time(entries: list[dict[str, Any]]) -> str:
+        oldest: datetime | None = None
+        for entry in entries:
+            timestamp = parse_auction_time(entry.get("time"))
+            if timestamp is None:
+                continue
+            if oldest is None or timestamp < oldest:
+                oldest = timestamp
+        return oldest.strftime("%Y-%m-%dT%H:%M:%SZ") if oldest else ""
+
+    async def _fetch_sc_core_history_page(
+        self,
+        item_id: str,
+        region: str,
+        page: int,
+        start_cursor: str,
+    ) -> dict[str, Any] | None:
+        """Walk SC CORE's ``before`` cursor to the requested 200-row page."""
+        if not self._cfg("sc_core_fallback", True):
+            return None
+        if page < 2 or page > 20 or not start_cursor:
+            return None
+        region = str(region or "").lower()
+        cache_key = (region, item_id)
+        try:
+            async with ScCoreClient(region) as client:
+                item_key = self._sc_item_keys.get(cache_key)
+                if not item_key:
+                    item_key = await client.find_item_key(item_id)
+                    if not item_key:
+                        return None
+                    self._sc_item_keys[cache_key] = item_key
+                cursor = start_cursor
+                total = 0
+                selected: list[dict[str, Any]] = []
+                for index in range(2, page + 1):
+                    payload = await client.get_history(
+                        item_key, before=cursor, limit=200
+                    )
+                    status = payload.get("history_status")
+                    if isinstance(status, dict):
+                        try:
+                            total = int(status.get("event_count") or total)
+                        except (TypeError, ValueError):
+                            total = total
+                    events = payload.get("events")
+                    events = (
+                        [event for event in events if isinstance(event, dict)]
+                        if isinstance(events, list)
+                        else []
+                    )
+                    if not events:
+                        return None
+                    page_entries: list[dict[str, Any]] = []
+                    oldest: datetime | None = None
+                    for event in events:
+                        timestamp = parse_auction_time(event.get("event_time"))
+                        if timestamp is None:
+                            continue
+                        if oldest is None or timestamp < oldest:
+                            oldest = timestamp
+                        page_entries.append(
+                            {
+                                "time": event.get("event_time"),
+                                "price": event.get("price"),
+                                "amount": event.get("amount"),
+                                "additional": event.get("additional") or {},
+                            }
+                        )
+                    if not page_entries:
+                        return None
+                    if index == page:
+                        selected = page_entries
+                        break
+                    if oldest is None:
+                        return None
+                    next_cursor = oldest.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    if next_cursor == cursor:
+                        return None
+                    cursor = next_cursor
+                if not selected:
+                    return None
+                selected.sort(
+                    key=lambda entry: parse_auction_time(entry.get("time"))
+                    or datetime.min.replace(tzinfo=timezone.utc),
+                    reverse=True,
+                )
+                return {
+                    "prices": selected,
+                    "total": total or ((page - 1) * 200 + len(selected)),
+                    "source": "sc_core",
+                }
+        except Exception as exc:
+            logger.warning(
+                "STALZONE SC CORE history page failed for %s: %s",
+                item_id,
+                exc,
+            )
+            return None
+
+    async def _fetch_history_page(
+        self,
+        client: StalzoneAPIClient,
+        item_id: str,
+        page: int,
+        page_size: int = 200,
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], int, str]:
+        """Fetch one history page, detecting ignored official offsets."""
+        offset = (page - 1) * page_size
+        payload = await client.get_auction_history(
+            item_id, limit=page_size, offset=offset
+        )
+        prices = (
+            [entry for entry in payload.get("prices", []) if isinstance(entry, dict)]
+            if isinstance(payload, dict)
+            else []
+        )
+        try:
+            total = int(payload.get("total") or 0) if isinstance(payload, dict) else 0
+        except (TypeError, ValueError):
+            total = 0
+        if page == 1 or total <= offset:
+            return payload, prices, total, "official"
+        first_payload = await client.get_auction_history(
+            item_id, limit=page_size, offset=0
+        )
+        first_prices = (
+            [
+                entry
+                for entry in first_payload.get("prices", [])
+                if isinstance(entry, dict)
+            ]
+            if isinstance(first_payload, dict)
+            else []
+        )
+        first_signature = self._history_signature(first_prices)
+        current_signature = self._history_signature(prices)
+        if current_signature and current_signature != first_signature:
+            return payload, prices, total, "official"
+
+        # Some deployments ignore 200-item offsets but honor 100-item pages.
+        expected = min(page_size, max(0, total - offset))
+        combined: list[dict[str, Any]] = []
+        seen: set[tuple[Any, ...]] = set()
+        for half_offset in (offset, offset + 100):
+            try:
+                half = await client.get_auction_history(
+                    item_id, limit=100, offset=half_offset
+                )
+            except Exception:
+                break
+            half_prices = (
+                [entry for entry in half.get("prices", []) if isinstance(entry, dict)]
+                if isinstance(half, dict)
+                else []
+            )
+            for entry in half_prices:
+                key = (entry.get("time"), entry.get("price"), entry.get("amount"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                combined.append(entry)
+        if (
+            len(combined) >= max(1, expected)
+            and self._history_signature(combined) != first_signature
+        ):
+            combined_payload = {
+                "prices": combined[:page_size],
+                "total": total,
+                "source": "official",
+            }
+            return combined_payload, combined[:page_size], total, "official"
+
+        logger.warning(
+            "STALZONE official history offset ignored for %s page %s; "
+            "trying SC CORE cursor",
+            item_id,
+            page,
+        )
+        cursor = self._oldest_history_time(first_prices)
+        sc_payload = await self._fetch_sc_core_history_page(
+            item_id, client.region, page, cursor
+        )
+        if sc_payload:
+            return (
+                sc_payload,
+                list(sc_payload.get("prices") or []),
+                int(sc_payload.get("total") or 0),
+                "sc_core",
+            )
+        return None, [], total, "official"
+
     async def _handle_auction_history(
         self,
         argument: str,
@@ -3299,20 +3499,27 @@ class StalzonePlugin(Star):
         page_size = 200
         offset = (page - 1) * page_size
         async with self._make_client() as client:
-            payload = await client.get_auction_history(
-                item_id, limit=page_size, offset=offset
+            payload, prices, total, source = await self._fetch_history_page(
+                client, item_id, page, page_size
             )
             region = client.region
-        prices = (
-            [entry for entry in payload.get("prices", []) if isinstance(entry, dict)]
-            if isinstance(payload, dict)
-            else []
-        )
-        raw_total = payload.get("total") if isinstance(payload, dict) else 0
-        try:
-            total = int(raw_total or 0)
-        except (TypeError, ValueError):
-            total = 0
+        if payload is None:
+            note = (
+                f"官方接口没有返回第 {page} 页（offset 可能被忽略），"
+                "且 SC CORE 第三方存档不可用。请稍后重试。"
+            )
+            empty_view = build_empty_auction_view(
+                item_id,
+                label,
+                region,
+                note=note,
+            )
+            return PluginReply(
+                format_auction_text(empty_view),
+                icon_url=item.get("icon"),
+                auction_view=empty_view,
+                sub="auction",
+            )
         if total <= 0:
             total = offset + len(prices)
         max_page = max(1, (total + page_size - 1) // page_size)

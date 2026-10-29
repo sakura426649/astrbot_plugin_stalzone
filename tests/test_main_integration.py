@@ -1157,7 +1157,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                     prices = [
                         {
                             "amount": 1,
-                            "price": 1000,
+                            "price": 1000 + offset,
                             "time": "2026-10-22T05:00:00Z",
                             "additional": {},
                         }
@@ -1178,6 +1178,49 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(beyond, PluginReply)
         self.assertIn("没有更多成交记录", beyond.text)
         self.assertIn("最多第 3 页", beyond.text)
+
+    async def test_history_ignored_offset_uses_sc_core_cursor(self):
+        class IgnoringOffsetClient(FakeClient):
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {
+                    "total": 401,
+                    "prices": [
+                        {
+                            "amount": 1,
+                            "price": 1111,
+                            "time": "2026-10-22T05:00:00Z",
+                            "additional": {},
+                        }
+                    ],
+                }
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: IgnoringOffsetClient()  # type: ignore[assignment]
+        calls = []
+
+        async def fake_sc_page(item_id, region, page, start_cursor):
+            calls.append((item_id, region, page, start_cursor))
+            return {
+                "prices": [
+                    {
+                        "amount": 1,
+                        "price": 2222,
+                        "time": "2026-10-21T05:00:00Z",
+                        "additional": {},
+                    }
+                ],
+                "total": 401,
+                "source": "sc_core",
+            }
+
+        plugin._fetch_sc_core_history_page = fake_sc_page  # type: ignore[assignment]
+        result = await plugin._handle_auction_history("vj2mp 2")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.auction_view["history_page"], 2)
+        self.assertEqual(result.auction_view["history_source"], "sc_core")
+        self.assertIn("SC CORE", result.text)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][2], 2)
 
     async def test_auction_premium_chinese_name(self):
         plugin = self.make_plugin()

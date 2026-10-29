@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.10.1 - 2026-10-29
+
+### Fixed
+
+- `/sz 拍卖历史` no longer shows page 1 for every page when the deployment ignores the official `offset`. The plugin detects the repeated page signature, retries with 100-item offsets, then fills the requested page from SC CORE's `before` cursor; SC CORE pages are labeled as third-party and capped at 4,000 records for safety.
+- An ignored offset with no SC CORE fallback now shows an explicit error card instead of silently presenting page 1 again.
+
+### Tests
+
+- Added an ignored-offset/SC CORE cursor regression; 253 tests and 14 visual signatures pass.
+
 ## 1.10.0 - 2026-10-29
 
 ### Added

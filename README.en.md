@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.10.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.10.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -151,6 +151,7 @@ The official history endpoint accepts `limit` up to **200 per request** and an u
 
 - `/sz 拍卖历史 <item> [page]` reads 200 records per page, starting at page 1, e.g. `/sz 拍卖历史 KS-12 2`.
 - The card shows the page, page size and total, plus a `翻页：/sz 拍卖历史 <item> <page>` hint; keep increasing the page until the API returns an empty page.
+- Some deployments ignore the official `offset` and return page 1 every time. The plugin detects the repeated signature, retries with 100-item offsets, then fills the page from SC CORE's `before` cursor (labeled as third-party, capped at 4,000 records for safety).
 - Normal `/sz auction` still shows only recent sales to avoid pulling the entire history on every query. Date-filtered queries scan pages internally with a 4,000-record safety cap.
 - Only official sale history is read; no complete history is uploaded to a third party.
 
