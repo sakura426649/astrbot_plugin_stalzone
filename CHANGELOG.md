@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.8 - 2026-10-29
+
+### Changed
+
+- Manual self-update messages are reduced to avoid platform anti-spam limits: one start notice with the current/target version and package type, then one post-hot-reload completion or failure notice. Intermediate download/backup/unzip steps are no longer sent; errors still surface in the final reply.
+
+### Tests
+
+- Updated update-flow expectations; 231 tests and 13 visual signatures pass.
+
 ## 1.6.7 - 2026-10-29
 
 ### Added

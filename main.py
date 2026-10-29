@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.7"
+PLUGIN_VERSION = "1.6.8"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1907,15 +1907,10 @@ class StalzonePlugin(Star):
                     return "GitHub Release 没有可识别的版本号。"
                 if latest_key <= current_key:
                     return f"当前已是最新版本：v{PLUGIN_VERSION}。"
-                await self._update_status(
-                    event,
-                    f"发现新版本 {latest_tag}，正在检查本地物品图标完整性…",
-                )
                 index_payload = await self._fetch_release_item_index(latest_tag)
                 need_full, missing, reason = self._choose_update_asset(
                     index_payload
                 )
-                await self._update_status(event, reason)
                 asset_name = (
                     UPDATE_ASSET_NAME if need_full else UPDATE_LIGHT_ASSET_NAME
                 )
@@ -1936,10 +1931,6 @@ class StalzonePlugin(Star):
                     if asset is not None:
                         asset_name = fallback
                         need_full = not need_full
-                        await self._update_status(
-                            event,
-                            f"Release 中没有目标包，改用 {asset_name}",
-                        )
                 asset_url = (
                     str(asset.get("browser_download_url") or "")
                     if isinstance(asset, dict)
@@ -1953,7 +1944,9 @@ class StalzonePlugin(Star):
                     )
                 package_label = "完整包" if need_full else "轻量包"
                 await self._update_status(
-                    event, f"正在下载{package_label}（{asset_name}）…"
+                    event,
+                    f"开始更新：v{PLUGIN_VERSION} → {latest_tag}"
+                    f"（{package_label}），正在下载并安装…",
                 )
                 stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
                 zip_path = updates_dir / f"update-{latest_tag}-{stamp}.zip"
@@ -1962,12 +1955,10 @@ class StalzonePlugin(Star):
                 )
                 plugin_root = Path(__file__).resolve().parent
                 await self._download_update_asset(asset_url, zip_path)
-                await self._update_status(event, "下载完成，正在备份旧版本…")
                 await asyncio.to_thread(
                     self._backup_plugin_dir, plugin_root, backup_root
                 )
                 await asyncio.to_thread(self._prune_update_backups, data_dir)
-                await self._update_status(event, "备份完成，正在异步解压覆盖…")
                 await asyncio.to_thread(
                     self._apply_update_zip,
                     zip_path,
@@ -1976,7 +1967,6 @@ class StalzonePlugin(Star):
                     latest_tag,
                 )
                 zip_path.unlink(missing_ok=True)
-                await self._update_status(event, "覆盖完成，正在热重载…")
                 notify_text = (
                     f"STALZONE 插件已更新到 {latest_tag}，热重载完成。"
                     if not auto
@@ -1986,15 +1976,20 @@ class StalzonePlugin(Star):
                     event=event,
                     notify_text=notify_text,
                 )
-                tail = (
-                    "正在热重载插件，请稍候…"
-                    if scheduled
-                    else "文件已覆盖，请手动在 AstrBot 中重载插件。"
-                )
+                if auto:
+                    return (
+                        f"已更新到 {latest_tag}，正在热重载。"
+                        if scheduled
+                        else f"已更新到 {latest_tag}，请手动重载。"
+                    )
+                if scheduled:
+                    # The post-reload message is the final confirmation.
+                    return ""
                 return (
-                    f"更新完成：v{PLUGIN_VERSION} → {latest_tag}（"
-                    f"{package_label}）。\n"
-                    f"旧版本备份：{backup_root}\n{tail}"
+                    f"更新已安装：v{PLUGIN_VERSION} → {latest_tag}"
+                    f"（{package_label}），文件已覆盖。\n"
+                    f"旧版本备份：{backup_root}\n"
+                    "请在 AstrBot 中手动重载插件。"
                 )
             except PluginUpdateError as exc:
                 return f"更新未完成：{exc}"
@@ -2030,7 +2025,9 @@ class StalzonePlugin(Star):
         if sub in UPDATE_COMMANDS or (
             sub == "插件" and arg.strip().lower() in {"更新", "升级", "update"}
         ):
-            yield event.plain_result(await self._handle_self_update(event))
+            result = await self._handle_self_update(event)
+            if result:
+                yield event.plain_result(result)
             return
         if sub:
             self._remember_notify_target(event)

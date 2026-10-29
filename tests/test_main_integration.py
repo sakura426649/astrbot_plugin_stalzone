@@ -512,7 +512,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         ) or False  # type: ignore[assignment]
         event = AdminEvent("/sz 更新")
         text = await plugin._handle_self_update(event)
-        self.assertIn("更新完成", text)
+        self.assertIn("更新已安装", text)
         self.assertIn("轻量包", text)
         self.assertTrue(any(call[0] == "backup" for call in calls))
         self.assertTrue(any(call[0] == "apply" for call in calls))
