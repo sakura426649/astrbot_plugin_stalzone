@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.8.0 - 2026-10-29
+
+### Added
+
+- `/sz 风暴订阅` (also `/sz 订阅风暴`) subscribes the current user in the current group or private chat to the next storm. Group success replies use a real @ mention; private chats reply directly.
+- After the allow-list group image is sent, each subscriber is notified in the session where they subscribed: groups get an @ mention, private chats get a direct message. The notice includes the official start time and reminds the user that the next storm needs a new subscription.
+- Subscriptions are one-shot, persist in `emission_auto_state.json` across reloads/restarts, and are only removed after a successful notice. Subscribe during an active storm waits for the next one. `/sz 风暴订阅 状态` and `/sz 风暴订阅 取消` are supported.
+- Subscription polling works even when the group allow-list is empty; group image alerts remain disabled in that case. Official QQ bots are rejected because they cannot push unsolicited mentions.
+
+### Tests
+
+- Added subscription mention/private/persistence, one-shot notification, active-storm deferral and no-whitelist polling coverage; 247 tests and 14 visual signatures pass.
+
 ## 1.7.4 - 2026-10-29
 
 ### Fixed

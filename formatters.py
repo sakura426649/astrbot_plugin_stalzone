@@ -3076,6 +3076,7 @@ def build_diag_view(
     auto_window = str(info.get("auto_window") or "—")
     auto_whitelist = int(info.get("auto_whitelist") or 0)
     auto_targets = int(info.get("auto_targets") or 0)
+    auto_subscribers = int(info.get("auto_subscribers") or 0)
     auto_last_check = str(info.get("auto_last_check") or "—")
     auto_last_send = str(info.get("auto_last_send") or "—")
     auto_last_error = str(info.get("auto_last_error") or "—")
@@ -3121,6 +3122,7 @@ def build_diag_view(
     auto_rows = [
         ("状态", auto_status),
         ("收件群", f"白名单 {auto_whitelist} · 目标 {auto_targets}"),
+        ("订阅用户", f"{auto_subscribers} 人 (一次性)"),
         ("检查窗口", auto_window),
         ("最近检查", auto_last_check),
         ("最近群发", auto_last_send),
@@ -3174,7 +3176,7 @@ def build_diag_view(
         f"凭证：{credentials}｜HTTP 连接池：{http}",
         f"字体：{font if font_ready else '不可用'}｜Pillow：{pillow}",
         f"API：最近 {api_last_status if api_last_status is not None else '—'}"
-        f" · 失败 {api_failures}｜自动提醒：{auto_status}（目标 {auto_targets}）",
+        f" · 失败 {api_failures}｜自动提醒：{auto_status}（目标 {auto_targets} · 订阅 {auto_subscribers}）",
     ]
     if credentials != "已配置":
         summary_lines.append("配置 Client-Id / Client-Secret 后可执行实时查询。")
@@ -3298,6 +3300,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
+        "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
         "/sz item / 物品 <中文名/英文名/ID> — 查看物品属性、描述和 ID",
         "/sz 候选 <序号> — 使用最近一次候选继续查询",

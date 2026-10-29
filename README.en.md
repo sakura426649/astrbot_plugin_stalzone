@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.7.4-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.8.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -29,7 +29,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | Auction | Active lots and sold history, quality groups, stackable lots summarized per quantity with the lowest buyout and any cheaper auction offer; long non-stackable lists keep the first and last 15 rows |
 | Emission | Time since the last emission, current status and region selection |
-| Auto emission alert | OneBot only; inactive when the allow-list is empty; polls once a minute in the 2–4h window plus a slow three-minute probe outside it, and sends one alert to every allow-listed group, deny-list wins |
+| Auto emission alert | OneBot only; polls once a minute in the 2–4h window plus a slow three-minute probe outside it, sends one alert to every allow-listed group (deny-list wins), and also supports one-shot per-user storm subscriptions |
 | Platform support | Queries and image replies work on OneBot (`aiocqhttp`) and QQ Official Bot (`qq_official` / `qq_official_webhook`); automatic storm alerts are OneBot-only |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
@@ -117,7 +117,7 @@ The game usually does not start a new emission in the first 2 hours after one en
 - While the storm is active the plugin keeps confirming its end once a minute; the saved end time is then refreshed and the next 2–4h window begins.
 - State is stored in `emission_auto_state.json` under the plugin data directory, including the previous end, active flag, last alerted start, successfully notified groups and latest session, so a restart neither loses the window nor repeats an alert.
 - Only QQ group chats are accepted: private sessions are never remembered and never receive automatic alerts.
-- An empty allow-list does nothing: no sending and no emission polling. There is no fallback to the latest group or `emission_notify_target`.
+- An empty allow-list sends no group image. Storm subscriptions are independent: if any user subscribed with `/sz 风暴订阅`, polling continues for those subscribers. There is no fallback to the latest group or `emission_notify_target`.
 - A non-empty allow-list defines the recipients: every listed group receives the alert, excluding deny-listed groups. The image is rendered once and sent to each group; per-group delivery is tracked, so only failed groups are retried.
 - The deny-list always wins. Both lists support adding more group numbers in the WebUI; groups outside the allow-list are not remembered.
 - Numeric allow-list entries reuse the platform prefix from the configured seed or a remembered group. If the plugin has never seen a group command, run `/sz` once in a group or use a full group UMO entry.
@@ -138,6 +138,10 @@ See [docs/maintenance.md](docs/maintenance.md) for aliases, balance updates and 
 ## AI function calling
 
 The plugin registers six LLM tools: `stalzone_auction`, `stalzone_item`, `stalzone_player`, `stalzone_emission`, `stalzone_balance` and `stalzone_pass`. When the configured model supports function calling, users can ask naturally ("show me the Atom auction market") and the model can fill the parameters and call the matching query. Results are sent as the same image cards as `/sz`; the tool sends the image directly instead of returning it to the model, avoiding a duplicated text answer. Enable function calling in the AstrBot provider first. Set `llm_tools_enabled` to `false` to disable all six tools; AstrBot's `/tool ls` and `/tool off` commands also work.
+
+### One-shot storm subscriptions
+
+Any group member or private-chat user can send `/sz 风暴订阅` to subscribe to the next emission. On success the bot @-mentions the user in the group, or replies directly in private chat. When the storm starts, the plugin first sends the allow-list group image, then mentions each subscriber in the session where they subscribed; private subscribers get a direct message. The notice includes the official start time and says the next storm requires a new subscription. Subscriptions are one-shot and are removed after a successful notice. Subscribing while a storm is already active waits for the next one. `/sz 风暴订阅 状态` shows the current subscription and `/sz 风暴订阅 取消` removes it. Records live in `emission_auto_state.json` and survive reloads/restarts; failed sends are retried while the storm is active. OneBot-compatible platforms only; official QQ bots cannot receive proactive mentions.
 
 ## Development
 

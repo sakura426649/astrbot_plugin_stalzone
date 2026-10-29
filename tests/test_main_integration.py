@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import sys
 import tempfile
@@ -1912,6 +1913,238 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
         target, chain = context.sent[0]
         self.assertEqual(target, self.GROUP_TARGET)
         self.assertIn("辐射风暴已开始", chain.components[0].text)
+
+    async def test_subscription_command_mentions_and_persists(self):
+        class SubscribeEvent(FakeEvent):
+            def __init__(self, text, target, user_id, name, private):
+                super().__init__(text)
+                self.unified_msg_origin = target
+                self.user_id = user_id
+                self.name = name
+                self.private = private
+
+            def get_sender_id(self):
+                return self.user_id
+
+            def get_sender_name(self):
+                return self.name
+
+            def is_private_chat(self):
+                return self.private
+
+            def chain_result(self, chain):
+                return ("chain", chain)
+
+        class FakeAt:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class FakePlain:
+            def __init__(self, text):
+                self.text = text
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin.config["client_id"] = "test"
+        plugin.config["client_secret"] = "test"
+        plugin._auto_state_path = Path(temp.name) / "emission_auto_state.json"
+        plugin._auto_state = {}
+        plugin._start_emission_auto = lambda: None  # type: ignore[assignment]
+        event = SubscribeEvent(
+            "/sz 风暴订阅",
+            self.GROUP_TARGET,
+            "456",
+            "Tester",
+            False,
+        )
+        with patch.object(main_module, "AstrAt", FakeAt), patch.object(
+            main_module, "AstrPlain", FakePlain
+        ):
+            result = plugin._handle_emission_subscribe(event)
+        self.assertEqual(result[0], "chain")
+        self.assertEqual(result[1][0].kwargs["qq"], "456")
+        self.assertIn("已成功订阅下一场风暴", result[1][1].text)
+        subscribers = plugin._emission_subscribers()
+        self.assertEqual(len(subscribers), 1)
+        saved = json.loads(plugin._auto_state_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(saved["subscribers"]), 1)
+
+        restarted = self.make_plugin()
+        restarted._auto_state_path = plugin._auto_state_path
+        restarted._auto_state = restarted._load_auto_state()
+        self.assertEqual(len(restarted._emission_subscribers()), 1)
+
+        status = plugin._handle_emission_subscribe(event, "状态")
+        self.assertIn("已订阅下一场风暴", status[1])
+        cancelled = plugin._handle_emission_subscribe(event, "取消")
+        self.assertIn("已取消风暴订阅", cancelled[1])
+        self.assertEqual(plugin._emission_subscribers(), {})
+
+    async def test_private_subscription_has_no_mention(self):
+        class SubscribeEvent(FakeEvent):
+            def __init__(self, text):
+                super().__init__(text)
+                self.unified_msg_origin = self.target = (
+                    "aiocqhttp:FriendMessage:456"
+                )
+
+            def get_sender_id(self):
+                return "456"
+
+            def get_sender_name(self):
+                return "Tester"
+
+            def is_private_chat(self):
+                return True
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin.config["client_id"] = "test"
+        plugin.config["client_secret"] = "test"
+        plugin._auto_state_path = Path(temp.name) / "emission_auto_state.json"
+        plugin._auto_state = {}
+        plugin._start_emission_auto = lambda: None  # type: ignore[assignment]
+        result = plugin._handle_emission_subscribe(SubscribeEvent("/sz 风暴订阅"))
+        self.assertEqual(result[0], "plain")
+        self.assertIn("已成功订阅下一场风暴", result[1])
+        self.assertNotIn("@", result[1])
+
+    async def test_storm_notifies_each_subscriber_once(self):
+        class FakeAt:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class FakePlain:
+            def __init__(self, text):
+                self.text = text
+
+        class FakeChain:
+            def __init__(self, components=None):
+                self.components = list(components or [])
+
+            def at(self, name, qq):
+                self.components.append(FakeAt(name=name, qq=qq))
+                return self
+
+            def message(self, text):
+                self.components.append(FakePlain(text))
+                return self
+
+        class RecordingContext(Context):
+            def __init__(self):
+                self.sent = []
+
+            async def send_message(self, target, chain):
+                self.sent.append((target, chain))
+                return True
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        now = datetime.now(timezone.utc)
+        context = RecordingContext()
+        plugin = StalzonePlugin(
+            context,
+            {"region": "eu", "render_mode": "text"},
+        )
+        plugin._auto_state_path = Path(temp.name) / "emission_auto_state.json"
+        group_key = plugin._subscriber_key(self.GROUP_TARGET, "456")
+        private_key = plugin._subscriber_key(self.PRIVATE_TARGET, "789")
+        plugin._auto_state = {
+            "subscribers": {
+                group_key: {
+                    "session": self.GROUP_TARGET,
+                    "user_id": "456",
+                    "name": "Tester",
+                    "private": False,
+                    "created_at": (now - timedelta(hours=1)).isoformat(),
+                },
+                private_key: {
+                    "session": self.PRIVATE_TARGET,
+                    "user_id": "789",
+                    "name": "Private",
+                    "private": True,
+                    "created_at": (now - timedelta(hours=1)).isoformat(),
+                },
+            }
+        }
+        with patch.object(main_module, "MessageChain", FakeChain):
+            sent = await plugin._notify_emission_subscribers(
+                {"currentStart": now.isoformat()}, now
+            )
+        self.assertEqual(sent, 2)
+        self.assertEqual(len(context.sent), 2)
+        group_target, group_chain = context.sent[0]
+        self.assertEqual(group_target, self.GROUP_TARGET)
+        self.assertIsInstance(group_chain.components[0], FakeAt)
+        self.assertIn("下一场风暴需重新订阅", group_chain.components[1].text)
+        private_target, private_chain = context.sent[1]
+        self.assertEqual(private_target, self.PRIVATE_TARGET)
+        self.assertIsInstance(private_chain.components[0], FakePlain)
+        self.assertNotIn("@", private_chain.components[0].text)
+        self.assertEqual(plugin._emission_subscribers(), {})
+
+    async def test_storm_subscription_waits_for_next_storm(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        now = datetime.now(timezone.utc)
+        plugin = self.make_plugin()
+        plugin._auto_state_path = Path(temp.name) / "emission_auto_state.json"
+        key = plugin._subscriber_key(self.PRIVATE_TARGET, "789")
+        plugin._auto_state = {
+            "subscribers": {
+                key: {
+                    "session": self.PRIVATE_TARGET,
+                    "user_id": "789",
+                    "name": "Private",
+                    "private": True,
+                    "created_at": now.isoformat(),
+                }
+            }
+        }
+        sent = await plugin._notify_emission_subscribers(
+            {"currentStart": (now - timedelta(minutes=5)).isoformat()}, now
+        )
+        self.assertEqual(sent, 0)
+        self.assertEqual(len(plugin._emission_subscribers()), 1)
+
+    async def test_subscription_polls_without_group_whitelist(self):
+        plugin = self.make_plugin()
+        plugin.config["emission_group_whitelist"] = []
+        now = datetime.now(timezone.utc)
+        client = self.Client(
+            {
+                "currentStart": (now - timedelta(minutes=3)).isoformat(),
+                "previousEnd": (now - timedelta(hours=3)).isoformat(),
+            }
+        )
+        plugin._make_client = lambda: client  # type: ignore[assignment]
+        key = plugin._subscriber_key(self.PRIVATE_TARGET, "789")
+        plugin._auto_state = {
+            "last_previous_end": (now - timedelta(hours=3)).isoformat(),
+            "subscribers": {
+                key: {
+                    "session": self.PRIVATE_TARGET,
+                    "user_id": "789",
+                    "name": "Private",
+                    "private": True,
+                    "created_at": (now - timedelta(hours=1)).isoformat(),
+                }
+            },
+        }
+        notified = []
+
+        async def fake_notify(payload, start=None):
+            notified.append((payload, start))
+            return 1
+
+        plugin._notify_emission_subscribers = fake_notify  # type: ignore[assignment]
+        await plugin._emission_auto_tick(force=True)
+        self.assertEqual(client.calls, 1)
+        self.assertEqual(len(notified), 1)
+        self.assertEqual(plugin._auto_diag()["auto_status"], "仅订阅提醒")
+        self.assertNotEqual(plugin._auto_diag()["auto_window"], "不轮询")
 
     async def test_active_end_anchors_window_if_api_lags(self):
         from formatters import parse_auction_time

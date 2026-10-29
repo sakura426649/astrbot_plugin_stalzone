@@ -33,9 +33,15 @@ import httpx
 from astrbot.api.star import Context, Star
 
 try:
-    from astrbot.api.message_components import Image as AstrImage
+    from astrbot.api.message_components import (
+        At as AstrAt,
+        Image as AstrImage,
+        Plain as AstrPlain,
+    )
 except ImportError:  # older/newer layout fallback
     AstrImage = None  # type: ignore[assignment]
+    AstrAt = None  # type: ignore[assignment]
+    AstrPlain = None  # type: ignore[assignment]
 try:
     from astrbot.core.message.message_event_result import MessageChain
 except ImportError:
@@ -224,7 +230,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.7.4"
+PLUGIN_VERSION = "1.8.0"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -796,22 +802,273 @@ class StalzonePlugin(Star):
         if changed:
             self._save_auto_state()
 
+    def _emission_subscribers(self) -> dict[str, dict[str, Any]]:
+        raw = self._auto_state.get("subscribers")
+        if not isinstance(raw, dict):
+            return {}
+        subscribers: dict[str, dict[str, Any]] = {}
+        for key, value in raw.items():
+            if not isinstance(value, dict):
+                continue
+            session = str(value.get("session") or "").strip()
+            user_id = str(value.get("user_id") or "").strip()
+            if not session or not user_id:
+                continue
+            subscribers[str(key)] = {
+                "session": session,
+                "user_id": user_id,
+                "name": str(value.get("name") or user_id),
+                "private": bool(value.get("private")),
+                "created_at": str(value.get("created_at") or ""),
+            }
+        return subscribers
+
+    @staticmethod
+    def _subscriber_key(session: str, user_id: str) -> str:
+        return f"{session}|{user_id}"
+
+    @staticmethod
+    def _event_sender_id(event: Any) -> str:
+        getter = getattr(event, "get_sender_id", None)
+        if callable(getter):
+            try:
+                value = getter()
+            except Exception:
+                value = None
+            if value not in (None, ""):
+                return str(value)
+        for attr in ("sender_id", "user_id"):
+            value = getattr(event, attr, None)
+            if value not in (None, ""):
+                return str(value)
+        raw = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        sender = getattr(raw, "sender", None)
+        value = getattr(sender, "user_id", None)
+        return str(value) if value not in (None, "") else ""
+
+    @staticmethod
+    def _event_sender_name(event: Any) -> str:
+        getter = getattr(event, "get_sender_name", None)
+        if callable(getter):
+            try:
+                value = getter()
+            except Exception:
+                value = None
+            if value not in (None, ""):
+                return str(value)
+        raw = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        sender = getattr(raw, "sender", None)
+        for attr in ("card", "nickname"):
+            value = getattr(sender, attr, None)
+            if value not in (None, ""):
+                return str(value)
+        return ""
+
+    def _event_is_private(self, event: Any) -> bool:
+        checker = getattr(event, "is_private_chat", None)
+        if callable(checker):
+            try:
+                return bool(checker())
+            except Exception:
+                pass
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        if re.search(r"(?i):(?:FriendMessage|PrivateMessage):", session):
+            return True
+        return not self._has_group_umo(session)
+
+    def _subscription_reply(self, event: Any, text: str) -> Any:
+        """Reply with a real @ in groups and plain text in private chats."""
+        private = self._event_is_private(event)
+        name = self._event_sender_name(event)
+        user_id = self._event_sender_id(event)
+        if (
+            not private
+            and user_id
+            and AstrAt is not None
+            and AstrPlain is not None
+            and callable(getattr(event, "chain_result", None))
+        ):
+            try:
+                return event.chain_result(
+                    [
+                        AstrAt(name=name or user_id, qq=user_id),
+                        AstrPlain(f"：{text}"),
+                    ]
+                )
+            except Exception:
+                logger.exception("STALZONE subscription mention failed")
+        if private:
+            return event.plain_result(text)
+        return event.plain_result(
+            f"@{name or user_id}：{text}" if (name or user_id) else text
+        )
+
+    def _subscriber_chain(self, entry: dict[str, Any], text: str) -> Any:
+        if MessageChain is None:
+            raise RuntimeError("MessageChain unavailable")
+        chain = MessageChain()
+        if not entry.get("private"):
+            name = str(entry.get("name") or entry.get("user_id") or "")
+            user_id = str(entry.get("user_id") or "")
+            try:
+                chain.at(name or user_id, user_id)
+            except Exception:
+                chain.message(f"@{name or user_id} ")
+            chain.message(f"：{text}")
+        else:
+            chain.message(text)
+        return chain
+
+    async def _notify_emission_subscribers(
+        self, payload: dict[str, Any], start: Any = None
+    ) -> int:
+        """Notify one-shot subscribers; successful ones are removed."""
+        subscribers = self._emission_subscribers()
+        if not subscribers:
+            return 0
+        start_time = start
+        if not isinstance(start_time, datetime):
+            start_time = parse_auction_time(payload.get("currentStart"))
+        start_label = ""
+        if isinstance(start_time, datetime):
+            try:
+                start_label = start_time.astimezone(CST).strftime("%m-%d %H:%M")
+            except Exception:
+                start_label = ""
+        sent = 0
+        changed = False
+        for key, entry in list(subscribers.items()):
+            created = parse_auction_time(entry.get("created_at"))
+            if (
+                isinstance(start_time, datetime)
+                and created is not None
+                and start_time <= created
+            ):
+                # Subscribed while this storm was already active; keep the
+                # entry for the next storm instead of notifying immediately.
+                continue
+            target = str(entry.get("session") or "")
+            platform = self._platform_from_target(target)
+            if not self._is_auto_supported_platform(platform):
+                logger.warning(
+                    "STALZONE subscription target skipped on unsupported platform: %s",
+                    target,
+                )
+                continue
+            text = "您订阅的风暴已经开始"
+            if start_label:
+                text += f"（{start_label}）"
+            text += "，下一场风暴需重新订阅。"
+            try:
+                chain = self._subscriber_chain(entry, text)
+                result = await self.context.send_message(target, chain)
+                if result is False:
+                    raise RuntimeError("send_message returned False")
+                subscribers.pop(key, None)
+                changed = True
+                sent += 1
+            except Exception:
+                logger.warning(
+                    "STALZONE subscription notification failed for %s",
+                    target,
+                    exc_info=True,
+                )
+        if changed:
+            self._auto_state["subscribers"] = subscribers
+            self._save_auto_state()
+        return sent
+
+    def _handle_emission_subscribe(self, event: Any, argument: str = "") -> Any:
+        action = str(argument or "").strip().lower()
+        if action in {"取消", "退订", "unsubscribe", "off"}:
+            action = "cancel"
+        elif action in {"状态", "status", "查询"}:
+            action = "status"
+        elif action:
+            return event.plain_result("用法：/sz 风暴订阅 [取消|状态]")
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        if not session:
+            return event.plain_result("无法识别当前会话，订阅失败。")
+        platform = self._platform_from_target(session)
+        if not self._is_auto_supported_platform(platform):
+            return event.plain_result(
+                "当前平台不支持主动推送，暂时无法订阅风暴。"
+            )
+        if not self._auto_notify_enabled():
+            return event.plain_result(
+                "自动风暴提醒已在配置中关闭，暂时无法订阅。"
+            )
+        if not (
+            str(self._cfg("client_id", "") or "").strip()
+            and str(self._cfg("client_secret", "") or "").strip()
+        ):
+            return event.plain_result("未配置 STALZONE API 凭证，无法订阅风暴。")
+        user_id = self._event_sender_id(event)
+        if not user_id:
+            return event.plain_result("无法识别当前用户，订阅失败。")
+        subscribers = self._emission_subscribers()
+        key = self._subscriber_key(session, user_id)
+        if action == "cancel":
+            existed = subscribers.pop(key, None) is not None
+            self._auto_state["subscribers"] = subscribers
+            self._save_auto_state()
+            return self._subscription_reply(
+                event,
+                "已取消风暴订阅。" if existed else "您当前没有风暴订阅。",
+            )
+        if action == "status":
+            entry = subscribers.get(key)
+            if entry is None:
+                return self._subscription_reply(
+                    event,
+                    "当前会话尚未订阅风暴。发送 /sz 风暴订阅 可订阅下一场。",
+                )
+            created = parse_auction_time(entry.get("created_at"))
+            stamp = (
+                created.astimezone(CST).strftime("%m-%d %H:%M")
+                if created is not None
+                else "未知"
+            )
+            return self._subscription_reply(
+                event,
+                f"已订阅下一场风暴（订阅时间 {stamp}，UTC+8）。",
+            )
+        subscribers[key] = {
+            "session": session,
+            "user_id": user_id,
+            "name": self._event_sender_name(event) or user_id,
+            "private": self._event_is_private(event),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._auto_state["subscribers"] = subscribers
+        self._save_auto_state()
+        self._start_emission_auto()
+        return self._subscription_reply(
+            event,
+            "已成功订阅下一场风暴，届时会在当前会话提醒您。",
+        )
+
     def _auto_diag(self) -> dict[str, Any]:
         state = self._auto_state
         whitelist = self._group_values("emission_group_whitelist")
         enabled = self._auto_notify_enabled()
+        subscribers = len(self._emission_subscribers())
         targets = self._notify_targets() if enabled and whitelist else []
         if not enabled:
             status = "关闭"
-        elif not whitelist:
+        elif not whitelist and not subscribers:
             status = "未配置白名单"
+        elif subscribers and not targets:
+            status = "仅订阅提醒"
+        elif subscribers:
+            status = "已启用（群发 + 订阅）"
         elif not targets:
             status = "无可用 OneBot 群"
         else:
             status = "已启用"
         previous_end = parse_auction_time(state.get("last_previous_end"))
         now = datetime.now(timezone.utc)
-        if not whitelist or not targets:
+        if not enabled or (not targets and not subscribers):
             window = "不轮询"
         elif state.get("active"):
             window = "风暴进行中"
@@ -851,6 +1108,7 @@ class StalzonePlugin(Star):
             "auto_window": window,
             "auto_whitelist": len(whitelist),
             "auto_targets": len(targets),
+            "auto_subscribers": subscribers,
             "auto_last_check": stamp(state.get("last_check_at")),
             "auto_last_send": last_send,
             "auto_last_error": str(state.get("last_error") or "—")[:160],
@@ -883,7 +1141,7 @@ class StalzonePlugin(Star):
 
     async def _emission_auto_tick(self, *, force: bool = False) -> bool:
         """Poll the official emission API only in the 2–4h after-storm window."""
-        if not self._notify_targets():
+        if not self._notify_targets() and not self._emission_subscribers():
             return False
         state = self._auto_state
         now = datetime.now(timezone.utc)
@@ -973,6 +1231,17 @@ class StalzonePlugin(Star):
                     "STALZONE automatic emission alert failed for %d target(s)",
                     len(failed),
                 )
+        subscriber_sent = await self._notify_emission_subscribers(
+            payload, current_start
+        )
+        if subscriber_sent:
+            state["last_subscriber_send_at"] = now.isoformat()
+            state["last_subscriber_send"] = subscriber_sent
+            logger.info(
+                "STALZONE emission subscription notified %d user(s) for %s",
+                subscriber_sent,
+                start_key,
+            )
         self._save_auto_state()
         return True
 
@@ -1057,15 +1326,15 @@ class StalzonePlugin(Star):
         if not str(self._cfg("client_secret", "") or "").strip():
             logger.warning("STALZONE automatic emission disabled: missing client_secret")
             return
-        if not self._group_values("emission_group_whitelist"):
+        if not self._group_values("emission_group_whitelist") and not self._emission_subscribers():
             logger.warning(
-                "STALZONE automatic emission has no group whitelist; "
-                "polling and sending stay disabled until groups are added"
+                "STALZONE automatic emission has no group whitelist or "
+                "subscribers; polling stays disabled"
             )
             return
-        if not self._notify_targets():
+        if not self._notify_targets() and not self._emission_subscribers():
             logger.warning(
-                "STALZONE automatic emission has no usable OneBot group target; "
+                "STALZONE automatic emission has no usable OneBot target; "
                 "QQ Official bots cannot send unsolicited alerts"
             )
             return
@@ -1073,8 +1342,10 @@ class StalzonePlugin(Star):
             return
         self._auto_task = asyncio.create_task(self._emission_auto_loop())
         logger.info(
-            "STALZONE automatic emission enabled for region %s",
+            "STALZONE automatic emission enabled for region %s (groups=%d, subscribers=%d)",
             self._region().upper(),
+            len(self._notify_targets()),
+            len(self._emission_subscribers()),
         )
 
     def _start_auto_update(self) -> None:
@@ -2702,6 +2973,9 @@ class StalzonePlugin(Star):
         sub, arg = parse_command(event.message_str)
         if sub == "check_version":
             yield event.plain_result(await self._handle_version_check())
+            return
+        if sub == "emission_subscribe":
+            yield self._handle_emission_subscribe(event, arg)
             return
         privileged = self._event_is_admin(event)
         if sub in {"alert", "set_region", "auction_mode"}:
