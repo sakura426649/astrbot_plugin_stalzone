@@ -2272,6 +2272,20 @@ class ItemIndexTests(unittest.TestCase):
                 )
             )
 
+    def test_skin_name_does_not_shadow_prefixed_weapon(self):
+        # "蜜獾" is both the exact name of the Ratel skin and the suffix of
+        # the AAC Honey Badger weapon. The bare query should mean the weapon;
+        # the skin remains reachable by its English name or ID.
+        weapon, matches = self.index.resolve("蜜獾")
+        self.assertIsNotNone(weapon)
+        self.assertEqual(weapon["id"], "m02jr")
+        self.assertEqual(weapon["cat"], "weapon/assault_rifle")
+        self.assertTrue(
+            any(candidate["id"] == "2o3l6" for candidate in matches)
+        )
+        skin, _ = self.index.resolve("Ratel")
+        self.assertEqual(skin["id"], "2o3l6")
+
     def test_non_artifact_derived_translations(self):
         premium = self.index.get("7l9d3")
         self.assertIsNotNone(premium)

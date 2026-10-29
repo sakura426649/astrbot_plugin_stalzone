@@ -370,6 +370,31 @@ class ItemIndex:
                 if q
                 and q == _normalize(_base_name(str(item.get("zh") or "")))
             ]
+            if len(chinese_exact) == 1:
+                exact_item = chinese_exact[0]
+                exact_top = str(exact_item.get("cat") or "").split("/", 1)[0]
+                # A skin can carry the bare translated name while the weapon
+                # base has a prefix ("蜜獾" skin vs "AAC 蜜獾"). The skin is an
+                # exact alias, but users mean the weapon; prefer the unique
+                # weapon whose Chinese base name ends with the query.
+                if exact_top == "other":
+                    weapon_suffix = [
+                        item
+                        for item in matches
+                        if str(item.get("cat") or "").startswith("weapon/")
+                        and q
+                        and _normalize(
+                            _base_name(str(item.get("zh") or ""))
+                        ).endswith(q)
+                        and _normalize(
+                            _base_name(str(item.get("zh") or ""))
+                        )
+                        != q
+                    ]
+                    if len(weapon_suffix) == 1:
+                        return weapon_suffix[0], matches
+                    if weapon_suffix:
+                        return None, matches
             if (
                 len(chinese_exact) == 1
                 and not str(chinese_exact[0].get("cat") or "").startswith(

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.7.4 - 2026-10-29
+
+### Fixed
+
+- Chinese queries no longer resolve to a skin when the bare translated name is an exact skin name and a weapon base has a prefix. For example `蜜獾` now resolves to `AAC 蜜獾` (weapon) instead of the `Ratel` skin; the skin remains reachable via `Ratel` or its item ID. When several weapon bases match, the plugin shows candidates instead of picking one.
+
+### Tests
+
+- Added a Honey Badger/skin resolution regression; 242 tests and 14 visual signatures pass.
+
 ## 1.7.3 - 2026-10-29
 
 ### Added
