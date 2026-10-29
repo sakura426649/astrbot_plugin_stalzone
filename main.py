@@ -205,7 +205,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.6.1"
+PLUGIN_VERSION = "1.6.2"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -611,6 +611,28 @@ class StalzonePlugin(Star):
             # suffix so the proactive alert targets the group, not a member.
             targets.append(f"{platform}:GroupMessage:{group}")
         return targets
+
+    def _update_notify_targets(self) -> list[str]:
+        raw = str(self._cfg("update_notify_target", "") or "").strip()
+        if not raw:
+            return self._notify_targets()
+        prefix = self._platform_prefix()
+        targets: list[str] = []
+        seen: set[str] = set()
+        for value in re.split(r"[,，;；\s]+", raw):
+            group = self._group_number(value)
+            if not group or not group.isdigit() or group in seen:
+                continue
+            platform = (
+                self._platform_from_target(value)
+                if self._has_group_umo(value)
+                else ""
+            ) or prefix
+            if not self._is_auto_supported_platform(platform):
+                continue
+            seen.add(group)
+            targets.append(f"{platform}:GroupMessage:{group}")
+        return targets or self._notify_targets()
 
     def _auto_target_allowed(self, target: str) -> bool:
         group = self._group_key(target)
@@ -1625,21 +1647,50 @@ class StalzonePlugin(Star):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def _schedule_plugin_reload(self) -> bool:
+    def _schedule_plugin_reload(
+        self,
+        *,
+        notify_targets: list[str] | None = None,
+        notify_text: str = "",
+    ) -> bool:
         manager = getattr(self.context, "_star_manager", None)
         if manager is None:
             return False
 
         async def _reload() -> None:
             await asyncio.sleep(1.2)
+            ok = False
+            error = ""
             try:
                 result = await manager.reload(PLUGIN_NAME)
-                if isinstance(result, tuple) and not result[0]:
-                    logger.error(
-                        "STALZONE self-update reload failed: %s", result[1]
-                    )
-            except Exception:
+                ok = not (isinstance(result, tuple) and not result[0])
+                if not ok:
+                    error = str(result[1] if isinstance(result, tuple) else result)
+                    logger.error("STALZONE self-update reload failed: %s", error)
+            except Exception as exc:
+                error = str(exc)
                 logger.exception("STALZONE self-update reload failed")
+            if not notify_targets or MessageChain is None:
+                return
+            if ok:
+                text = notify_text or "STALZONE 插件热重载完成。"
+            else:
+                text = (
+                    f"STALZONE 自动更新已覆盖文件，但热重载失败：{error}。"
+                    "请在 AstrBot 中手动重载插件。"
+                )
+            for target in dict.fromkeys(
+                str(item).strip() for item in notify_targets if str(item).strip()
+            ):
+                try:
+                    await self.context.send_message(
+                        target, MessageChain().message(text)
+                    )
+                except Exception:
+                    logger.warning(
+                        "STALZONE self-update reload notice failed for %s",
+                        target,
+                    )
 
         self._reload_task = asyncio.create_task(_reload())
         return True
@@ -1832,7 +1883,16 @@ class StalzonePlugin(Star):
                 )
                 zip_path.unlink(missing_ok=True)
                 await self._update_status(event, "覆盖完成，正在热重载…")
-                scheduled = self._schedule_plugin_reload()
+                notify_targets = self._update_notify_targets() if auto else []
+                notify_text = (
+                    f"STALZONE 插件已自动更新到 {latest_tag}，热重载完成。"
+                    if auto
+                    else ""
+                )
+                scheduled = self._schedule_plugin_reload(
+                    notify_targets=notify_targets,
+                    notify_text=notify_text,
+                )
                 tail = (
                     "正在热重载插件，请稍候…"
                     if scheduled

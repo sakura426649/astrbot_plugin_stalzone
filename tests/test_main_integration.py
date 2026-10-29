@@ -423,6 +423,19 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("updater-called", text)
         self.assertEqual(len(called), 1)
 
+    async def test_update_notify_target_explicit_groups(self):
+        plugin = self.make_plugin()
+        plugin.config["update_notify_target"] = (
+            "aiocqhttp:GroupMessage:111, aiocqhttp:GroupMessage:222"
+        )
+        self.assertEqual(
+            plugin._update_notify_targets(),
+            [
+                "aiocqhttp:GroupMessage:111",
+                "aiocqhttp:GroupMessage:222",
+            ],
+        )
+
     async def test_self_update_latest_and_admin_guard(self):
         class AdminEvent(FakeEvent):
             role = "admin"
@@ -494,7 +507,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._apply_update_zip = lambda *args: calls.append(
             ("apply", *args)
         )  # type: ignore[assignment]
-        plugin._schedule_plugin_reload = lambda: False  # type: ignore[assignment]
+        plugin._schedule_plugin_reload = lambda **kwargs: False  # type: ignore[assignment]
         text = await plugin._handle_self_update(AdminEvent("/sz 更新"))
         self.assertIn("更新完成", text)
         self.assertIn("轻量包", text)

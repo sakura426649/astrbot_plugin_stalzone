@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.2 - 2026-10-29
+
+### Added
+
+- Automatic updates now send a post-reload group notice: "STALZONE 插件已自动更新到 vX，热重载完成。" The new `update_notify_target` option accepts one or more group numbers/UMOs; when empty it reuses the emission allow-list groups, and if that is also empty the update only writes logs.
+- If the post-update hot reload fails, the configured notification groups receive a failure notice asking for a manual reload.
+
+### Tests
+
+- Added explicit update-notification target coverage; 228 tests and 13 visual signatures pass.
+
 ## 1.6.1 - 2026-10-29
 
 ### Changed

@@ -90,6 +90,12 @@
     "default": false,
     "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。"
   },
+  "update_notify_target": {
+    "description": "自动更新完成通知群",
+    "type": "string",
+    "default": "",
+    "hint": "群号或 platform:GroupMessage:群号，多个用逗号/空格分隔。留空则复用风暴提醒白名单群；仍为空则只写日志，不发群消息。"
+  },
   "font_path": {
     "description": "中文字体路径（可选）",
     "type": "string",
