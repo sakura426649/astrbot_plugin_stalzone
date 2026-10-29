@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.8.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.9.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -72,7 +72,7 @@
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；优先匹配名称括号内的标签，标签长度不限、不区分大小写；支持战队列表 |
-| **物品图鉴** | 2,636 件物品的中/英/俄/ID 索引，1,359 件详情；基础包内置 828 个常用图标，完整 2,621 图标通过扩展包安装 |
+| **物品图鉴** | 2,636 件物品的中/英/俄/ID 索引，1,359 件详情；支持品质与类型筛选（如 `准镜 红`、`准镜 红 瞄具`、`准镜 瞄具`）；基础包内置 828 个常用图标，完整 2,621 图标通过扩展包安装 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 171 份 2023–2026 官方补丁公告（含 2026-10-28），按物品列出全部改动，支持武器、神器与配件 |
 | **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；预测等级置顶大字展示，等级变化用颜色区分，不请求游戏 API |
@@ -122,8 +122,9 @@
 | `/sz 拍卖显示模式 <0/1/聚合/全部>` | 切换拍卖聚合/全部显示 | `/sz 拍卖显示模式 1` |
 | `/sz 插件更新` / `/sz 更新` / `/sz update` | 通过 GitHub Release 检查并自更新；管理员默认可用 | `/sz 插件更新` |
 | `/sz emission [区服]` | 距上次风暴时间与当前状态 | `/sz 风暴 ru` |
+| `/sz 风暴订阅 [取消/状态]` | 订阅下一场风暴（一次性；群聊 @、私聊直发） | `/sz 风暴订阅` |
 | `/sz player <角色名/UUID> [区服]` | 玩家公开资料、战队、PvP 估算分 | `/sz 玩家 Sakura_Akira eu` |
-| `/sz item <中文名/英文名/ID>` | 物品属性、描述、类别和图标 | `/sz 物品 寒冰` |
+| `/sz item <中文名/英文名/ID> [品质] [类型]` | 物品属性、描述、类别和图标；支持品质/类型筛选 | `/sz 物品 准镜 红 瞄具` |
 | `/sz 候选 <序号>` | 使用最近一次候选继续原查询 | `/sz 候选 1` |
 | `/sz 调整 <装备>` | 官方平衡调整历史 | `/sz 调整 螺旋` |
 | `/sz 通行证计算 <等级> <每日任务> [天数]` | 通行证经验与等级预测 | `/sz 通行证计算 15 15+2 20` |
@@ -373,7 +374,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **248 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **251 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 81%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

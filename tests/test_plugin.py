@@ -2289,6 +2289,59 @@ class ItemIndexTests(unittest.TestCase):
         skin, _ = self.index.resolve("Ratel")
         self.assertEqual(skin["id"], "2o3l6")
 
+    def test_item_filters_parse_quality_and_category(self):
+        self.assertEqual(self.index.parse_filters("准镜 红"), ("准镜", 4, None))
+        self.assertEqual(
+            self.index.parse_filters("准镜 红 瞄具"),
+            ("准镜", 4, "attachment/collimator_sights"),
+        )
+        self.assertEqual(
+            self.index.parse_filters("准镜 瞄具 红"),
+            ("准镜", 4, "attachment/collimator_sights"),
+        )
+        self.assertEqual(
+            self.index.parse_filters("准镜 瞄具"),
+            ("准镜", None, "attachment/collimator_sights"),
+        )
+        # An item whose name is itself a filter word must not be swallowed.
+        self.assertEqual(self.index.parse_filters("红"), ("红", None, None))
+
+    def test_item_filters_narrow_matches_in_one_pass(self):
+        item, matches = self.index.resolve("准镜", quality=4)
+        self.assertIsNone(item)
+        self.assertTrue(matches)
+        self.assertTrue(
+            all(candidate["color"] == "RANK_MASTER" for candidate in matches)
+        )
+        self.assertTrue(
+            all(
+                candidate["cat"] == "attachment/collimator_sights"
+                for candidate in matches
+            )
+        )
+        item, matches = self.index.resolve(
+            "准镜",
+            quality=4,
+            category="attachment/collimator_sights",
+        )
+        self.assertIsNone(item)
+        self.assertEqual(len(matches), 11)
+        self.assertIsNone(
+            self.index.resolve(
+                "准镜",
+                quality=5,
+                category="attachment/collimator_sights",
+            )[0]
+        )
+        weapon, _ = self.index.resolve(
+            "AAC 蜜獾",
+            quality=4,
+            category="weapon/assault_rifle",
+        )
+        self.assertEqual(weapon["id"], "m02jr")
+        # A raw ID still respects an explicitly contradictory filter.
+        self.assertIsNone(self.index.resolve("m02jr", quality=0)[0])
+
     def test_non_artifact_derived_translations(self):
         premium = self.index.get("7l9d3")
         self.assertIsNotNone(premium)

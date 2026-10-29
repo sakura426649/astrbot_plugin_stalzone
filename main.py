@@ -87,6 +87,7 @@ try:  # Package import (normal AstrBot plugin loading).
         format_diag,
         format_emission,
         format_help,
+        QUALITY_NAMES,
         format_item,
         format_item_candidates,
         format_operations,
@@ -166,6 +167,7 @@ except ImportError:  # Direct execution / flat import fallback.
         format_diag,
         format_emission,
         format_help,
+        QUALITY_NAMES,
         format_item,
         format_item_candidates,
         format_operations,
@@ -230,7 +232,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.8.1"
+PLUGIN_VERSION = "1.9.0"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -405,13 +407,17 @@ USAGE = {
         "  /sz 风暴 ru"
     ),
     "item": (
-        "用法：/sz 物品 <中文名/英文名/物品ID>\n"
-        "说明：查看物品属性、描述、类别和图标\n"
+        "用法：/sz 物品 <中文名/英文名/物品ID> [品质] [类型]\n"
+        "说明：查看物品属性、描述、类别和图标；品质/类型筛选可同时使用\n"
         "参数：\n"
         "  物品   必填，支持中文名、英文名或 ID\n"
+        "  品质   可选，白/绿/蓝/粉/红/金 或 常见/罕见/特殊/稀有/独特/传奇\n"
+        "  类型   可选，如 武器/瞄具/弹匣/护甲/神器/消耗品；筛选词顺序任意\n"
         "示例：\n"
         "  /sz 物品 寒冰\n"
-        "  /sz 物品 Spectral Crystal"
+        "  /sz 物品 准镜 红\n"
+        "  /sz 物品 准镜 红 瞄具\n"
+        "  /sz 物品 准镜 瞄具"
     ),
     "player": (
         "用法：/sz 玩家 <角色名/UUID> [区服]\n"
@@ -3867,7 +3873,15 @@ class StalzonePlugin(Star):
     ) -> str | PluginReply:
         if not self.item_index.ready:
             return "物品索引未加载，请联系管理员更新 item_index.json。"
-        item, matches = await asyncio.to_thread(self._resolve_item, query)
+        base_query, quality_filter, category_filter = (
+            self.item_index.parse_filters(query)
+        )
+        item, matches = await asyncio.to_thread(
+            self.item_index.resolve,
+            base_query,
+            quality=quality_filter,
+            category=category_filter,
+        )
         if item:
             details = self.item_index.get_details(item["id"])
             return PluginReply(
@@ -3891,6 +3905,22 @@ class StalzonePlugin(Star):
                 text,
                 candidate_view=build_item_candidate_view(query, candidates),
                 sub="candidates",
+            )
+        if quality_filter is not None or category_filter:
+            filters = []
+            if quality_filter is not None:
+                short = QUALITY_NAMES.get(quality_filter, ("", ""))[1]
+                filters.append(f"品质 {short}")
+            if category_filter:
+                filters.append(f"类型 {category_label(category_filter)}")
+            return self._not_found(
+                "item",
+                query,
+                region="全服",
+                note=(
+                    f"没有符合{'、'.join(filters)}筛选的物品；"
+                    "可去掉筛选词后重试。"
+                ),
             )
         return self._not_found("item", query, region="全服")
 

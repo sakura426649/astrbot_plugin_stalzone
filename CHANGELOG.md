@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.9.0 - 2026-10-29
+
+### Added
+
+- `/sz 物品` accepts optional trailing quality and category filters in either order: `准镜 红`, `准镜 红 瞄具`, `准镜 瞄具`. Quality accepts 白/绿/蓝/粉/红/金 and English aliases; category accepts labels such as 武器/瞄具/弹匣/护甲/神器/消耗品, plus aliases like 瞄准镜/红点/全息/弹夹/皮肤.
+- Filtering is applied during the single catalog scan before alias ranking, so adding filters does not trigger repeated full searches. Raw IDs also respect a contradictory filter; an empty filtered result shows a filter-specific notice instead of a generic "item not found" card.
+
+### Tests
+
+- Added parser, single-pass narrowing, out-of-range filter and missing-result coverage; 251 tests and 14 visual signatures pass.
+
 ## 1.8.1 - 2026-10-29
 
 ### Changed

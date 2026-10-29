@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.8.1-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.9.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -70,8 +70,9 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | `/sz auction <item> [quality] [affix] [date] [count]` | Active lots and sold history; weapon modules accept fuzzy affix filters and are named by their three rolled affixes |
 | `/sz emission [region]` | Time since the last emission and current status |
+| `/sz 风暴订阅 [cancel/status]` | One-shot subscription to the next storm (group mention, private DM) |
 | `/sz player <name/UUID> [region]` | Public profile, clan, PvP estimate and optional Lunar data |
-| `/sz item <name/ID>` | Item stats, description, category and icon |
+| `/sz item <name/ID> [quality] [category]` | Item stats, description, category and icon; quality/category filters |
 | `/sz candidate <number>` | Replay the previous query with a candidate |
 | `/sz balance <item>` | Official balance-change history |
 | `/sz pass <level> <daily> [overload] <days>` | Season-pass level prediction |

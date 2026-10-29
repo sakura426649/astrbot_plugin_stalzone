@@ -1131,6 +1131,20 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("寒冰 / Chilly", text)
         self.assertIn("ljn2", text)
 
+    async def test_item_quality_category_filters(self):
+        plugin = self.make_plugin()
+        result = await plugin._handle_item("准镜 红 瞄具")
+        self.assertIsInstance(result, PluginReply)
+        self.assertEqual(result.sub, "candidates")
+        self.assertEqual(result.candidate_view["count"], 11)
+        detail = await plugin._handle_item("AAC 蜜獾 红 突击步枪")
+        self.assertIsInstance(detail, PluginReply)
+        self.assertEqual(detail.item_meta["en"], "AAC Honey Badger")
+        empty = await plugin._handle_item("准镜 金 瞄具")
+        self.assertIsInstance(empty, PluginReply)
+        self.assertEqual(empty.sub, "notice")
+        self.assertIn("没有符合", empty.notice_view["note"])
+
     async def test_auction_premium_chinese_name(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]

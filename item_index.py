@@ -83,6 +83,61 @@ def _base_name(text: str) -> str:
     return re.split(r"[（(]", text, maxsplit=1)[0].strip()
 
 
+ITEM_QUALITY_FILTERS = {
+    "常见": 0, "白": 0, "白色": 0, "common": 0, "white": 0,
+    "罕见": 1, "绿": 1, "绿色": 1, "uncommon": 1, "green": 1,
+    "特殊": 2, "蓝": 2, "蓝色": 2, "special": 2, "blue": 2,
+    "稀有": 3, "粉": 3, "粉色": 3, "rare": 3, "pink": 3,
+    "独特": 4, "红": 4, "红色": 4, "unique": 4, "red": 4,
+    "传奇": 5, "金": 5, "金色": 5, "legendary": 5, "gold": 5,
+}
+ITEM_QUALITY_BY_COLOR = {
+    "DEFAULT": 0,
+    "RANK_NEWBIE": 1,
+    "RANK_STALKER": 2,
+    "RANK_VETERAN": 3,
+    "RANK_MASTER": 4,
+    "RANK_LEGEND": 5,
+}
+_EXTRA_CATEGORY_ALIASES = {
+    "瞄准镜": "attachment/collimator_sights",
+    "红点": "attachment/collimator_sights",
+    "全息": "attachment/collimator_sights",
+    "弹夹": "attachment/mag",
+    "皮肤": "other/skins",
+    "时装": "other/skins",
+    "近战武器": "weapon/melee",
+    "sights": "attachment/collimator_sights",
+}
+
+
+def _build_category_filters() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for category, label in CATEGORY_LABELS.items():
+        values = [category, label]
+        if "/" in label:
+            values.append(label.rsplit("/", 1)[-1].strip())
+        for value in values:
+            key = _normalize(value)
+            if key:
+                result.setdefault(key, category)
+    for alias, category in _EXTRA_CATEGORY_ALIASES.items():
+        result.setdefault(_normalize(alias), category)
+    return result
+
+
+CATEGORY_FILTER_ALIASES = _build_category_filters()
+
+
+def _quality_tier(item: dict[str, Any]) -> int | None:
+    return ITEM_QUALITY_BY_COLOR.get(str(item.get("color") or "").upper())
+
+
+def _matches_category(item: dict[str, Any], category: str) -> bool:
+    current = str(item.get("cat") or "")
+    return current == category or current.startswith(f"{category}/")
+
+
 def _aliases(item: dict[str, Any]) -> list[str]:
     zh = str(item.get("zh") or "").strip()
     en = str(item.get("en") or "").strip()
@@ -242,7 +297,14 @@ class ItemIndex:
         cached = self._alias_cache.get(str(item.get("id") or ""))
         return cached if cached is not None else tuple(_aliases(item))
 
-    def search(self, query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int = 8,
+        quality: int | None = None,
+        category: str | None = None,
+    ) -> list[dict[str, Any]]:
         q = _normalize(query)
         if not q or not self.items:
             return []
@@ -260,6 +322,10 @@ class ItemIndex:
         fuzzy: list[tuple[float, dict[str, Any]]] = []
         fuzzy_enabled = any(len(term) >= 3 for term in terms)
         for item in self.items:
+            if quality is not None and _quality_tier(item) != quality:
+                continue
+            if category is not None and not _matches_category(item, category):
+                continue
             aliases = self._aliases_for(item)
             if any(term in aliases for term in terms):
                 exact.append(item)
@@ -339,15 +405,72 @@ class ItemIndex:
             result = [item for item, _ in nearby[:limit]]
         return result
 
-    def resolve(self, query: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    def parse_filters(
+        self, argument: str
+    ) -> tuple[str, int | None, str | None]:
+        """Split trailing quality/category filters from an item query.
+
+        ``准镜 红 瞄具`` -> (``准镜``, red, collimator_sights).  At most two
+        trailing tokens are consumed, and the query keeps at least one token
+        so an item literally named ``红`` can still be looked up.
+        """
+        original = " ".join(str(argument or "").split())
+        if not original:
+            return "", None, None
+        tokens = original.split(" ")
+        quality: int | None = None
+        category: str | None = None
+        consumed = 0
+        for token in reversed(tokens):
+            if consumed >= 2 or len(tokens) - consumed < 2:
+                break
+            key = _normalize(token)
+            tier = ITEM_QUALITY_FILTERS.get(key)
+            if tier is not None:
+                if quality is None:
+                    quality = tier
+                    consumed += 1
+                    continue
+                break
+            matched_category = CATEGORY_FILTER_ALIASES.get(key)
+            if matched_category is not None:
+                if category is None:
+                    category = matched_category
+                    consumed += 1
+                    continue
+                break
+            break
+        if consumed == 0:
+            return original, None, None
+        base = " ".join(tokens[:-consumed]).strip()
+        if not base:
+            return original, None, None
+        return base, quality, category
+
+    def resolve(
+        self,
+        query: str,
+        *,
+        quality: int | None = None,
+        category: str | None = None,
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         """Return (unique item or None, matches).
 
         A raw item ID always wins; otherwise an exact alias with one match wins.
+        Optional quality/category filters are applied before ranking so a
+        filtered query only scans the item catalog once.
         """
         raw = str(query or "").strip()
         if raw in self.by_id:
-            return self.by_id[raw], [self.by_id[raw]]
-        matches = self.search(raw, limit=20)
+            item = self.by_id[raw]
+            if quality is not None and _quality_tier(item) != quality:
+                return None, []
+            if category is not None and not _matches_category(item, category):
+                return None, []
+            return item, [item]
+        matches = self.search(
+            raw, limit=20, quality=quality, category=category
+        )
         if len(matches) == 1:
             return matches[0], matches
         if matches:
