@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.0"
+PLUGIN_VERSION = "1.11.1"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1514,18 +1514,21 @@ class StalzonePlugin(Star):
     ) -> tuple[int | None, int, int]:
         now = now or datetime.now(timezone.utc)
         cutoff = now - timedelta(days=3)
-        values: list[int] = []
+        values: list[float] = []
         raw = payload.get("prices") if isinstance(payload, dict) else None
         for entry in raw if isinstance(raw, list) else []:
             if not isinstance(entry, dict):
                 continue
             price = self._arsenal_int(entry.get("price"))
+            amount = self._arsenal_int(entry.get("amount")) or 1
             timestamp = parse_auction_time(entry.get("time"))
             if not price or price <= 0:
                 continue
             if timestamp is not None and timestamp < cutoff:
                 continue
-            values.append(price)
+            # History price is the whole lot; stackable items must be
+            # normalized to a per-unit price before taking the median.
+            values.append(price / max(1, amount))
         if len(values) < 5:
             return None, len(values), 0
         values.sort()
@@ -1537,9 +1540,9 @@ class StalzonePlugin(Star):
         median = (
             trimmed[middle]
             if len(trimmed) % 2
-            else (trimmed[middle - 1] + trimmed[middle]) // 2
+            else (trimmed[middle - 1] + trimmed[middle]) / 2
         )
-        return median, len(values), drop * 2
+        return int(round(median)), len(values), drop * 2
 
     async def _refresh_arsenal_snapshot(self) -> None:
         if not self._arsenal_static:

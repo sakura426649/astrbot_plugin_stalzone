@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.1 - 2026-11-01
+
+### Fixed
+
+- Arsenal price refresh now converts each official sale's total lot price to a per-unit price (`price / amount`) before taking the 3-day median. Previously stackable items used the whole lot price as the unit price, making their 10K cost and ranking wrong.
+
+### Tests
+
+- Added a stacked-lot unit-price regression; 262 tests and 14 visual signatures pass.
+
 ## 1.11.0 - 2026-11-01
 
 ### Added

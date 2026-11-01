@@ -1168,6 +1168,26 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(median, 100)
         self.assertLessEqual(median, 190)
 
+    def test_arsenal_median_uses_unit_price_for_stacks(self):
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        payload = {
+            "prices": [
+                {
+                    "price": 2000,
+                    "amount": 2,
+                    "time": (now - timedelta(hours=1)).isoformat(),
+                }
+                for _ in range(6)
+            ]
+        }
+        plugin = self.make_plugin()
+        median, deals, dropped = plugin._arsenal_median(payload)
+        self.assertEqual(deals, 6)
+        self.assertEqual(dropped, 0)
+        self.assertEqual(median, 1000)
+
     async def test_arsenal_refresh_swaps_snapshot(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
