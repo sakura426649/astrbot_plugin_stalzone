@@ -1472,20 +1472,68 @@ def build_auction_view(
                     f"{short_label}｜{len(rows):,} 条在售｜全部显示"
                 )
             else:
-                levels: dict[int, dict[str, Any]] = {}
+                level_slots: dict[int, dict[str, dict[str, Any] | None]] = {}
+
+                def level_rank(row: dict[str, Any], buyout: bool) -> int:
+                    value = int(
+                        row.get("buyout_value" if buyout else "start_value") or 0
+                    )
+                    return value or int(row.get("sort_price") or 0)
+
                 for row in all_rows:
                     level = int(row.get("level") or 0)
-                    current = levels.get(level)
-                    if current is None or row["sort_price"] < current["sort_price"]:
-                        levels[level] = row
+                    slot = level_slots.setdefault(
+                        level, {"buyout": None, "auction": None}
+                    )
+                    buyout = int(row.get("buyout_value") or 0)
+                    if buyout > 0:
+                        current = slot["buyout"]
+                        if current is None or level_rank(row, True) < level_rank(
+                            current, True
+                        ):
+                            slot["buyout"] = row
+                    else:
+                        current = slot["auction"]
+                        if current is None or level_rank(row, False) < level_rank(
+                            current, False
+                        ):
+                            slot["auction"] = row
+
+                selected: list[dict[str, Any]] = []
+                for level, slot in level_slots.items():
+                    buyout_row = slot["buyout"]
+                    auction_row = slot["auction"]
+                    buyout_value = (
+                        int(buyout_row.get("buyout_value") or 0)
+                        if buyout_row is not None
+                        else 0
+                    )
+                    if buyout_row is not None:
+                        selected.append(buyout_row)
+                    if auction_row is not None:
+                        start_value = int(auction_row.get("start_value") or 0)
+                        if buyout_row is None or start_value < buyout_value:
+                            row = dict(auction_row)
+                            row["buyout"] = "—"
+                            row["buyout_value"] = 0
+                            row["offer_kind"] = "auction"
+                            row["offer_label"] = "竞拍"
+                            row.pop("lowest", None)
+                            row.pop("lowest_label", None)
+                            row.pop("badges", None)
+                            selected.append(row)
                 rows = sorted(
-                    levels.values(),
+                    selected,
                     key=lambda row: row["sort_price"],
                     reverse=True,
                 )
+                for row in rows:
+                    level = int(row.get("level") or 0)
+                    row["level_count"] = level_counts.get((quality, level), 1)
+                groups_count = len(level_slots)
                 header = (
                     f"{short_label}｜{len(all_rows):,} 条在售"
-                    f"｜{len(levels)} 个等级"
+                    f"｜{groups_count} 个等级"
                 )
             grouped.append(
                 {
@@ -1503,7 +1551,7 @@ def build_auction_view(
         active_grouped = True
         active_note = (
             f"神器在售共 {active_total:,} 条；红/金品质全部显示，"
-            "其他品质按 +等级保留最低价，组内按价格倒序"
+            "其他品质按 +等级优先最低买断，无买断竞拍更低时并列"
         )
 
     if (module_mode or per_quality_recent) and (
@@ -1914,7 +1962,7 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
             active_heading = "在售（按买断价从高到低）"
             if view.get("active_grouped"):
                 active_heading += (
-                    f"｜共 {view['active_total']:,} 条，按品质分组显示每级最低价"
+                    f"｜共 {view['active_total']:,} 条，按品质分组显示每级最低买断/竞拍"
                 )
             elif view.get("active_truncated"):
                 active_heading += (

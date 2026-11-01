@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.5 - 2026-11-01
+
+### Fixed
+
+- Artifact level aggregation no longer treats a missing buyout as a cheap buyout. Each level now keeps the lowest **buyout** row; if that level also has an auction-only row cheaper than that buyout, the auction row is appended with `买断 —` instead of hiding the buyout.
+- Quantity aggregation already kept both rows; added a regression to lock the behavior for an auction-only lot plus a real buyout.
+
+### Tests
+
+- Added artifact buyout-priority and quantity buyout retention regressions; 266 tests and 14 visual signatures pass.
+
 ## 1.11.4 - 2026-11-01
 
 ### Fixed

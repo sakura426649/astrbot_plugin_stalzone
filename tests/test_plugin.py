@@ -1298,8 +1298,105 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertEqual({row["level_count"] for row in rows}, {4})
         text = format_auction_text(view)
-        self.assertIn("按品质分组显示每级最低价", text)
-        self.assertIn("其他品质按 +等级保留最低价，组内按价格倒序", text)
+        self.assertIn("按品质分组显示每级最低买断/竞拍", text)
+        self.assertIn("其他品质按 +等级优先最低买断，无买断竞拍更低时并列", text)
+
+    def test_artifact_group_prefers_buyout_over_auction_only(self):
+        lots = {
+            "total": 41,
+            "lots": [
+                {
+                    "amount": 1,
+                    "startPrice": 1000 + i,
+                    "buyoutPrice": 2000 + i,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 3, "ptn": i % 10},
+                }
+                for i in range(40)
+            ]
+            + [
+                {
+                    "amount": 1,
+                    "startPrice": 1,
+                    "buyoutPrice": None,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {"qlt": 3, "ptn": 0},
+                }
+            ],
+        }
+        view = build_auction_view(
+            "wg53",
+            lots,
+            {"total": 0, "prices": []},
+            "ru",
+            now=self.NOW,
+            item_label="原子 / Atom",
+        )
+        self.assertIsNotNone(view)
+        rows = [
+            row
+            for row in view["active"]
+            if not row.get("quality_header") and row["level"] == 0
+        ]
+        self.assertEqual(len(rows), 2)
+        buyout_row = next(row for row in rows if row["buyout_value"] > 0)
+        auction_row = next(row for row in rows if row["buyout_value"] == 0)
+        self.assertEqual(buyout_row["buyout_value"], 2000)
+        self.assertEqual(buyout_row["start_value"], 1000)
+        self.assertEqual(auction_row["start_value"], 1)
+        self.assertEqual(auction_row["buyout"], "—")
+
+    def test_quantity_group_keeps_buyout_row_for_auction_only_lot(self):
+        lots = {
+            "total": 4,
+            "lots": [
+                {
+                    "amount": 5,
+                    "startPrice": 500,
+                    "buyoutPrice": None,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+                {
+                    "amount": 5,
+                    "startPrice": 900,
+                    "buyoutPrice": 1000,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+                {
+                    "amount": 10,
+                    "startPrice": 1800,
+                    "buyoutPrice": 2100,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+                {
+                    "amount": 10,
+                    "startPrice": 1900,
+                    "buyoutPrice": 2000,
+                    "endTime": "2026-10-25T06:00:00Z",
+                    "additional": {},
+                },
+            ],
+        }
+        view = build_auction_view(
+            "cig",
+            lots,
+            {"total": 0, "prices": []},
+            "eu",
+            now=self.NOW,
+            item_label="香烟",
+            non_artifact=True,
+        )
+        self.assertIsNotNone(view)
+        amount_five = [
+            row for row in view["active"] if int(row.get("amount") or 0) == 5
+        ]
+        self.assertEqual(len(amount_five), 2)
+        self.assertEqual(
+            sorted(int(row["buyout_value"]) for row in amount_five), [0, 1000]
+        )
 
     def test_artifact_gold_does_not_trigger_limit(self):
         lots = []
