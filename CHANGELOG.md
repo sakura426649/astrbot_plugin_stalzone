@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.6 - 2026-11-01
+
+### Fixed
+
+- Bundled the three `7.62` candidate icons (`m0gv2`, `0rpqy`, `1r3j2`) that were previously fetched from the item CDN during tests. This removes the network flake that failed the v1.11.5 Release workflow twice.
+- Includes the v1.11.5 artifact-group fix: each level keeps its lowest buyout; a cheaper auction-only listing is appended instead of hiding the buyout.
+
+### Tests
+
+- 266 tests and 14 visual signatures pass.
+
 ## 1.11.5 - 2026-11-01
 
 ### Fixed
