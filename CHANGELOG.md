@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.3 - 2026-11-01
+
+### Changed
+
+- Arsenal median is now weighted by `amount`: each history entry contributes its per-unit price with the stack size as weight. Example `1@110 + 5@120 + 1@125 + 1@130 + 1@135` now returns 120, not 125.
+- Outlier trimming now removes 10% of *units* from each tail instead of 10% of lots, so a large stack is not discarded as a single outlier.
+- Cache schema bumped to version 3, invalidating medians computed before the weighted algorithm. Arsenal cache cleanup also drops unknown/removed item keys and stale `.tmp` files.
+
+### Tests
+
+- Added weighted-median and cache-pruning regressions; 264 tests and 14 visual signatures pass.
+
 ## 1.11.2 - 2026-11-01
 
 ### Fixed

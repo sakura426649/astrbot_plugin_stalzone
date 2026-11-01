@@ -238,8 +238,8 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.2"
-ARSENAL_CACHE_VERSION = 2
+PLUGIN_VERSION = "1.11.3"
+ARSENAL_CACHE_VERSION = 3
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -588,6 +588,7 @@ class StalzonePlugin(Star):
         self._arsenal_lock: asyncio.Lock | None = None
         self._query_depth = 0
         self._load_arsenal_cache()
+        self._prune_arsenal_cache()
         self._update_lock = asyncio.Lock()
         self._reload_task: asyncio.Task | None = None
         self._update_auto_task: asyncio.Task | None = None
@@ -1454,6 +1455,10 @@ class StalzonePlugin(Star):
         if not isinstance(payload, dict):
             return
         if payload.get("version") != ARSENAL_CACHE_VERSION:
+            try:
+                self._arsenal_cache_path.unlink(missing_ok=True)
+            except OSError:
+                pass
             return
         region = str(payload.get("region") or "").lower()
         if region and region != self._region():
@@ -1468,6 +1473,31 @@ class StalzonePlugin(Star):
         }
         self._arsenal_generated_at = str(payload.get("generated_at") or "")
         self._arsenal_cache_region = region
+
+    def _prune_arsenal_cache(self) -> None:
+        """Drop obsolete keys and abandoned temp files from the cache."""
+        valid = {
+            str(item.get("key") or item.get("lunar_id") or "")
+            for item in self._arsenal_static
+            if item.get("key") or item.get("lunar_id")
+        }
+        cleaned = {
+            key: value
+            for key, value in self._arsenal_prices.items()
+            if key in valid
+            and isinstance(value, dict)
+            and (self._arsenal_int(value.get("price")) or 0) > 0
+        }
+        changed = cleaned != self._arsenal_prices
+        self._arsenal_prices = cleaned
+        temp = self._arsenal_cache_path.with_suffix(".tmp")
+        try:
+            if temp.is_file() and time.time() - temp.stat().st_mtime > 3600:
+                temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if changed:
+            self._save_arsenal_cache()
 
     def _arsenal_cache_stale(self) -> bool:
         if self._arsenal_cache_region != self._region():
@@ -1518,7 +1548,8 @@ class StalzonePlugin(Star):
     ) -> tuple[int | None, int, int]:
         now = now or datetime.now(timezone.utc)
         cutoff = now - timedelta(days=3)
-        values: list[float] = []
+        samples: list[list[float]] = []
+        total_weight = 0
         raw = payload.get("prices") if isinstance(payload, dict) else None
         for entry in raw if isinstance(raw, list) else []:
             if not isinstance(entry, dict):
@@ -1532,21 +1563,63 @@ class StalzonePlugin(Star):
                 continue
             # History price is the whole lot; stackable items must be
             # normalized to a per-unit price before taking the median.
-            values.append(price / max(1, amount))
-        if len(values) < 5:
-            return None, len(values), 0
-        values.sort()
-        drop = int(len(values) * 0.10)
-        trimmed = values[drop : len(values) - drop] if drop else values
-        if not trimmed:
-            return None, len(values), 0
-        middle = len(trimmed) // 2
-        median = (
-            trimmed[middle]
-            if len(trimmed) % 2
-            else (trimmed[middle - 1] + trimmed[middle]) / 2
+            unit = price / max(1, amount)
+            samples.append([unit, max(1, amount)])
+            total_weight += max(1, amount)
+        deals = len(samples)
+        if total_weight < 5:
+            return None, deals, 0
+        samples.sort(key=lambda sample: sample[0])
+        trim = int(total_weight * 0.10)
+        dropped = 0
+
+        # Trim 10% of *units* from each tail, not 10% of lots, so a large
+        # stack cannot be removed as if it were one outlier.
+        def _trim_low(amount: int) -> int:
+            consumed = 0
+            index = 0
+            while amount > 0 and index < len(samples):
+                take = min(amount, int(samples[index][1]))
+                samples[index][1] -= take
+                amount -= take
+                consumed += take
+                if samples[index][1] <= 0:
+                    samples.pop(index)
+                else:
+                    index += 1
+            return consumed
+
+        def _trim_high(amount: int) -> int:
+            consumed = 0
+            index = len(samples) - 1
+            while amount > 0 and index >= 0:
+                take = min(amount, int(samples[index][1]))
+                samples[index][1] -= take
+                amount -= take
+                consumed += take
+                if samples[index][1] <= 0:
+                    samples.pop(index)
+                index -= 1
+            return consumed
+
+        dropped += _trim_low(trim)
+        dropped += _trim_high(trim)
+        remaining_weight = sum(int(sample[1]) for sample in samples)
+        if remaining_weight <= 0:
+            return None, deals, dropped
+        target = (remaining_weight + 1) / 2
+        accumulated = 0.0
+        median = samples[-1][0] if samples else None
+        for unit, weight in samples:
+            accumulated += int(weight)
+            if accumulated >= target:
+                median = unit
+                break
+        return (
+            int(round(median)) if median is not None else None,
+            deals,
+            dropped,
         )
-        return int(round(median)), len(values), drop * 2
 
     async def _refresh_arsenal_snapshot(self) -> None:
         if not self._arsenal_static:
@@ -1629,6 +1702,7 @@ class StalzonePlugin(Star):
         while True:
             try:
                 self._load_arsenal_cache()
+                self._prune_arsenal_cache()
                 if self._arsenal_cache_stale():
                     await self._refresh_arsenal_snapshot()
             except asyncio.CancelledError:

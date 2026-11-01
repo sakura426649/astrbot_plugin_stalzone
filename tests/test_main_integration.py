@@ -1185,8 +1185,45 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin = self.make_plugin()
         median, deals, dropped = plugin._arsenal_median(payload)
         self.assertEqual(deals, 6)
-        self.assertEqual(dropped, 0)
+        self.assertEqual(dropped, 2)
         self.assertEqual(median, 1000)
+
+    def test_arsenal_median_weights_stack_amounts(self):
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        rows = [(110, 1), (120, 5), (125, 1), (130, 1), (135, 1)]
+        payload = {
+            "prices": [
+                {
+                    "price": price * amount,
+                    "amount": amount,
+                    "time": (now - timedelta(hours=1)).isoformat(),
+                }
+                for price, amount in rows
+            ]
+        }
+        plugin = self.make_plugin()
+        median, deals, dropped = plugin._arsenal_median(payload)
+        self.assertEqual(deals, 5)
+        self.assertEqual(dropped, 0)
+        self.assertEqual(median, 120)
+
+    def test_arsenal_cache_prunes_unknown_keys(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin._arsenal_cache_path = Path(temp.name) / "arsenal_prices.json"
+        first_key = plugin._arsenal_static[0]["key"]
+        plugin._arsenal_prices = {
+            first_key: {"price": 100},
+            "removed_item": {"price": 200},
+            "bad_entry": {"price": 0},
+        }
+        plugin._arsenal_generated_at = "2026-11-01T00:00:00+00:00"
+        plugin._arsenal_cache_region = "eu"
+        plugin._prune_arsenal_cache()
+        self.assertEqual(set(plugin._arsenal_prices), {first_key})
 
     async def test_arsenal_refresh_swaps_snapshot(self):
         temp = tempfile.TemporaryDirectory()
@@ -1229,7 +1266,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._make_client = lambda: HistoryClient()  # type: ignore[assignment]
         await plugin._refresh_arsenal_snapshot()
         self.assertEqual(HistoryClient.calls, 1)
-        self.assertEqual(plugin._arsenal_prices["test-item"]["price"], 125)
+        self.assertEqual(plugin._arsenal_prices["test-item"]["price"], 130)
         self.assertTrue(plugin._arsenal_cache_path.exists())
 
     async def test_arsenal_refresh_yields_to_foreground(self):
