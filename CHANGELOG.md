@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.4 - 2026-11-01
+
+### Fixed
+
+- Self-update downloads now probe the direct GitHub URL and both gh-proxy mirrors with a short ranged read, then download through the fastest one. Previously a slow-but-not-failing direct stream never fell back to a proxy.
+- The update start message now includes the package size (for example `完整包 38.8 MB`), and logs record the probe speed, source, downloaded size and elapsed time. This makes slow home connections distinguishable from the smaller light package used on a server.
+- The probe uses at most 512 KiB / 4 seconds per candidate; normal fast servers only add a fraction of a second.
+
+### Tests
+
+- 264 tests and 14 visual signatures pass.
+
 ## 1.11.3 - 2026-11-01
 
 ### Changed

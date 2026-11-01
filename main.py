@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.3"
+PLUGIN_VERSION = "1.11.4"
 ARSENAL_CACHE_VERSION = 3
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -2954,6 +2954,32 @@ class StalzonePlugin(Star):
             )
         raise PluginUpdateError("GitHub Release 返回格式异常。")
 
+    async def _probe_download_speed(
+        self, client: httpx.AsyncClient, url: str
+    ) -> float:
+        """Measure a short ranged read so slow direct routes lose to proxies."""
+        started = time.monotonic()
+        received = 0
+        try:
+            async with client.stream(
+                "GET", url, headers={"Range": "bytes=0-1048575"}
+            ) as response:
+                if response.status_code not in (200, 206):
+                    return 0.0
+                async for chunk in response.aiter_bytes(65536):
+                    if not chunk:
+                        continue
+                    received += len(chunk)
+                    if (
+                        received >= 1024 * 1024
+                        or time.monotonic() - started >= 5.0
+                    ):
+                        break
+        except Exception:
+            return 0.0
+        elapsed = max(0.05, time.monotonic() - started)
+        return received / elapsed
+
     async def _download_update_asset(self, url: str, destination: Path) -> None:
         headers = {
             "Accept": "application/octet-stream",
@@ -2962,12 +2988,25 @@ class StalzonePlugin(Star):
         timed_out = False
         network_error = False
         last_status = 0
+        candidates = _github_url_candidates(url)
+        download_started = time.monotonic()
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(180.0, connect=20.0),
             follow_redirects=True,
             headers=headers,
         ) as client:
-            for candidate in _github_url_candidates(url):
+            # A direct GitHub stream may be painfully slow without failing.
+            # Probe each candidate briefly, then download via the fastest one.
+            speeds: list[tuple[float, str]] = []
+            for candidate in candidates:
+                speed = await self._probe_download_speed(client, candidate)
+                speeds.append((speed, candidate))
+            speeds.sort(reverse=True)
+            ordered = [candidate for _speed, candidate in speeds if _speed > 0]
+            ordered.extend(
+                candidate for candidate in candidates if candidate not in ordered
+            )
+            for candidate in ordered:
                 destination.unlink(missing_ok=True)
                 try:
                     async with client.stream("GET", candidate) as response:
@@ -2998,9 +3037,21 @@ class StalzonePlugin(Star):
                 ):
                     if candidate != url:
                         logger.info(
-                            "STALZONE update download via proxy: %s",
+                            "STALZONE update download via proxy: %s "
+                            "(probe %.0f KB/s)",
                             candidate.split("/https://", 1)[0],
+                            max((speed for speed, value in speeds if value == candidate), default=0) / 1024,
                         )
+                    else:
+                        logger.info(
+                            "STALZONE update download direct (probe %.0f KB/s)",
+                            max((speed for speed, value in speeds if value == candidate), default=0) / 1024,
+                        )
+                    logger.info(
+                        "STALZONE update asset downloaded: %.1f MB in %.1fs",
+                        destination.stat().st_size / 1048576,
+                        time.monotonic() - download_started,
+                    )
                     return
                 destination.unlink(missing_ok=True)
         if timed_out:
@@ -3336,7 +3387,13 @@ class StalzonePlugin(Star):
                         f"{UPDATE_ASSET_NAME} 或 {UPDATE_LIGHT_ASSET_NAME}，"
                         "请稍后重试或手动安装。"
                     )
+                try:
+                    asset_size = int(asset.get("size") or 0)
+                except (TypeError, ValueError):
+                    asset_size = 0
                 package_label = "完整包" if need_full else "轻量包"
+                if asset_size > 0:
+                    package_label += f" {asset_size / 1048576:.1f} MB"
                 await self._update_status(
                     event,
                     f"开始更新：v{PLUGIN_VERSION} → {latest_tag}"
