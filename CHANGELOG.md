@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.2 - 2026-11-01
+
+### Fixed
+
+- Arsenal price cache now carries `version: 2`; caches written before the stacked-unit-price fix are rejected on load. This prevents a bot upgrading from v1.11.0 from serving the old wrong prices until the next 3-hour refresh.
+
+### Tests
+
+- 262 tests and 14 visual signatures pass.
+
 ## 1.11.1 - 2026-11-01
 
 ### Fixed

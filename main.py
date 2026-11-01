@@ -238,7 +238,8 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.1"
+PLUGIN_VERSION = "1.11.2"
+ARSENAL_CACHE_VERSION = 2
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1452,6 +1453,8 @@ class StalzonePlugin(Star):
             return
         if not isinstance(payload, dict):
             return
+        if payload.get("version") != ARSENAL_CACHE_VERSION:
+            return
         region = str(payload.get("region") or "").lower()
         if region and region != self._region():
             return
@@ -1483,6 +1486,7 @@ class StalzonePlugin(Star):
             temp.write_text(
                 json.dumps(
                     {
+                        "version": ARSENAL_CACHE_VERSION,
                         "region": self._arsenal_cache_region,
                         "generated_at": self._arsenal_generated_at,
                         "items": self._arsenal_prices,
