@@ -3381,11 +3381,47 @@ def format_operations(payload: dict[str, Any] | None, map_name: str | None = Non
     )
 
 
+def format_arsenal_text(view: dict[str, Any] | None) -> str:
+    if not view:
+        return "军械库数据暂不可用，请稍后重试。"
+    entries = [x for x in (view.get("entries") or []) if isinstance(x, dict)]
+    ranked = [x for x in entries if x.get("ranked")]
+    rows: list[str] = []
+    for entry in ranked[:15]:
+        rows.append(
+            f"{entry.get('rank')}. {entry.get('name')}  "
+            f"限量 {entry.get('limit_text')}/日  "
+            f"10K {entry.get('total_price_text')} 卢布  "
+            f"{entry.get('days') or '—'}天"
+        )
+    if len(ranked) > 15:
+        rows.append(f"……其余 {len(ranked) - 15} 项请在图片中查看")
+    if not rows:
+        rows.append("拍卖价格正在更新；当前只显示手动价或无报价物品。")
+    notes = [
+        f"{view.get('reset_label') or '每日 12:00 重置'}；"
+        f"无限制=无每日上限；不收=当前不接收",
+        f"价格快照：{view.get('generated_at') or '更新中'}；"
+        f"后台空闲刷新，约 3 小时一次",
+    ]
+    return _card(
+        "STALZONE · 军械库收购清单",
+        [
+            f"{str(view.get('region') or 'EU').upper()}｜共 {len(entries)} 项｜"
+            f"{int(view.get('auction_count') or 0)} 拍卖价 / "
+            f"{int(view.get('manual_count') or 0)} 手动价"
+        ],
+        [("推荐（10K 成本从低到高）", rows), ("说明", notes)],
+        "价格：近 3 日成交中位数并剔除极值｜手动价：策展设定｜时间为 UTC+8",
+    )
+
+
 def format_help(region: str, *, demo: bool = False) -> str:
     env = "演示环境（假数据）" if demo else "生产环境"
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
         "/sz 拍卖历史 <物品> [页码] [品质] — 不带页码查官方最近 200 条；带页码查第三方存档",
+        "/sz 军械库 / arsenal / 阿森纳 — 军械库收购清单、每日限量与 10K 声望成本",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",

@@ -1132,6 +1132,139 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("寒冰 / Chilly", text)
         self.assertIn("ljn2", text)
 
+    async def test_arsenal_command_uses_snapshot(self):
+        plugin = self.make_plugin()
+        for command in ("/sz 军械库", "/sz arsenal", "/sz 阿森纳"):
+            text = await collect(plugin, command)
+            self.assertIn("军械库收购清单", text, command)
+            self.assertIn("每日 12:00", text, command)
+        view = plugin._arsenal_view()
+        self.assertIsNotNone(view)
+        self.assertEqual(len(view["entries"]), 61)
+        self.assertGreaterEqual(
+            sum(1 for entry in view["entries"] if entry.get("ranked")), 50
+        )
+        self.assertNotIn("每日 每日", await collect(plugin, "/sz 军械库"))
+
+    def test_arsenal_median_drops_outliers(self):
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        prices = [100, 110, 120, 130, 140, 150, 160, 170, 180, 190]
+        payload = {
+            "prices": [
+                {
+                    "price": price,
+                    "time": (now - timedelta(hours=1)).isoformat(),
+                }
+                for price in [1, *prices, 999999]
+            ]
+        }
+        plugin = self.make_plugin()
+        median, deals, dropped = plugin._arsenal_median(payload)
+        self.assertEqual(deals, 12)
+        self.assertEqual(dropped, 2)
+        self.assertIsNotNone(median)
+        self.assertGreaterEqual(median, 100)
+        self.assertLessEqual(median, 190)
+
+    async def test_arsenal_refresh_swaps_snapshot(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin._arsenal_cache_path = Path(temp.name) / "arsenal_prices.json"
+        plugin._arsenal_static = [
+            {
+                "key": "test-item",
+                "lunar_id": "wg53",
+                "catalog_id": "wg53",
+                "zh": "测试物品",
+                "en": "Test Item",
+                "color": "RANK_MASTER",
+                "reputation": 10,
+                "daily_limit": "100",
+                "accepted": True,
+                "price_source": "auction",
+            }
+        ]
+
+        class HistoryClient(FakeClient):
+            calls = 0
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                HistoryClient.calls += 1
+                return {
+                    "total": 6,
+                    "prices": [
+                        {
+                            "amount": 1,
+                            "price": 100 + index * 10,
+                            "time": "2026-10-30T05:00:00Z",
+                            "additional": {},
+                        }
+                        for index in range(6)
+                    ],
+                }
+
+        plugin._make_client = lambda: HistoryClient()  # type: ignore[assignment]
+        await plugin._refresh_arsenal_snapshot()
+        self.assertEqual(HistoryClient.calls, 1)
+        self.assertEqual(plugin._arsenal_prices["test-item"]["price"], 125)
+        self.assertTrue(plugin._arsenal_cache_path.exists())
+
+    async def test_arsenal_refresh_yields_to_foreground(self):
+        import asyncio
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin._arsenal_cache_path = Path(temp.name) / "arsenal_prices.json"
+        plugin._arsenal_static = [
+            {
+                "key": "test-item",
+                "lunar_id": "wg53",
+                "zh": "测试物品",
+                "reputation": 10,
+                "daily_limit": "100",
+                "accepted": True,
+                "price_source": "auction",
+            }
+        ]
+
+        class HistoryClient(FakeClient):
+            calls = 0
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                HistoryClient.calls += 1
+                return {
+                    "total": 5,
+                    "prices": [
+                        {"amount": 1, "price": 100, "time": "2026-10-30T05:00:00Z"}
+                    ],
+                }
+
+        plugin._make_client = lambda: HistoryClient()  # type: ignore[assignment]
+        plugin._query_begin()
+        task = asyncio.create_task(plugin._refresh_arsenal_snapshot())
+        await asyncio.sleep(0.2)
+        self.assertEqual(HistoryClient.calls, 0)
+        plugin._query_end()
+        await asyncio.wait_for(task, timeout=2.0)
+        self.assertEqual(HistoryClient.calls, 1)
+
+    async def test_arsenal_card_renders(self):
+        from image_renderer import find_cjk_font, render_arsenal_card
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+        plugin = self.make_plugin()
+        view = plugin._arsenal_view()
+        path = render_arsenal_card(view)
+        self.assertIsNotNone(path)
+        self.assertTrue(path.exists())
+        self.assertGreater(path.stat().st_size, 1024)
+        path.unlink(missing_ok=True)
+
     async def test_item_quality_category_filters(self):
         plugin = self.make_plugin()
         result = await plugin._handle_item("准镜 红 瞄具")

@@ -2069,6 +2069,9 @@ class ParserTests(unittest.TestCase):
             "/sz 默认区服 ru": ("set_region", "ru"),
             "/sz 拍卖显示模式 1": ("auction_mode", "1"),
             "/sz 拍卖历史 KS-12 2": ("auction_history", "KS-12 2"),
+            "/sz 军械库": ("arsenal", ""),
+            "/sz arsenal": ("arsenal", ""),
+            "/sz 阿森纳": ("arsenal", ""),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)

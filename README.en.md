@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.10.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.11.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -70,6 +70,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | --- | --- |
 | `/sz auction <item> [quality] [affix] [date] [count]` | Active lots and sold history; weapon modules accept fuzzy affix filters and are named by their three rolled affixes |
 | `/sz 拍卖历史 <item> [page] [quality]` | No page: latest 200 official records; with page: third-party archive; optional quality filter | `/sz 拍卖历史 原子 红`；`/sz 拍卖历史 KS-12 2` |
+| `/sz 军械库` / `/sz arsenal` | Arsenal buy-list image with daily limits and 10K reputation cost | `/sz 军械库` |
 | `/sz emission [region]` | Time since the last emission and current status |
 | `/sz 风暴订阅 [cancel/status]` | One-shot subscription to the next storm (group mention, private DM) |
 | `/sz player <name/UUID> [region]` | Public profile, clan, PvP estimate and optional Lunar data |
@@ -136,6 +137,15 @@ The automatic card shares the doomsday emission style but leads with "风暴已�
 - UserAuth-only endpoints (character list, friends, clan members) are intentionally not implemented.
 
 See [docs/maintenance.md](docs/maintenance.md) for aliases, balance updates and new-item workflows.
+
+## Arsenal buy list
+
+`/sz 军械库` (also `arsenal`, `阿森纳`) sends a buy-list image for the current Arsenal. It uses 61 bundled item definitions and daily limits, English/Chinese names and local icons.
+
+- Prices for auction-priced items are computed in the background from the latest 200 official sale records, limited to the last 3 days, with 10% outliers removed and a median taken.
+- The refresh yields to foreground commands and runs about every 3 hours. A completed refresh swaps the whole in-memory snapshot and `arsenal_prices.json` at once, so half-updated prices are never shown.
+- Manual prices for illiquid items live in `arsenal_items.json` and do not call the auction API.
+- Daily limits, the item list and manual prices are a static snapshot; update them when the Arsenal rotation/limits change. Reset is shown as 12:00 UTC+8.
 
 ## AI function calling
 

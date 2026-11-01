@@ -21,7 +21,7 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -79,6 +79,7 @@ try:  # Package import (normal AstrBot plugin loading).
         build_item_candidate_view,
         build_profile_view,
         build_season_pass_view,
+        format_arsenal_text,
         format_auction_text,
         format_balance_history,
         format_clan,
@@ -106,6 +107,7 @@ try:  # Package import (normal AstrBot plugin loading).
     from .image_renderer import (
         card_background_stamp,
         find_cjk_font,
+        render_arsenal_card,
         render_auction_card,
         render_diag_card,
         faction_icon_path,
@@ -160,6 +162,7 @@ except ImportError:  # Direct execution / flat import fallback.
         build_item_candidate_view,
         build_profile_view,
         build_season_pass_view,
+        format_arsenal_text,
         format_auction_text,
         format_balance_history,
         format_clan,
@@ -188,6 +191,7 @@ except ImportError:  # Direct execution / flat import fallback.
         card_background_stamp,
         faction_icon_path,
         find_cjk_font,
+        render_arsenal_card,
         render_auction_card,
         render_candidate_card,
         render_diag_card,
@@ -234,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.10.3"
+PLUGIN_VERSION = "1.11.0"
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -324,6 +328,7 @@ IMAGE_COMMANDS = {
     "pass",
     "notice",
     "diag",
+    "arsenal",
 }
 
 
@@ -338,6 +343,7 @@ class PluginReply:
     profile_view: dict[str, Any] | None = None
     notice_view: dict[str, Any] | None = None
     diag_view: dict[str, Any] | None = None
+    arsenal_view: dict[str, Any] | None = None
     pass_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
@@ -571,6 +577,16 @@ class StalzonePlugin(Star):
         self._auto_state_path = data_dir / "emission_auto_state.json"
         self._auto_state = self._load_auto_state()
         self._auto_task: asyncio.Task | None = None
+        self._arsenal_items_path = Path(__file__).with_name("arsenal_items.json")
+        self._arsenal_static = self._load_arsenal_static()
+        self._arsenal_cache_path = data_dir / "arsenal_prices.json"
+        self._arsenal_prices: dict[str, dict[str, Any]] = {}
+        self._arsenal_generated_at = ""
+        self._arsenal_cache_region = ""
+        self._arsenal_task: asyncio.Task | None = None
+        self._arsenal_lock: asyncio.Lock | None = None
+        self._query_depth = 0
+        self._load_arsenal_cache()
         self._update_lock = asyncio.Lock()
         self._reload_task: asyncio.Task | None = None
         self._update_auto_task: asyncio.Task | None = None
@@ -1350,6 +1366,7 @@ class StalzonePlugin(Star):
             logger.exception("STALZONE update-backup cleanup failed")
         self._start_emission_auto()
         self._start_auto_update()
+        self._start_arsenal_refresh()
 
     def _start_emission_auto(self) -> None:
         if not self._auto_notify_enabled():
@@ -1390,6 +1407,357 @@ class StalzonePlugin(Star):
         self._update_auto_task = asyncio.create_task(self._update_auto_loop())
         if bool(self._cfg("auto_update", False)):
             logger.info("STALZONE automatic plugin update enabled (hourly)")
+
+    @staticmethod
+    def _arsenal_int(value: Any, default: int | None = None) -> int | None:
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return default
+
+    def _load_arsenal_static(self) -> list[dict[str, Any]]:
+        try:
+            payload = json.loads(
+                self._arsenal_items_path.read_text(encoding="utf-8")
+            )
+            items = payload.get("items")
+            return (
+                [item for item in items if isinstance(item, dict)]
+                if isinstance(items, list)
+                else []
+            )
+        except (OSError, ValueError):
+            logger.warning("STALZONE arsenal item data could not be loaded")
+            return []
+
+    def _arsenal_icon_path(self, item: dict[str, Any]) -> Path | None:
+        icon = str(item.get("icon") or "").strip()
+        if icon:
+            path = Path(__file__).parent / icon
+            if path.is_file():
+                return path
+        catalog_id = str(item.get("catalog_id") or "").strip()
+        if catalog_id:
+            path = Path(__file__).with_name("item_icons") / f"{catalog_id}.png"
+            if path.is_file():
+                return path
+        return None
+
+    def _load_arsenal_cache(self) -> None:
+        try:
+            payload = json.loads(
+                self._arsenal_cache_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            return
+        if not isinstance(payload, dict):
+            return
+        region = str(payload.get("region") or "").lower()
+        if region and region != self._region():
+            return
+        items = payload.get("items")
+        if not isinstance(items, dict):
+            return
+        self._arsenal_prices = {
+            str(key): value
+            for key, value in items.items()
+            if isinstance(value, dict)
+        }
+        self._arsenal_generated_at = str(payload.get("generated_at") or "")
+        self._arsenal_cache_region = region
+
+    def _arsenal_cache_stale(self) -> bool:
+        if self._arsenal_cache_region != self._region():
+            return True
+        generated = parse_auction_time(self._arsenal_generated_at)
+        if generated is None:
+            return True
+        return (
+            datetime.now(timezone.utc) - generated
+        ).total_seconds() > 3 * 3600
+
+    def _save_arsenal_cache(self) -> None:
+        try:
+            self._arsenal_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            temp = self._arsenal_cache_path.with_suffix(".tmp")
+            temp.write_text(
+                json.dumps(
+                    {
+                        "region": self._arsenal_cache_region,
+                        "generated_at": self._arsenal_generated_at,
+                        "items": self._arsenal_prices,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            temp.replace(self._arsenal_cache_path)
+        except OSError:
+            logger.warning("STALZONE arsenal price cache could not be saved")
+
+    def _query_begin(self) -> None:
+        self._query_depth += 1
+
+    def _query_end(self) -> None:
+        if self._query_depth > 0:
+            self._query_depth -= 1
+
+    async def _wait_arsenal_idle(self) -> None:
+        # Let any foreground command finish before pulling the next history page.
+        while self._query_depth > 0:
+            await asyncio.sleep(0.5)
+        await asyncio.sleep(0.2)
+
+    def _arsenal_median(
+        self, payload: dict[str, Any], now: datetime | None = None
+    ) -> tuple[int | None, int, int]:
+        now = now or datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=3)
+        values: list[int] = []
+        raw = payload.get("prices") if isinstance(payload, dict) else None
+        for entry in raw if isinstance(raw, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            price = self._arsenal_int(entry.get("price"))
+            timestamp = parse_auction_time(entry.get("time"))
+            if not price or price <= 0:
+                continue
+            if timestamp is not None and timestamp < cutoff:
+                continue
+            values.append(price)
+        if len(values) < 5:
+            return None, len(values), 0
+        values.sort()
+        drop = int(len(values) * 0.10)
+        trimmed = values[drop : len(values) - drop] if drop else values
+        if not trimmed:
+            return None, len(values), 0
+        middle = len(trimmed) // 2
+        median = (
+            trimmed[middle]
+            if len(trimmed) % 2
+            else (trimmed[middle - 1] + trimmed[middle]) // 2
+        )
+        return median, len(values), drop * 2
+
+    async def _refresh_arsenal_snapshot(self) -> None:
+        if not self._arsenal_static:
+            return
+        if self._arsenal_lock is None:
+            self._arsenal_lock = asyncio.Lock()
+        if self._arsenal_lock.locked():
+            return
+        async with self._arsenal_lock:
+            region = self._region()
+            previous = (
+                dict(self._arsenal_prices)
+                if self._arsenal_cache_region == region
+                else {}
+            )
+            updated = dict(previous)
+            updated_count = 0
+            try:
+                async with self._make_client() as client:
+                    for item in self._arsenal_static:
+                        if str(item.get("price_source") or "") != "auction":
+                            continue
+                        item_id = str(
+                            item.get("lunar_id")
+                            or item.get("catalog_id")
+                            or ""
+                        ).strip()
+                        if not item_id or not item.get("accepted", True):
+                            continue
+                        await self._wait_arsenal_idle()
+                        try:
+                            payload = await client.get_auction_history(
+                                item_id, limit=200, offset=0
+                            )
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            logger.warning(
+                                "STALZONE arsenal price fetch failed for %s: %s",
+                                item_id,
+                                exc,
+                            )
+                            continue
+                        price, deals, dropped = self._arsenal_median(payload)
+                        if price is None:
+                            continue
+                        updated[str(item.get("key") or item_id)] = {
+                            "price": price,
+                            "deals": deals,
+                            "dropped": dropped,
+                            "source": "auction",
+                        }
+                        updated_count += 1
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("STALZONE arsenal price refresh failed")
+            if not updated_count and not previous:
+                logger.warning(
+                    "STALZONE arsenal refresh produced no prices; retrying next cycle"
+                )
+                return
+            generated = datetime.now(timezone.utc)
+            # Snapshot swap is intentionally a single assignment after the loop.
+            self._arsenal_prices = updated
+            self._arsenal_generated_at = generated.isoformat()
+            self._arsenal_cache_region = region
+            self._save_arsenal_cache()
+            logger.info(
+                "STALZONE arsenal snapshot updated: %d/%d auction prices",
+                updated_count,
+                sum(
+                    1
+                    for item in self._arsenal_static
+                    if item.get("price_source") == "auction"
+                ),
+            )
+
+    async def _arsenal_loop(self) -> None:
+        while True:
+            try:
+                self._load_arsenal_cache()
+                if self._arsenal_cache_stale():
+                    await self._refresh_arsenal_snapshot()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("STALZONE arsenal background refresh failed")
+            await asyncio.sleep(300)
+
+    def _start_arsenal_refresh(self) -> None:
+        if not self._arsenal_static:
+            return
+        if self._arsenal_task is not None and not self._arsenal_task.done():
+            return
+        self._arsenal_task = asyncio.create_task(self._arsenal_loop())
+        logger.info("STALZONE arsenal background refresh started")
+
+    @staticmethod
+    def _arsenal_limit_text(raw: Any) -> str:
+        text = str(raw or "").strip()
+        if "не принимает" in text.lower():
+            return "不收"
+        if "лимита" in text.lower():
+            return "无限制"
+        return text or "—"
+
+    def _arsenal_view(self) -> dict[str, Any] | None:
+        if not self._arsenal_static:
+            return None
+        entries: list[dict[str, Any]] = []
+        for item in self._arsenal_static:
+            key = str(item.get("key") or item.get("lunar_id") or "")
+            rep = max(0, self._arsenal_int(item.get("reputation")) or 0)
+            raw_limit = item.get("daily_limit")
+            limit_text = self._arsenal_limit_text(raw_limit)
+            accepted = bool(item.get("accepted", True)) and limit_text != "不收"
+            unlimited = limit_text == "无限制"
+            limit_value = self._arsenal_int(str(raw_limit).replace(",", "")) or 0
+            source = str(item.get("price_source") or "auction")
+            unit: int | None = None
+            if accepted:
+                if source == "manual":
+                    unit = self._arsenal_int(item.get("manual_price"))
+                else:
+                    cached = self._arsenal_prices.get(key)
+                    if isinstance(cached, dict):
+                        unit = self._arsenal_int(cached.get("price"))
+                    if unit is None:
+                        # First-run fallback; the background refresh replaces it.
+                        unit = self._arsenal_int(item.get("seed_price"))
+            per_ten_k = (
+                (10000 + rep - 1) // rep if rep else None
+            )
+            total = unit * per_ten_k if unit and per_ten_k else None
+            days: int | None = None
+            if accepted and rep:
+                if unlimited:
+                    days = 1
+                elif limit_value:
+                    days = (10000 + rep * limit_value - 1) // (
+                        rep * limit_value
+                    )
+            entries.append(
+                {
+                    "name": str(item.get("zh") or item.get("en") or key),
+                    "en": str(item.get("en") or ""),
+                    "icon_path": str(self._arsenal_icon_path(item) or ""),
+                    "color": item_rank_color(item.get("color")),
+                    "limit_text": limit_text,
+                    "reputation": rep,
+                    "unit_price": unit,
+                    "total_price": total,
+                    "total_price_text": f"{total:,}" if total is not None else "—",
+                    "days": days,
+                    "source": "手动" if source == "manual" else "拍卖",
+                    "accepted": accepted,
+                }
+            )
+        ranked = sorted(
+            (entry for entry in entries if entry["accepted"] and entry["total_price"] is not None),
+            key=lambda entry: entry["total_price"],
+        )
+        for index, entry in enumerate(ranked, 1):
+            entry["rank"] = index
+            entry["ranked"] = True
+        unranked = [entry for entry in entries if not entry.get("ranked")]
+        unranked.sort(
+            key=lambda entry: (not entry["accepted"], entry["name"])
+        )
+        ordered = ranked + unranked
+        generated = parse_auction_time(self._arsenal_generated_at)
+        generated_label = (
+            generated.astimezone(CST).strftime("%m-%d %H:%M")
+            if generated is not None
+            else "更新中"
+        )
+        cache_note = (
+            f"价格快照：{generated_label} UTC+8｜后台空闲刷新（约 3 小时一次）"
+            if generated is not None
+            else "初始快照 + 手动价；官方 3 日价格正在后台空闲刷新，完成后整图切换"
+        )
+        return {
+            "region": self._region().upper(),
+            "generated_at": generated_label,
+            "reset_label": "每日 12:00 重置",
+            "entries": ordered,
+            "auction_count": sum(
+                1
+                for item in self._arsenal_static
+                if item.get("price_source") == "auction"
+            ),
+            "manual_count": sum(
+                1
+                for item in self._arsenal_static
+                if item.get("price_source") == "manual"
+            ),
+            "data_note": (
+                "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜"
+                "无限制=无每日上限｜不收=当前不接收"
+            ),
+            "cache_note": cache_note,
+        }
+
+    async def _handle_arsenal(self) -> PluginReply:
+        view = self._arsenal_view()
+        if view is None:
+            return PluginReply(
+                "军械库数据未加载，请联系管理员更新 arsenal_items.json。",
+                sub="arsenal",
+            )
+        if self._arsenal_cache_stale():
+            self._start_arsenal_refresh()
+        return PluginReply(
+            format_arsenal_text(view),
+            arsenal_view=view,
+            sub="arsenal",
+        )
 
     def _cache_get(self, key: str) -> Any:
         item = self._api_cache.get(key)
@@ -1637,6 +2005,7 @@ class StalzonePlugin(Star):
         notice_view = None
         diag_view = None
         pass_view = None
+        arsenal_view = None
         faction = None
         sub = default_sub
         if isinstance(result, PluginReply):
@@ -1651,6 +2020,7 @@ class StalzonePlugin(Star):
             notice_view = result.notice_view
             diag_view = result.diag_view
             pass_view = result.pass_view
+            arsenal_view = result.arsenal_view
             faction = result.faction
         else:
             text = "" if result is None else str(result)
@@ -1673,6 +2043,7 @@ class StalzonePlugin(Star):
             notice_view,
             diag_view,
             pass_view,
+            arsenal_view,
         )
         if image is not None:
             try:
@@ -1707,6 +2078,7 @@ class StalzonePlugin(Star):
                 "AI 查询工具已关闭（可在 STALZONE 配置中开启）。"
             )
             return
+        self._query_begin()
         try:
             async with self._api_gate():
                 result = await coro
@@ -1734,6 +2106,8 @@ class StalzonePlugin(Star):
         except Exception:
             logger.exception("STALZONE LLM tool query failed")
             result = "查询失败，请稍后再试。"
+        finally:
+            self._query_end()
         async for output in self._llm_deliver(event, result, sub):
             yield output
 
@@ -2090,6 +2464,7 @@ class StalzonePlugin(Star):
         notice_view: dict[str, Any] | None = None,
         diag_view: dict[str, Any] | None = None,
         pass_view: dict[str, Any] | None = None,
+        arsenal_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -2098,7 +2473,13 @@ class StalzonePlugin(Star):
             if icon_path is None and faction:
                 icon_path = faction_icon_path(faction)
             font_path = str(self._cfg("font_path", "") or "").strip() or None
-            if sub == "auction" and auction_view:
+            if sub == "arsenal" and arsenal_view:
+                path = await asyncio.to_thread(
+                    render_arsenal_card,
+                    arsenal_view,
+                    font_path=font_path,
+                )
+            elif sub == "auction" and auction_view:
                 path = await asyncio.to_thread(
                     render_auction_card,
                     auction_view,
@@ -3027,16 +3408,24 @@ class StalzonePlugin(Star):
     @filter.command("sz")
     async def sz(self, event: AstrMessageEvent):
         """Slash form: /sz ..."""
-        async for result in self._dispatch_sz(event):
-            yield result
-        self._finish_sz_event(event)
+        self._query_begin()
+        try:
+            async for result in self._dispatch_sz(event):
+                yield result
+        finally:
+            self._query_end()
+            self._finish_sz_event(event)
 
     @filter.regex(SZ_BARE_RE)
     async def sz_bare(self, event: AstrMessageEvent):
         """Prefixless form: sz ... / stalzone ..."""
-        async for result in self._dispatch_sz(event):
-            yield result
-        self._finish_sz_event(event)
+        self._query_begin()
+        try:
+            async for result in self._dispatch_sz(event):
+                yield result
+        finally:
+            self._query_end()
+            self._finish_sz_event(event)
 
     async def _dispatch_sz(self, event: AstrMessageEvent):
         """查询 STALZONE 拍卖、辐射爆发、角色、战队与物品数据。"""
@@ -3103,6 +3492,7 @@ class StalzonePlugin(Star):
             "regions",
             "balance",
             "pass",
+            "arsenal",
         }:
             try:
                 cooldown = max(0.0, float(self._cfg("command_cooldown", 1.0) or 0))
@@ -3144,7 +3534,9 @@ class StalzonePlugin(Star):
             yield event.plain_result(format_help(self._region(), demo=self._is_demo()))
             return
 
-        if sub == "auction":
+        if sub == "arsenal":
+            coro = self._handle_arsenal()
+        elif sub == "auction":
             if not arg:
                 yield await self._usage_reply(event, "auction")
                 return
@@ -3204,6 +3596,7 @@ class StalzonePlugin(Star):
         notice_view = None
         diag_view = None
         pass_view = None
+        arsenal_view = None
         faction = None
         render_sub = sub
         try:
@@ -3220,6 +3613,7 @@ class StalzonePlugin(Star):
                 notice_view = result.notice_view
                 diag_view = result.diag_view
                 pass_view = result.pass_view
+                arsenal_view = result.arsenal_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -3265,6 +3659,7 @@ class StalzonePlugin(Star):
             notice_view,
             diag_view,
             pass_view,
+            arsenal_view,
         )
         if image is not None:
             try:

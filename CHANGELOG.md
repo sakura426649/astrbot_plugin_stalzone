@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.0 - 2026-11-01
+
+### Added
+
+- `/sz 军械库` (also `arsenal`, `阿森纳`): a 61-item Arsenal buy-list image with daily limits, reputation per item, unit price, 10K reputation cost, days to reach 10K, price source, local icons and English/Chinese names.
+- Background price refresh: official history is read 200 records at a time for the last 3 days, outliers are trimmed and the median is stored. The job runs when idle, yields to foreground commands, and atomically swaps the in-memory snapshot and `arsenal_prices.json` only after a complete pass. Refresh interval is about 3 hours.
+- Manual prices for illiquid items live in `arsenal_items.json`; the first run shows a seeded snapshot plus manual prices while the official refresh is in progress.
+- Daily limits support `无限制` and `不收`; the reset label is 12:00 UTC+8.
+
+### Tests
+
+- Added arsenal command/aliasing, median/outlier, image rendering, atomic snapshot refresh and foreground-yield coverage; 261 tests and 14 visual signatures pass.
+
 ## 1.10.3 - 2026-10-30
 
 ### Changed

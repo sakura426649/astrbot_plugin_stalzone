@@ -1855,6 +1855,310 @@ def _emission_canvas(width: int, height: int) -> Any:
     return canvas
 
 
+def render_arsenal_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    width: int = 1500,
+) -> Path | None:
+    """Render the arsenal buy list from an already-computed snapshot."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    font_file = find_cjk_font(font_path)
+    if font_file is None:
+        return None
+    display_file = _find_display_font(font_path) or font_file
+    mono_file = find_mono_font(font_path) or font_file
+    entries = [entry for entry in (view.get("entries") or []) if isinstance(entry, dict)]
+    if not entries:
+        return None
+    try:
+        title_font = ImageFont.truetype(str(display_file), 50)
+        subtitle_font = ImageFont.truetype(str(font_file), 19)
+        chip_font = ImageFont.truetype(str(font_file), 14)
+        head_font = ImageFont.truetype(str(font_file), 14)
+        name_font = ImageFont.truetype(str(font_file), 17)
+        sub_font = ImageFont.truetype(str(font_file), 11)
+        num_font = ImageFont.truetype(str(font_file), 15)
+        small_font = ImageFont.truetype(str(font_file), 12)
+        summary_name = ImageFont.truetype(str(font_file), 17)
+    except Exception:
+        return None
+
+    margin = 52
+    gap = 24
+    panel_w = (width - margin * 2 - gap) // 2
+    row_h = 42
+    per_column = (len(entries) + 1) // 2
+    header_h = 300
+    table_h = 34 + per_column * row_h
+    footer_h = 100
+    height = max(900, header_h + table_h + footer_h)
+    canvas = _card_canvas(width, height, alpha=238)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+    accent = "#FFB454"
+    body = "#E7EDF5"
+    muted = "#8FA2B8"
+
+    def _arsenal_value(value: Any) -> int | None:
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return None
+
+    def money(value: Any) -> str:
+        number = _arsenal_value(value)
+        if number is None:
+            return "—"
+        if number >= 1_000_000:
+            return f"{number / 1_000_000:.2f}M"
+        if number >= 1_000:
+            return f"{number / 1_000:.1f}K"
+        return f"{number:,}"
+
+    def exact(value: Any) -> str:
+        number = _arsenal_value(value)
+        return f"{number:,}" if number is not None else "—"
+
+    draw.text((margin, 28), "STALZONE / ARSENAL BUY LIST", font=chip_font, fill=accent)
+    draw.rounded_rectangle((margin, 66, margin + 6, 126), radius=3, fill=accent)
+    draw.text((margin + 22, 60), "军械库收购清单", font=title_font, fill=body)
+    draw.text(
+        (margin + 24, 124),
+        "每日限量 · 10K 声望成本 · 近 3 日成交中位数",
+        font=subtitle_font,
+        fill="#A9BACD",
+    )
+    chips = [
+        f"{str(view.get('region') or 'EU').upper()} · {view.get('generated_at') or '—'}",
+        f"{len(entries)} 项",
+        str(view.get("reset_label") or "每日 12:00 重置"),
+    ]
+    chip_right = width - margin
+    for text in reversed(chips):
+        chip_w = int(chip_font.getlength(text)) + 26
+        draw.rounded_rectangle(
+            (chip_right - chip_w, 46, chip_right, 80),
+            radius=17,
+            fill="#0C1621",
+            outline="#33465A",
+            width=1,
+        )
+        draw.text((chip_right - chip_w + 13, 55), text, font=chip_font, fill="#C6D3E2")
+        chip_right -= chip_w + 8
+
+    box_top = 168
+    box_h = 86
+    box_w = (width - margin * 2 - 24) // 3
+    best = [entry for entry in entries if entry.get("ranked")][:2]
+    summary: list[tuple[str, str, str, str]] = []
+    for index, entry in enumerate(best):
+        summary.append(
+            (
+                "最划算 10K" if index == 0 else "次优 10K",
+                str(entry.get("name") or ""),
+                f"{money(entry.get('total_price'))} ₽ · 限量 {entry.get('limit_text')}/日",
+                str(entry.get("color") or body),
+            )
+        )
+    summary.append(
+        (
+            "价格来源",
+            f"{int(view.get('auction_count') or 0)} 拍卖 / "
+            f"{int(view.get('manual_count') or 0)} 手动",
+            "手动价由策展设定；拍卖价取近 3 日成交中位数",
+            muted,
+        )
+    )
+    for index, (label, name, detail, color) in enumerate(summary):
+        x = margin + index * (box_w + 12)
+        draw.rounded_rectangle(
+            (x, box_top, x + box_w, box_top + box_h),
+            radius=12,
+            fill="#0A131D",
+            outline="#26384A",
+            width=1,
+        )
+        draw.rounded_rectangle(
+            (x + 1, box_top + 12, x + 5, box_top + box_h - 12),
+            radius=2,
+            fill=color,
+        )
+        draw.text((x + 18, box_top + 12), label, font=chip_font, fill=color)
+        draw.text(
+            (x + 18, box_top + 32),
+            _fit_text(draw, name, summary_name, box_w - 36),
+            font=summary_name,
+            fill=body,
+        )
+        draw.text(
+            (x + 18, box_top + 60),
+            _fit_text(draw, detail, small_font, box_w - 36),
+            font=small_font,
+            fill=muted,
+        )
+
+    table_top = header_h
+    draw.line((margin, table_top - 14, width - margin, table_top - 14), fill="#2A3A4A", width=1)
+    columns = [entries[:per_column], entries[per_column:]]
+    for col, group in enumerate(columns):
+        x = margin + col * (panel_w + gap)
+        draw.text((x + 46, table_top + 2), "物品", font=head_font, fill="#7F93A8")
+        draw.text((x + 315, table_top + 2), "限量/日", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 370, table_top + 2), "声望", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 450, table_top + 2), "单价", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 585, table_top + 2), "10K 成本", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 640, table_top + 2), "凑 10K", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 675, table_top + 2), "来源", font=head_font, fill="#7F93A8", anchor="ra")
+        row_y = table_top + 30
+        for local_index, entry in enumerate(group):
+            if local_index % 2 == 0:
+                draw.rounded_rectangle(
+                    (x - 8, row_y - 3, x + panel_w + 8, row_y + row_h - 7),
+                    radius=7,
+                    fill="#08111A",
+                )
+            ranked = bool(entry.get("ranked"))
+            top = ranked and int(entry.get("rank") or 0) <= 3
+            if top:
+                draw.rounded_rectangle(
+                    (x - 8, row_y - 3, x - 4, row_y + row_h - 7),
+                    radius=2,
+                    fill=accent,
+                )
+            draw.text(
+                (x + 2, row_y + 3),
+                str(entry.get("rank") or "—"),
+                font=small_font,
+                fill=accent if top else "#607386",
+            )
+            icon_path = entry.get("icon_path")
+            if icon_path:
+                try:
+                    icon = _load_normalized_icon(icon_path, 30)
+                    canvas.alpha_composite(icon, (x + 24, row_y + 1))
+                except Exception:
+                    pass
+            color = str(entry.get("color") or body)
+            draw.text(
+                (x + 64, row_y - 1),
+                _fit_text(draw, str(entry.get("name") or ""), name_font, 185),
+                font=name_font,
+                fill=color,
+            )
+            draw.text(
+                (x + 64, row_y + 21),
+                _fit_text(draw, str(entry.get("en") or ""), sub_font, 185),
+                font=sub_font,
+                fill="#71889A",
+            )
+            accepted = bool(entry.get("accepted", True))
+            draw.text(
+                (x + 315, row_y + 6),
+                str(entry.get("limit_text") or "—"),
+                font=num_font,
+                fill="#FF6B6B" if not accepted else body,
+                anchor="ra",
+            )
+            draw.text(
+                (x + 370, row_y + 6),
+                str(entry.get("reputation") or ""),
+                font=num_font,
+                fill="#C6D3E2",
+                anchor="ra",
+            )
+            draw.text(
+                (x + 450, row_y + 6),
+                exact(entry.get("unit_price")) if accepted else "—",
+                font=num_font,
+                fill="#C6D3E2",
+                anchor="ra",
+            )
+            draw.text(
+                (x + 585, row_y + 6),
+                (
+                    exact(entry.get("total_price"))
+                    if accepted and entry.get("total_price") is not None
+                    else ("—" if not accepted else "无报价")
+                ),
+                font=num_font,
+                fill=(
+                    accent
+                    if top
+                    else ("#71889A" if entry.get("total_price") is None else body)
+                ),
+                anchor="ra",
+            )
+            days = entry.get("days")
+            draw.text(
+                (x + 640, row_y + 6),
+                f"{days}天" if accepted and days else "—",
+                font=num_font,
+                fill=muted,
+                anchor="ra",
+            )
+            source = "—"
+            if accepted:
+                source = "手动" if entry.get("source") == "manual" else "拍卖"
+            draw.text(
+                (x + 675, row_y + 6),
+                source,
+                font=small_font,
+                fill="#FFB454" if source == "手动" else "#7FC4FF",
+                anchor="ra",
+            )
+            row_y += row_h
+
+    footer_y = height - footer_h
+    draw.line((margin, footer_y, width - margin, footer_y), fill="#2A3A4A", width=1)
+    draw.text(
+        (margin, footer_y + 12),
+        str(
+            view.get("data_note")
+            or "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜无限制=无每日上限｜不收=当前不接收"
+        ),
+        font=small_font,
+        fill=muted,
+    )
+    draw.text(
+        (margin, footer_y + 34),
+        str(
+            view.get("cache_note")
+            or "数据来自官方 API 与手动价格；缓存快照更新后整图切换"
+        ),
+        font=small_font,
+        fill="#5D7083",
+    )
+    _draw_signature(
+        draw,
+        width,
+        footer_y + 34,
+        font_file,
+        small_font,
+        right_margin=margin,
+        max_bottom=height,
+        more_tip=True,
+        tip_x=margin,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    target = out_dir / f"sz_arsenal_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
+    except OSError:
+        return None
+    return target
+
+
 def render_emission_alert_card(
     view: dict[str, Any] | None,
     *,
@@ -2331,10 +2635,10 @@ def render_help_card(
         (
             "其他",
             "MORE",
-            "/sz 战队列表 · /sz 行动 · /sz 区服 · /sz 帮助 · /sz 版本",
+            "/sz 军械库 · /sz 拍卖历史 · /sz 帮助",
             [
-                "战队列表、行动记录、区服列表",
-                "候选 /sz 候选 或 /sz 1｜诊断 /sz diag｜更新 /sz 更新",
+                "军械库清单、拍卖历史翻页",
+                "战队列表/行动/区服｜候选 /sz 1｜诊断 /sz diag",
             ],
             "#8FA2B8",
         ),
