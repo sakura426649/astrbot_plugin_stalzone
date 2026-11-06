@@ -2112,11 +2112,15 @@ def render_arsenal_card(
                 if source == "手动"
                 else (
                     "#B69CFF"
-                    if source == "参考"
+                    if source == "Lunar"
                     else (
-                        "#54D6A1"
-                        if source == "回收价"
-                        else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                        "#8FA2B8"
+                        if source == "参考"
+                        else (
+                            "#54D6A1"
+                            if source == "回收价"
+                            else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                        )
                     )
                 )
             )

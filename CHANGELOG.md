@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.9 - 2026-11-06
+
+### Fixed
+
+- Added a Lunar auction-history fallback for Arsenal items whose official history is empty/400/404. Lunar uses its own item keys, which is why its page has prices for filters, glowing-skin grafts, PDA parts, etc.; the plugin now reads that public history and labels it `Lunar` rather than pretending it is official.
+- Merchant-priced junk (laptop) still checks the configured recycle price before the Lunar fallback; reference seed remains the last resort.
+- Arsenal cache schema bumped to version 6 to invalidate v5 entries that lacked Lunar fallback data.
+
+### Tests
+
+- Added Lunar fallback coverage and updated merchant-priority assertions; 269 tests and 14 visual signatures pass.
+
 ## 1.11.8 - 2026-11-06
 
 ### Fixed
