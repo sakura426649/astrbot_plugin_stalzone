@@ -238,8 +238,8 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.9"
-ARSENAL_CACHE_VERSION = 6
+PLUGIN_VERSION = "1.11.10"
+ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1624,42 +1624,6 @@ class StalzonePlugin(Star):
             dropped,
         )
 
-    async def _fetch_lunar_history(
-        self, lunar_id: str, region: str
-    ) -> dict[str, Any] | None:
-        """Read Lunar's public price cache as a labeled third-party fallback."""
-        if not lunar_id:
-            return None
-        url = "https://lunar-zone.com/web-api/auction/live/history"
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(10.0, connect=5.0),
-                follow_redirects=True,
-                headers={
-                    "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
-                    "Accept": "application/json",
-                },
-            ) as client:
-                response = await client.get(
-                    url,
-                    params={
-                        "item": lunar_id,
-                        "region": region,
-                        "limit": "200",
-                    },
-                )
-            if response.status_code != 200:
-                return None
-            payload = response.json()
-            return payload if isinstance(payload, dict) else None
-        except Exception as exc:
-            logger.warning(
-                "STALZONE Lunar arsenal fallback failed for %s: %s",
-                lunar_id,
-                exc,
-            )
-            return None
-
     async def _refresh_arsenal_snapshot(self) -> None:
         if not self._arsenal_static:
             return
@@ -1727,34 +1691,9 @@ class StalzonePlugin(Star):
                             updated_count += 1
                             resolved_count += 1
                             continue
-                        npc_price = self._arsenal_int(item.get("npc_price"))
-                        if npc_price:
-                            updated[key] = {
-                                "price": npc_price,
-                                "source": "npc",
-                            }
-                            resolved_count += 1
-                            continue
-                        await self._wait_arsenal_idle()
-                        lunar_payload = await self._fetch_lunar_history(
-                            str(item.get("lunar_id") or ""), region
-                        )
-                        lunar_price, lunar_deals, lunar_dropped = (
-                            self._arsenal_median(lunar_payload or {})
-                        )
-                        if lunar_price is not None:
-                            updated[key] = {
-                                "price": lunar_price,
-                                "deals": lunar_deals,
-                                "dropped": lunar_dropped,
-                                "source": "lunar",
-                            }
-                            updated_count += 1
-                            resolved_count += 1
-                            continue
                         updated[key] = {
                             "unavailable": True,
-                            "reason": "no_official_or_lunar_price",
+                            "reason": "no_official_price",
                             "source": "auction",
                         }
                         resolved_count += 1
@@ -1831,8 +1770,6 @@ class StalzonePlugin(Star):
             unit: int | None = None
             unavailable = False
             reference = False
-            npc = False
-            external_source = ""
             if accepted:
                 if source == "manual":
                     unit = self._arsenal_int(item.get("manual_price"))
@@ -1843,16 +1780,6 @@ class StalzonePlugin(Star):
                             unavailable = True
                         else:
                             unit = self._arsenal_int(cached.get("price"))
-                            cached_source = str(cached.get("source") or "")
-                            if cached_source == "lunar":
-                                external_source = "Lunar"
-                            elif cached_source == "npc":
-                                external_source = "回收价"
-                    if unit is None:
-                        # No auction quote: use a known NPC sell price first,
-                        # then the maintained snapshot as a fallback.
-                        unit = self._arsenal_int(item.get("npc_price"))
-                        npc = unit is not None
                     if unit is None:
                         unit = self._arsenal_int(item.get("seed_price"))
                         reference = unit is not None
@@ -1877,6 +1804,7 @@ class StalzonePlugin(Star):
                     "limit_text": limit_text,
                     "reputation": rep,
                     "unit_price": unit,
+                    "weight": item.get("weight"),
                     "total_price": total,
                     "total_price_text": f"{total:,}" if total is not None else "—",
                     "days": days,
@@ -1884,20 +1812,9 @@ class StalzonePlugin(Star):
                         "手动"
                         if source == "manual"
                         else (
-                            external_source
-                            or (
-                                "回收价"
-                                if npc
-                                else (
-                                    "参考"
-                                    if reference
-                                    else (
-                                        "拍卖"
-                                        if unit is not None
-                                        else "无报价"
-                                    )
-                                )
-                            )
+                            "参考"
+                            if reference
+                            else ("拍卖" if unit is not None else "无报价")
                         )
                     ),
                     "accepted": accepted,
@@ -1923,7 +1840,7 @@ class StalzonePlugin(Star):
         )
         cache_note = (
             f"价格快照：{generated_label} UTC+8｜后台空闲刷新（约 3 小时一次）"
-            "｜官方无报价时使用回收价/Lunar/参考价"
+            "｜官方无报价时使用内置参考价"
             if generated is not None
             else "初始参考价 + 手动价；官方 3 日价格正在后台空闲刷新，完成后整图切换"
         )
@@ -1944,7 +1861,7 @@ class StalzonePlugin(Star):
             ),
             "data_note": (
                 "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜"
-                "无限制=无每日上限｜不收=当前不接收｜回收价=卖给基地商人｜Lunar=第三方缓存｜参考=内置快照价"
+                "无限制=无每日上限｜不收=当前不接收｜参考=内置快照价"
             ),
             "cache_note": cache_note,
         }

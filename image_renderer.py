@@ -2014,9 +2014,9 @@ def render_arsenal_card(
         draw.text((x + 315, table_top + 2), "限量/日", font=head_font, fill="#7F93A8", anchor="ra")
         draw.text((x + 370, table_top + 2), "声望", font=head_font, fill="#7F93A8", anchor="ra")
         draw.text((x + 450, table_top + 2), "单价", font=head_font, fill="#7F93A8", anchor="ra")
-        draw.text((x + 585, table_top + 2), "10K 成本", font=head_font, fill="#7F93A8", anchor="ra")
-        draw.text((x + 640, table_top + 2), "凑 10K", font=head_font, fill="#7F93A8", anchor="ra")
-        draw.text((x + 675, table_top + 2), "来源", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 615, table_top + 2), "10K 成本", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 515, table_top + 2), "重量", font=head_font, fill="#7F93A8", anchor="ra")
+        draw.text((x + 680, table_top + 2), "来源", font=head_font, fill="#7F93A8", anchor="ra")
         row_y = table_top + 30
         for local_index, entry in enumerate(group):
             if local_index % 2 == 0:
@@ -2082,7 +2082,7 @@ def render_arsenal_card(
                 anchor="ra",
             )
             draw.text(
-                (x + 585, row_y + 6),
+                (x + 615, row_y + 6),
                 (
                     exact(entry.get("total_price"))
                     if accepted and entry.get("total_price") is not None
@@ -2096,10 +2096,14 @@ def render_arsenal_card(
                 ),
                 anchor="ra",
             )
-            days = entry.get("days")
+            weight = entry.get("weight")
+            try:
+                weight_text = f"{float(weight):g} kg" if weight is not None else "—"
+            except (TypeError, ValueError):
+                weight_text = "—"
             draw.text(
-                (x + 640, row_y + 6),
-                f"{days}天" if accepted and days else "—",
+                (x + 515, row_y + 6),
+                weight_text,
                 font=num_font,
                 fill=muted,
                 anchor="ra",
@@ -2111,21 +2115,13 @@ def render_arsenal_card(
                 "#FFB454"
                 if source == "手动"
                 else (
-                    "#B69CFF"
-                    if source == "Lunar"
-                    else (
-                        "#8FA2B8"
-                        if source == "参考"
-                        else (
-                            "#54D6A1"
-                            if source == "回收价"
-                            else ("#7FC4FF" if source == "拍卖" else "#71889A")
-                        )
-                    )
+                    "#8FA2B8"
+                    if source == "参考"
+                    else ("#7FC4FF" if source == "拍卖" else "#71889A")
                 )
             )
             draw.text(
-                (x + 675, row_y + 6),
+                (x + 680, row_y + 6),
                 source,
                 font=small_font,
                 fill=source_color,

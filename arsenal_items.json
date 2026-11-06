@@ -538,11 +538,10 @@
       "daily_limit": "85",
       "rotation_days": 3,
       "accepted": true,
-      "price_source": "auction",
-      "manual_price": null,
+      "price_source": "manual",
+      "manual_price": 20000,
       "icon": "assets/arsenal_icons/jptUfEGC.png",
-      "seed_price": 24500,
-      "npc_price": 20000
+      "seed_price": 24500
     },
     {
       "key": "55ymq",

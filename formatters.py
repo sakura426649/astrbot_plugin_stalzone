@@ -3436,11 +3436,15 @@ def format_arsenal_text(view: dict[str, Any] | None) -> str:
     ranked = [x for x in entries if x.get("ranked")]
     rows: list[str] = []
     for entry in ranked[:15]:
+        try:
+            weight = f"{float(entry.get('weight')):g}kg"
+        except (TypeError, ValueError):
+            weight = "—"
         rows.append(
             f"{entry.get('rank')}. {entry.get('name')}  "
             f"限量 {entry.get('limit_text')}/日  "
             f"10K {entry.get('total_price_text')} 卢布  "
-            f"{entry.get('days') or '—'}天"
+            f"{weight}"
         )
     if len(ranked) > 15:
         rows.append(f"……其余 {len(ranked) - 15} 项请在图片中查看")
@@ -3448,7 +3452,7 @@ def format_arsenal_text(view: dict[str, Any] | None) -> str:
         rows.append("拍卖价格正在更新；当前只显示手动价或无报价物品。")
     notes = [
         f"{view.get('reset_label') or '每日 12:00 重置'}；"
-        f"无限制=无每日上限；不收=当前不接收",
+        f"无限制=无每日上限；不收=当前不接收；参考=内置快照价",
         f"价格快照：{view.get('generated_at') or '更新中'}；"
         f"后台空闲刷新，约 3 小时一次",
     ]

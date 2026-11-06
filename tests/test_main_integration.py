@@ -1286,7 +1286,6 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 "accepted": True,
                 "price_source": "auction",
                 "seed_price": 24500,
-                "npc_price": 20000,
             }
         ]
 
@@ -1300,62 +1299,22 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._make_client = lambda: BadClient()  # type: ignore[assignment]
         await plugin._refresh_arsenal_snapshot()
         self.assertEqual(BadClient.calls, ["jptUfEGC"])
-        self.assertEqual(plugin._arsenal_prices["laptop"]["source"], "npc")
-        self.assertEqual(plugin._arsenal_prices["laptop"]["price"], 20000)
+        self.assertTrue(plugin._arsenal_prices["laptop"]["unavailable"])
         view = plugin._arsenal_view()
         entry = next(item for item in view["entries"] if item["name"] == "笔记本电脑")
-        self.assertEqual(entry["unit_price"], 20000)
-        self.assertEqual(entry["source"], "回收价")
+        self.assertEqual(entry["unit_price"], 24500)
+        self.assertEqual(entry["source"], "参考")
         self.assertTrue(entry["ranked"])
 
-    async def test_arsenal_falls_back_to_lunar_history(self):
-        temp = tempfile.TemporaryDirectory()
-        self.addCleanup(temp.cleanup)
+    def test_laptop_is_manually_priced(self):
         plugin = self.make_plugin()
-        plugin._arsenal_cache_path = Path(temp.name) / "arsenal_prices.json"
-        plugin._arsenal_static = [
-            {
-                "key": "filter",
-                "lunar_id": "y4g93",
-                "catalog_id": "GpdSXQyq",
-                "zh": "滤芯",
-                "en": "Filter",
-                "reputation": 12,
-                "daily_limit": "65",
-                "accepted": True,
-                "price_source": "auction",
-                "seed_price": 2600,
-            }
-        ]
-
-        class BadClient(FakeClient):
-            async def get_auction_history(self, item_id, limit=20, offset=0):
-                raise main_module.BadRequestError("no official history")
-
-        async def fake_lunar(item_id, region):
-            self.assertEqual(item_id, "y4g93")
-            return {
-                "total": 6,
-                "prices": [
-                    {
-                        "amount": 2,
-                        "price": 6000,
-                        "time": datetime.now(timezone.utc).isoformat(),
-                        "additional": {},
-                    }
-                    for _ in range(6)
-                ],
-            }
-
-        plugin._make_client = lambda: BadClient()  # type: ignore[assignment]
-        plugin._fetch_lunar_history = fake_lunar  # type: ignore[assignment]
-        await plugin._refresh_arsenal_snapshot()
-        self.assertEqual(plugin._arsenal_prices["filter"]["source"], "lunar")
         view = plugin._arsenal_view()
-        entry = view["entries"][0]
-        self.assertEqual(entry["unit_price"], 3000)
-        self.assertEqual(entry["source"], "Lunar")
-        self.assertTrue(entry["ranked"])
+        laptop = next(
+            item for item in view["entries"] if item["name"] == "笔记本电脑"
+        )
+        self.assertEqual(laptop["unit_price"], 20000)
+        self.assertEqual(laptop["source"], "手动")
+        self.assertEqual(laptop["weight"], 10)
 
     async def test_arsenal_uses_reference_price_after_cache_without_quote(self):
         plugin = self.make_plugin()

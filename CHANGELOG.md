@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.10 - 2026-11-06
+
+### Changed
+
+- Reverted the Lunar auction-history fallback per user preference: official median, then bundled reference price. The laptop is now a normal manual item (`manual_price=20000`, source `手动`), so the “回收价/NPC” label is gone.
+- Arsenal image layout: removed the “凑 10K” column and added a “重量” column after unit price. Weight comes from the Lunar arsenal snapshot per item.
+
+### Tests
+
+- Updated reference/manual expectations and weight field coverage; 269 tests and 14 visual signatures pass.
+
 ## 1.11.9 - 2026-11-06
 
 ### Fixed
