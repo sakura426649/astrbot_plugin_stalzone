@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.7"
+PLUGIN_VERSION = "1.11.8"
 ARSENAL_CACHE_VERSION = 5
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -1773,6 +1773,7 @@ class StalzonePlugin(Star):
             unit: int | None = None
             unavailable = False
             reference = False
+            npc = False
             if accepted:
                 if source == "manual":
                     unit = self._arsenal_int(item.get("manual_price"))
@@ -1784,9 +1785,11 @@ class StalzonePlugin(Star):
                         else:
                             unit = self._arsenal_int(cached.get("price"))
                     if unit is None:
-                        # The official item is not marketable, has too few
-                        # trades, or the cache has no entry yet. Fall back to
-                        # the maintained snapshot price, but label it 参考.
+                        # No auction quote: use a known NPC sell price first,
+                        # then the maintained snapshot as a fallback.
+                        unit = self._arsenal_int(item.get("npc_price"))
+                        npc = unit is not None
+                    if unit is None:
                         unit = self._arsenal_int(item.get("seed_price"))
                         reference = unit is not None
             per_ten_k = (
@@ -1817,12 +1820,16 @@ class StalzonePlugin(Star):
                         "手动"
                         if source == "manual"
                         else (
-                            "参考"
-                            if reference
+                            "回收价"
+                            if npc
                             else (
-                                "不可交易"
-                                if unavailable
-                                else ("拍卖" if unit is not None else "无数据")
+                                "参考"
+                                if reference
+                                else (
+                                    "拍卖"
+                                    if unit is not None
+                                    else "无报价"
+                                )
                             )
                         )
                     ),
@@ -1849,7 +1856,7 @@ class StalzonePlugin(Star):
         )
         cache_note = (
             f"价格快照：{generated_label} UTC+8｜后台空闲刷新（约 3 小时一次）"
-            "｜官方无数据/不可交易时使用内置参考价"
+            "｜官方无报价时使用回收价/参考价"
             if generated is not None
             else "初始参考价 + 手动价；官方 3 日价格正在后台空闲刷新，完成后整图切换"
         )
@@ -1870,7 +1877,7 @@ class StalzonePlugin(Star):
             ),
             "data_note": (
                 "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜"
-                "无限制=无每日上限｜不收=当前不接收｜参考=内置快照价"
+                "无限制=无每日上限｜不收=当前不接收｜回收价=卖给基地商人｜参考=内置快照价"
             ),
             "cache_note": cache_note,
         }

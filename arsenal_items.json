@@ -541,7 +541,8 @@
       "price_source": "auction",
       "manual_price": null,
       "icon": "assets/arsenal_icons/jptUfEGC.png",
-      "seed_price": 24500
+      "seed_price": 24500,
+      "npc_price": 20000
     },
     {
       "key": "55ymq",

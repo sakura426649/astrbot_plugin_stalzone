@@ -1286,6 +1286,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 "accepted": True,
                 "price_source": "auction",
                 "seed_price": 24500,
+                "npc_price": 20000,
             }
         ]
 
@@ -1302,8 +1303,8 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(plugin._arsenal_prices["laptop"]["unavailable"])
         view = plugin._arsenal_view()
         entry = next(item for item in view["entries"] if item["name"] == "笔记本电脑")
-        self.assertEqual(entry["unit_price"], 24500)
-        self.assertEqual(entry["source"], "参考")
+        self.assertEqual(entry["unit_price"], 20000)
+        self.assertEqual(entry["source"], "回收价")
         self.assertTrue(entry["ranked"])
 
     async def test_arsenal_uses_reference_price_after_cache_without_quote(self):

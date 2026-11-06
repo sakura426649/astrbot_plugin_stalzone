@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.11.7-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.11.8-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -144,7 +144,7 @@ See [docs/maintenance.md](docs/maintenance.md) for aliases, balance updates and 
 
 - Prices for auction-priced items are computed in the background from the latest 200 official sale records, limited to the last 3 days, with 10% outliers removed and a median taken.
 - The refresh yields to foreground commands and runs about every 3 hours. A completed refresh swaps the whole in-memory snapshot and `arsenal_prices.json` at once, so half-updated prices are never shown.
-- Price priority: manual price → official weighted 3-day median → bundled reference price. An unmarketable/insufficient official item is labeled `参考` instead of borrowing another item's history. Manual prices live in `arsenal_items.json` and do not call the auction API.
+- Price priority: manual price → official weighted 3-day median → known merchant sell price → bundled reference price. Junk items that never reach the auction show `回收价`; without a merchant-sell price they show `参考`, never another item's history. Manual/merchant-sell prices live in `arsenal_items.json` and do not call the auction API.
 - Daily limits, the item list and manual prices are a static snapshot; update them when the Arsenal rotation/limits change. Reset is shown as 12:00 UTC+8.
 
 ## AI function calling

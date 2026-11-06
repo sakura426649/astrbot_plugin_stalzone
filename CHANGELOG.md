@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.8 - 2026-11-06
+
+### Fixed
+
+- Arsenal fallback price is now labeled `回收价` (merchant sell price), not `NPC`/`不可交易`. The laptop entry has a configured 20,000 merchant-sell price, so it no longer shows the wrong 3333 or a misleading unmarketable label.
+- Price priority is manual → official weighted median → known merchant-sell price → bundled reference price. Only when none exists does the row show `无报价`.
+
+### Tests
+
+- 268 tests and 14 visual signatures pass.
+
 ## 1.11.7 - 2026-11-06
 
 ### Fixed

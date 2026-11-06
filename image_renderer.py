@@ -2113,7 +2113,11 @@ def render_arsenal_card(
                 else (
                     "#B69CFF"
                     if source == "参考"
-                    else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                    else (
+                        "#54D6A1"
+                        if source == "回收价"
+                        else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                    )
                 )
             )
             draw.text(
