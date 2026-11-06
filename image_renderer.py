@@ -2106,12 +2106,21 @@ def render_arsenal_card(
             )
             source = "—"
             if accepted:
-                source = "手动" if entry.get("source") == "manual" else "拍卖"
+                source = str(entry.get("source") or "拍卖")
+            source_color = (
+                "#FFB454"
+                if source == "手动"
+                else (
+                    "#B69CFF"
+                    if source == "参考"
+                    else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                )
+            )
             draw.text(
                 (x + 675, row_y + 6),
                 source,
                 font=small_font,
-                fill="#FFB454" if source == "手动" else "#7FC4FF",
+                fill=source_color,
                 anchor="ra",
             )
             row_y += row_h

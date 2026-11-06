@@ -1256,7 +1256,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                         {
                             "amount": 1,
                             "price": 100 + index * 10,
-                            "time": "2026-10-30T05:00:00Z",
+                            "time": datetime.now(timezone.utc).isoformat(),
                             "additional": {},
                         }
                         for index in range(6)
@@ -1268,6 +1268,67 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(HistoryClient.calls, 1)
         self.assertEqual(plugin._arsenal_prices["test-item"]["price"], 130)
         self.assertTrue(plugin._arsenal_cache_path.exists())
+
+    async def test_arsenal_uses_catalog_id_and_marks_unmarketable(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        plugin = self.make_plugin()
+        plugin._arsenal_cache_path = Path(temp.name) / "arsenal_prices.json"
+        plugin._arsenal_static = [
+            {
+                "key": "laptop",
+                "lunar_id": "771lj",
+                "catalog_id": "jptUfEGC",
+                "zh": "笔记本电脑",
+                "en": "Laptop",
+                "reputation": 12,
+                "daily_limit": "85",
+                "accepted": True,
+                "price_source": "auction",
+                "seed_price": 24500,
+            }
+        ]
+
+        class BadClient(FakeClient):
+            calls = []
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                BadClient.calls.append(item_id)
+                raise main_module.BadRequestError("invalid item", status_code=400)
+
+        plugin._make_client = lambda: BadClient()  # type: ignore[assignment]
+        await plugin._refresh_arsenal_snapshot()
+        self.assertEqual(BadClient.calls, ["jptUfEGC"])
+        self.assertTrue(plugin._arsenal_prices["laptop"]["unavailable"])
+        view = plugin._arsenal_view()
+        entry = next(item for item in view["entries"] if item["name"] == "笔记本电脑")
+        self.assertEqual(entry["unit_price"], 24500)
+        self.assertEqual(entry["source"], "参考")
+        self.assertTrue(entry["ranked"])
+
+    async def test_arsenal_uses_reference_price_after_cache_without_quote(self):
+        plugin = self.make_plugin()
+        plugin._arsenal_static = [
+            {
+                "key": "laptop",
+                "lunar_id": "771lj",
+                "catalog_id": "jptUfEGC",
+                "zh": "笔记本电脑",
+                "en": "Laptop",
+                "reputation": 12,
+                "daily_limit": "85",
+                "accepted": True,
+                "price_source": "auction",
+                "seed_price": 24500,
+            }
+        ]
+        plugin._arsenal_prices = {}
+        plugin._arsenal_generated_at = "2026-11-01T00:00:00+00:00"
+        plugin._arsenal_cache_region = "eu"
+        view = plugin._arsenal_view()
+        entry = view["entries"][0]
+        self.assertEqual(entry["unit_price"], 24500)
+        self.assertEqual(entry["source"], "参考")
 
     async def test_arsenal_refresh_yields_to_foreground(self):
         import asyncio

@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.11.6-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.11.7-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -203,7 +203,7 @@
 - 第 1 列按 10K 声望成本从低到高排序，同时显示单件声望、单价、凑满 10K 所需天数和价格来源。
 - 拍卖价在后台空闲时刷新：每项读取官方最近 200 条成交，过滤最近 3 天并剔除极值后取中位数；不会在用户查询时逐项请求 API。
 - 刷新期间先返回旧快照；整轮完成后一次性替换内存快照和 `arsenal_prices.json`，不会出现半新半旧的价格。
-- 手动价（成交极少的物品）固定写在 `arsenal_items.json` 中，不参与拍卖请求。
+- 价格优先级：手动价 → 官方最近 3 天加权中位数 → 内置参考价。官方接口返回不可交易/无成交/样本不足时显示「参考」，不会把别的物品的成交价误当成本物品价格。手动价固定写在 `arsenal_items.json` 中，不参与拍卖请求。
 - 每日限量、物品列表和手动价是该文件的静态快照；军械库轮换或限价调整后需要同步更新。
 
 ## 插件自更新
@@ -401,7 +401,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **266 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **268 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
 
 演示服冒烟测试（需要演示应用凭证）：
 

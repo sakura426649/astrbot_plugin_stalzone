@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.7 - 2026-11-06
+
+### Fixed
+
+- Arsenal refresh now uses the official `catalog_id` before the Lunar-internal `lunar_id`. The laptop (`771lj` vs official `jptUfEGC`) previously fetched another item's history and showed an absurd 3333.
+- Official 400/404 or insufficient samples are cached as unavailable, and the display falls back to the bundled reference price labeled `参考`. Manual prices still have the highest priority; items without any fallback show `不可交易`/`无数据` instead of a stale seed.
+- Arsenal cache schema bumped to version 5 so the wrong 3333 value is discarded on upgrade.
+
+### Tests
+
+- Added catalog-ID preference, unmarketable fallback and reference-price-after-cache regressions; 268 tests and 14 visual signatures pass.
+
 ## 1.11.6 - 2026-11-01
 
 ### Fixed

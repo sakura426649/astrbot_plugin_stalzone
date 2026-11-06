@@ -238,8 +238,8 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.6"
-ARSENAL_CACHE_VERSION = 3
+PLUGIN_VERSION = "1.11.7"
+ARSENAL_CACHE_VERSION = 5
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
 UPDATE_ASSET_NAME = "astrbot_plugin_stalzone_full.zip"
@@ -1486,7 +1486,10 @@ class StalzonePlugin(Star):
             for key, value in self._arsenal_prices.items()
             if key in valid
             and isinstance(value, dict)
-            and (self._arsenal_int(value.get("price")) or 0) > 0
+            and (
+                value.get("unavailable")
+                or (self._arsenal_int(value.get("price")) or 0) > 0
+            )
         }
         changed = cleaned != self._arsenal_prices
         self._arsenal_prices = cleaned
@@ -1637,14 +1640,17 @@ class StalzonePlugin(Star):
             )
             updated = dict(previous)
             updated_count = 0
+            resolved_count = 0
             try:
                 async with self._make_client() as client:
                     for item in self._arsenal_static:
                         if str(item.get("price_source") or "") != "auction":
                             continue
+                        # catalog_id is the official item ID; lunar_id is a
+                        # Lunar-internal key and can point at a different item.
                         item_id = str(
-                            item.get("lunar_id")
-                            or item.get("catalog_id")
+                            item.get("catalog_id")
+                            or item.get("lunar_id")
                             or ""
                         ).strip()
                         if not item_id or not item.get("accepted", True):
@@ -1656,6 +1662,19 @@ class StalzonePlugin(Star):
                             )
                         except asyncio.CancelledError:
                             raise
+                        except (BadRequestError, NotFoundError) as exc:
+                            updated[str(item.get("key") or item_id)] = {
+                                "unavailable": True,
+                                "reason": "not_marketable",
+                                "source": "auction",
+                            }
+                            resolved_count += 1
+                            logger.info(
+                                "STALZONE arsenal item not marketable: %s (%s)",
+                                item_id,
+                                exc,
+                            )
+                            continue
                         except Exception as exc:
                             logger.warning(
                                 "STALZONE arsenal price fetch failed for %s: %s",
@@ -1664,20 +1683,28 @@ class StalzonePlugin(Star):
                             )
                             continue
                         price, deals, dropped = self._arsenal_median(payload)
+                        key = str(item.get("key") or item_id)
                         if price is None:
+                            updated[key] = {
+                                "unavailable": True,
+                                "reason": "insufficient_samples",
+                                "source": "auction",
+                            }
+                            resolved_count += 1
                             continue
-                        updated[str(item.get("key") or item_id)] = {
+                        updated[key] = {
                             "price": price,
                             "deals": deals,
                             "dropped": dropped,
                             "source": "auction",
                         }
                         updated_count += 1
+                        resolved_count += 1
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("STALZONE arsenal price refresh failed")
-            if not updated_count and not previous:
+            if not resolved_count and not previous:
                 logger.warning(
                     "STALZONE arsenal refresh produced no prices; retrying next cycle"
                 )
@@ -1689,8 +1716,9 @@ class StalzonePlugin(Star):
             self._arsenal_cache_region = region
             self._save_arsenal_cache()
             logger.info(
-                "STALZONE arsenal snapshot updated: %d/%d auction prices",
+                "STALZONE arsenal snapshot updated: %d prices, %d resolved",
                 updated_count,
+                resolved_count,
                 sum(
                     1
                     for item in self._arsenal_static
@@ -1732,6 +1760,7 @@ class StalzonePlugin(Star):
         if not self._arsenal_static:
             return None
         entries: list[dict[str, Any]] = []
+        cache_ready = bool(self._arsenal_generated_at)
         for item in self._arsenal_static:
             key = str(item.get("key") or item.get("lunar_id") or "")
             rep = max(0, self._arsenal_int(item.get("reputation")) or 0)
@@ -1742,16 +1771,24 @@ class StalzonePlugin(Star):
             limit_value = self._arsenal_int(str(raw_limit).replace(",", "")) or 0
             source = str(item.get("price_source") or "auction")
             unit: int | None = None
+            unavailable = False
+            reference = False
             if accepted:
                 if source == "manual":
                     unit = self._arsenal_int(item.get("manual_price"))
                 else:
                     cached = self._arsenal_prices.get(key)
                     if isinstance(cached, dict):
-                        unit = self._arsenal_int(cached.get("price"))
+                        if cached.get("unavailable"):
+                            unavailable = True
+                        else:
+                            unit = self._arsenal_int(cached.get("price"))
                     if unit is None:
-                        # First-run fallback; the background refresh replaces it.
+                        # The official item is not marketable, has too few
+                        # trades, or the cache has no entry yet. Fall back to
+                        # the maintained snapshot price, but label it 参考.
                         unit = self._arsenal_int(item.get("seed_price"))
+                        reference = unit is not None
             per_ten_k = (
                 (10000 + rep - 1) // rep if rep else None
             )
@@ -1776,7 +1813,19 @@ class StalzonePlugin(Star):
                     "total_price": total,
                     "total_price_text": f"{total:,}" if total is not None else "—",
                     "days": days,
-                    "source": "手动" if source == "manual" else "拍卖",
+                    "source": (
+                        "手动"
+                        if source == "manual"
+                        else (
+                            "参考"
+                            if reference
+                            else (
+                                "不可交易"
+                                if unavailable
+                                else ("拍卖" if unit is not None else "无数据")
+                            )
+                        )
+                    ),
                     "accepted": accepted,
                 }
             )
@@ -1800,8 +1849,9 @@ class StalzonePlugin(Star):
         )
         cache_note = (
             f"价格快照：{generated_label} UTC+8｜后台空闲刷新（约 3 小时一次）"
+            "｜官方无数据/不可交易时使用内置参考价"
             if generated is not None
-            else "初始快照 + 手动价；官方 3 日价格正在后台空闲刷新，完成后整图切换"
+            else "初始参考价 + 手动价；官方 3 日价格正在后台空闲刷新，完成后整图切换"
         )
         return {
             "region": self._region().upper(),
@@ -1820,7 +1870,7 @@ class StalzonePlugin(Star):
             ),
             "data_note": (
                 "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜"
-                "无限制=无每日上限｜不收=当前不接收"
+                "无限制=无每日上限｜不收=当前不接收｜参考=内置快照价"
             ),
             "cache_note": cache_note,
         }
