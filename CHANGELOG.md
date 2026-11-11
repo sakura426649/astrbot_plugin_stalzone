@@ -8,6 +8,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Price watch now requires a quality: `/sz 关注 <神器> <品质> +等级 <目标价|-N%> [上限]`. Quality is no longer optional because the same artifact at the same level has very different prices across qualities; allowing an all-quality threshold made alerts ambiguous. Existing subscriptions created with an omitted quality remain readable and continue to poll by each lot's own quality.
+- Creating a watch now checks the current market: if a buyout lot already matches the target, the command refuses to create a pointless subscription and tells the user the current buyout/price. If only the current auction price matches, the subscription is created with a notice that the next tick will send an auction alert and the task will stay active.
 
 ## 1.14.4 - 2026-11-11
 
@@ -59,7 +60,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
-- Added parser/statistics/view, cap, shared-query, buyout-cancel, auction-retain, dedupe, relative-threshold, expiry, permission and group-mention tests; 299 tests and 16 visual signatures pass.
+- Added parser/statistics/view, cap, shared-query, buyout-cancel, auction-retain, dedupe, relative-threshold, expiry, permission, group-mention and current-price pre-check tests; 301 tests and 17 visual signatures pass.
 
 ## 1.13.3 - 2026-11-11
 

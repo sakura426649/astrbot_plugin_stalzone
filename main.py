@@ -3366,9 +3366,10 @@ class StalzonePlugin(Star):
         level = int(query["level"])
         quality = query.get("quality")
         region = self._region()
+        medians_map: dict[int | None, int] = {}
         async with self._make_client() as client:
             try:
-                await client.get_auction_lots(item_id, limit=1)
+                lots_payload = await client.get_auction_lots(item_id, limit=200)
             except (BadRequestError, NotFoundError):
                 return "该神器暂不支持拍卖查询，无法创建价格关注。"
             except StalzoneAPIError as exc:
@@ -3384,17 +3385,47 @@ class StalzonePlugin(Star):
                 except StalzoneAPIError:
                     history = {}
                 cutoff = datetime.now(timezone.utc) - timedelta(days=3)
-                medians = history_medians(
+                medians_map = history_medians(
                     history, level, cutoff=cutoff, now=datetime.now(timezone.utc)
                 )
                 median = (
-                    medians.get(quality)
+                    medians_map.get(quality)
                     if quality is not None
-                    else medians.get(None)
+                    else medians_map.get(None)
                 )
                 if not median:
                     return "该神器/等级暂无近 3 天成交中位数，请改用绝对价。"
         now = datetime.now(timezone.utc)
+        probe = {
+            "quality": quality,
+            "level": level,
+            "mode": query["mode"],
+            "threshold": query.get("threshold"),
+            "relative_pct": query.get("relative_pct"),
+            "cap": query.get("cap"),
+            "seen": {},
+        }
+        current_buyouts, current_auctions = self._watch_matches(
+            probe,
+            watch_lot_rows(lots_payload, item_id),
+            medians_map,
+            now,
+            self._watch_interval(),
+        )
+        if current_buyouts:
+            best = current_buyouts[0]
+            return (
+                f"当前已有买断挂单 {int(best['price']):,} 卢布，"
+                f"已达到/低于目标价 {int(best['target']):,}；{best['remaining']}。{chr(10)}"
+                "无需创建关注；如果仍想等更低价格，请把目标价设在该挂单价以下。"
+            )
+        auction_note = ""
+        if current_auctions:
+            best = current_auctions[0]
+            auction_note = (
+                f"{chr(10)}注意：当前竞拍价 {int(best['price']):,} 已达到目标价，"
+                "关注已创建，下一轮会发竞拍提醒（不会自动取消关注）。"
+            )
         key = self._watch_key(
             target["session"],
             target["user_id"],
@@ -3469,6 +3500,7 @@ class StalzonePlugin(Star):
             f"{action}：{label}\n"
             f"有效期至 {parse_time(entry['expires_at']).astimezone(CST).strftime('%m-%d %H:%M')} UTC+8。\n"
             "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
+            + auction_note
         )
 
     def _watch_interval(self) -> int:

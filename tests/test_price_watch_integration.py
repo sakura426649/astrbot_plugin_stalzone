@@ -91,6 +91,45 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         cancel_usage = await integration.collect(plugin, "/sz 取消关注")
         self.assertIn("用法：/sz 取消关注", cancel_usage)
 
+    async def test_target_above_current_buyout_is_rejected(self):
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        WatchClient.lots = [
+            {
+                "amount": 1,
+                "currentPrice": 7500,
+                "buyoutPrice": 7800,
+                "startTime": "2026-11-11T00:00:00Z",
+                "endTime": (now + timedelta(hours=2)).isoformat(),
+                "additional": {"qlt": 4, "ptn": 15},
+            }
+        ]
+        result = await plugin._handle_watch(
+            WatchEvent("/sz"), "wg53 红 +15 8000"
+        )
+        self.assertIn("无需创建关注", result)
+        self.assertEqual(plugin._watch_subs(), {})
+
+    async def test_target_above_current_auction_creates_with_notice(self):
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        WatchClient.lots = [
+            {
+                "amount": 1,
+                "currentPrice": 7000,
+                "buyoutPrice": 9000,
+                "startTime": "2026-11-11T00:00:00Z",
+                "endTime": (now + timedelta(hours=2)).isoformat(),
+                "additional": {"qlt": 4, "ptn": 15},
+            }
+        ]
+        result = await plugin._handle_watch(
+            WatchEvent("/sz"), "wg53 红 +15 8000"
+        )
+        self.assertIn("已创建关注", result)
+        self.assertIn("当前竞拍价", result)
+        self.assertEqual(len(plugin._watch_subs()), 1)
+
     async def test_create_update_and_per_user_cap(self):
         plugin = self.make_plugin()
         created = await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
