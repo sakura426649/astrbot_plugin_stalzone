@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.4 - 2026-11-11
+
+### Changed
+
+- Alert card region is now a large rounded pill (24px text, 52px high), sized to the region text with even padding, vertically centered with the icon/name row and right-aligned with the hero panel edge.
+
 ## 1.14.3 - 2026-11-11
 
 ### Fixed

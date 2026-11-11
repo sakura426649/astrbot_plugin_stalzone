@@ -2882,6 +2882,7 @@ def render_watch_alert_card(
         subtitle_font = ImageFont.truetype(str(font_file), 17)
         item_font = ImageFont.truetype(str(font_file), 44)
         chip_font = ImageFont.truetype(str(font_file), 15)
+        region_font = ImageFont.truetype(str(font_file), 24)
         price_label_font = ImageFont.truetype(str(font_file), 16)
         price_font = ImageFont.truetype(str(font_file), 44)
         value_font = ImageFont.truetype(str(font_file), 44)
@@ -2935,23 +2936,36 @@ def render_watch_alert_card(
             icon_size = 0
     text_x = margin + (icon_size + 24 if icon_size else 0)
     identity_center = identity_y + (icon_size // 2 if icon_size else 28)
+    region_text = str(view.get("region") or "EU").upper()
+    region_w = int(region_font.getlength(region_text)) + 48
+    region_h = 52
+    region_right = width - margin
+    region_left = region_right - region_w
+    region_top = identity_center - region_h // 2
+    draw.rounded_rectangle(
+        (region_left, region_top, region_right, region_top + region_h),
+        radius=26,
+        fill="#0C1621",
+        outline=accent,
+        width=2,
+    )
+    draw.text(
+        (region_left + region_w / 2, region_top + region_h / 2),
+        region_text,
+        font=region_font,
+        fill=accent,
+        anchor="mm",
+    )
     draw.text(
         (text_x, identity_center - 26),
         _fit_text(
             draw,
             str(view.get("item_label") or ""),
             item_font,
-            width - margin - text_x - 120,
+            max(120, region_left - text_x - 26),
         ),
         font=item_font,
         fill=quality_color,
-    )
-    draw.text(
-        (width - margin, identity_center),
-        str(view.get("region") or "EU").upper(),
-        font=chip_font,
-        fill=muted,
-        anchor="rm",
     )
 
     hero_y = 300
