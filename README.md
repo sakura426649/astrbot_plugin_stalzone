@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.6-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.7-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -217,6 +217,7 @@
 `/sz 关注 <神器> <品质> +等级 <目标价|-N%> [上限]` 只针对神器，**品质和等级都必须写**（品质白/绿/蓝/粉/红/金，等级 `+0～+15`）。
 
 - `8000`：买断单价 ≤ 8000 提醒；
+- 支持价格缩写：`3K` = 3,000、`3M` / `3kk` = 3,000,000，大小写不限，也支持 `3,000,000` 和 `3 000 000`；`3.5M` 这类小数同样可用；
 - `-20%`：低于同等级、同品质近 3 天中位数的 20% 提醒；
 - `-20% 12000`：相对价，但绝对价不能超过 12000；
 - 每位用户最多 2 种神器，每个会话最多 5 种不同神器；同一神器重复发送是更新规则；
@@ -438,7 +439,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、官方数据库同步、神器估价、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **301 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。官方物品库的更新流程见 [`docs/official-item-database.md`](docs/official-item-database.md)。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、官方数据库同步、神器估价、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **302 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。官方物品库的更新流程见 [`docs/official-item-database.md`](docs/official-item-database.md)。
 
 演示服冒烟测试（需要演示应用凭证）：
 

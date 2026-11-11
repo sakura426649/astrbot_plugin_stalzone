@@ -282,7 +282,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.6"
+PLUGIN_VERSION = "1.14.7"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -518,10 +518,10 @@ USAGE = {
         "  神器   必填，中文名 / 英文名 / 神器ID\n"
         "  品质   必填，白/绿/蓝/粉/红/金\n"
         "  等级   必填，+0～+15\n"
-        "  目标价   必填，如 8000；或 -20% 表示低于近3天中位数20%\n"
+        "  目标价   必填，如 8000 / 3K / 3M / 3kk；或 -20% 表示低于近3天中位数20%\n"
         "  上限   可选，相对价模式下限制最高绝对价\n"
         "示例：\n"
-        "  /sz 关注 原子 红 +15 8000\n"
+        "  /sz 关注 原子 红 +15 3M\n"
         "  /sz 关注 原子 金 +15 -20%\n"
         "  /sz 关注 原子 金 +15 -20% 12000\n"
         "  /sz 关注列表\n"

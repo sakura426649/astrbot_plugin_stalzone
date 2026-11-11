@@ -46,6 +46,29 @@ class WatchParserTests(unittest.TestCase):
             parse_watch_query("原子 红 +15 -20% 12000")["cap"], 12000
         )
 
+    def test_price_units_and_separators(self):
+        cases = {
+            "3M": 3_000_000,
+            "3m": 3_000_000,
+            "3kk": 3_000_000,
+            "3KK": 3_000_000,
+            "3K": 3_000,
+            "3k": 3_000,
+            "3,000,000": 3_000_000,
+            "3 000 000": 3_000_000,
+            "3.5M": 3_500_000,
+            "3,5M": 3_500_000,
+        }
+        for token, expected in cases.items():
+            query = parse_watch_query(f"原子 红 +15 {token}")
+            self.assertEqual(query["threshold"], expected, token)
+            self.assertEqual(query["mode"], "absolute", token)
+        capped = parse_watch_query("原子 红 +15 -20% 3kk")
+        self.assertEqual(capped["mode"], "relative")
+        self.assertEqual(capped["cap"], 3_000_000)
+        with self.assertRaises(WatchQueryError):
+            parse_watch_query("原子 红 +15 3X")
+
     def test_parse_requires_level(self):
         with self.assertRaises(WatchQueryError):
             parse_watch_query("原子 8000")

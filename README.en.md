@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.6-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.7-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -187,6 +187,7 @@ The official history endpoint returns at most **200 records per request**. The p
 `/sz 关注 <artifact> <quality> +level <price|-N%> [cap]` watches artifact prices.
 
 - `8000`: alert when the buyout unit price is at most 8,000;
+- price abbreviations are accepted case-insensitively: `3K` = 3,000, `3M` / `3kk` = 3,000,000, plus `3,000,000`, `3 000 000` and `3.5M`;
 - `-20%`: alert when it is 20% below the 3-day median for the same level/quality;
 - `-20% 12000`: relative threshold with an absolute cap;
 - level and quality are required;

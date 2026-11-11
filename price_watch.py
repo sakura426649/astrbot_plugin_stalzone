@@ -19,6 +19,20 @@ from formatters import (
 
 LEVEL_TOKEN = re.compile(r"^[+＋](\d{1,2})$")
 RELATIVE_TOKEN = re.compile(r"^-(\d{1,2})%$")
+PRICE_TOKEN = re.compile(
+    r"^(\d[\d,._]*)(kk|k|m|b|кк|к|м|б)?$", re.IGNORECASE
+)
+PRICE_MULTIPLIERS = {
+    "": 1,
+    "k": 1_000,
+    "к": 1_000,
+    "kk": 1_000_000,
+    "кк": 1_000_000,
+    "m": 1_000_000,
+    "м": 1_000_000,
+    "b": 1_000_000_000,
+    "б": 1_000_000_000,
+}
 WATCH_DEFAULT_TTL_DAYS = 7
 WATCH_MAX_TTL_DAYS = 30
 
@@ -55,8 +69,9 @@ def parse_watch_query(argument: str) -> dict[str, Any]:
             "神器关注必须写等级，例如：/sz 关注 原子 +15 8000"
         )
     tokens.pop(level_at)
+    _merge_grouped_price(tokens)
     if not tokens:
-        raise WatchQueryError("请填写目标价，例如：8000 或 -20%。")
+        raise WatchQueryError("请填写目标价，例如：8000、3K、3M 或 -20%。")
 
     mode = "absolute"
     threshold: int | None = None
@@ -68,22 +83,22 @@ def parse_watch_query(argument: str) -> dict[str, Any]:
         mode = "relative"
         relative_pct = int(relative.group(1))
         tokens.pop()
-    elif last.isdigit():
+    elif PRICE_TOKEN.fullmatch(last):
         if len(tokens) >= 2:
             previous = RELATIVE_TOKEN.fullmatch(tokens[-2])
             if previous is not None:
                 mode = "relative"
                 relative_pct = int(previous.group(1))
-                cap = int(last)
+                cap = _parse_price_token(last, "价格上限")
                 tokens.pop()
                 tokens.pop()
             else:
                 mode = "absolute"
-                threshold = int(last)
+                threshold = _parse_price_token(last, "目标价")
                 tokens.pop()
         else:
             mode = "absolute"
-            threshold = int(last)
+            threshold = _parse_price_token(last, "目标价")
             tokens.pop()
     else:
         raise WatchQueryError(
@@ -119,6 +134,53 @@ def parse_watch_query(argument: str) -> dict[str, Any]:
         "relative_pct": relative_pct,
         "cap": cap,
     }
+
+
+def _parse_price_token(token: str, label: str) -> int:
+    """Parse ``8000``, ``3K``, ``3M``, ``3kk`` or ``3,000,000``."""
+    text = str(token or "").strip().replace("_", "")
+    match = PRICE_TOKEN.fullmatch(text)
+    if match is None:
+        raise WatchQueryError(
+            f"{label}格式不正确，支持 8000、3K、3M、3kk 或 3,000,000。"
+        )
+    number, unit = match.group(1), (match.group(2) or "").lower()
+    multiplier = PRICE_MULTIPLIERS.get(unit)
+    if multiplier is None:
+        raise WatchQueryError(f"{label}单位不支持，请用 K、M 或 kk。")
+    try:
+        if unit:
+            normalized = number.replace("_", "")
+            if "," in normalized and "." not in normalized:
+                normalized = normalized.replace(",", ".", 1)
+            else:
+                normalized = normalized.replace(",", "")
+            numeric = float(normalized) * multiplier
+        else:
+            # No suffix: commas/dots are thousands separators, not decimals.
+            numeric = float(number.replace(",", "").replace("_", ""))
+    except ValueError:
+        raise WatchQueryError(
+            f"{label}格式不正确，支持 8000、3K、3M、3kk 或 3,000,000。"
+        ) from None
+    value = int(round(numeric))
+    if value <= 0:
+        raise WatchQueryError(f"{label}必须大于 0。")
+    return value
+
+
+def _merge_grouped_price(tokens: list[str]) -> None:
+    """Merge ``3 000 000`` into one token when it is a trailing price."""
+    start = len(tokens)
+    while start > 0 and tokens[start - 1].isdigit():
+        start -= 1
+    group = tokens[start:]
+    if (
+        len(group) >= 2
+        and 1 <= len(group[0]) <= 3
+        and all(len(part) == 3 for part in group[1:])
+    ):
+        tokens[start:] = ["".join(group)]
 
 
 def watch_query_summary(query: dict[str, Any]) -> str:

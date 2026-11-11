@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.7 - 2026-11-11
+
+### Added
+
+- Price-watch thresholds and caps accept human-readable units case-insensitively: `3K` = 3,000, `3M` / `3kk` = 3,000,000, plus `3,000,000`, `3 000 000`, `3.5M` and `3,5M`. Cyrillic `к/кк/м` are accepted too.
+
+### Tests
+
+- Added unit/separator parser coverage; 302 tests and 17 visual signatures pass.
+
 ## 1.14.6 - 2026-11-11
 
 ### Added
