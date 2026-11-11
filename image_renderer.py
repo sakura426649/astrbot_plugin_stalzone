@@ -1678,10 +1678,16 @@ def render_usage_card(
 def _fit_text(draw: Any, text: str, font: Any, max_width: int) -> str:
     if draw.textlength(text, font=font) <= max_width:
         return text
-    trimmed = text
-    while trimmed and draw.textlength(trimmed + "…", font=font) > max_width:
-        trimmed = trimmed[:-1]
-    return (trimmed + "…") if trimmed else "…"
+    # Binary search the longest prefix that fits.  The old character-by-
+    # character loop was O(n^2) on long nicknames/item names.
+    low, high = 0, len(text)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if draw.textlength(text[:mid] + "…", font=font) <= max_width:
+            low = mid
+        else:
+            high = mid - 1
+    return (text[:low] + "…") if low else "…"
 
 
 def _fit_auction_name(
@@ -2685,6 +2691,8 @@ def render_watch_list_card(
         return None
     display_file = _find_display_font(font_path) or font_file
     users = [user for user in (view.get("users") or []) if isinstance(user, dict)]
+    page = max(1, int(view.get("page") or 1))
+    pages = max(1, int(view.get("pages") or 1))
     try:
         eyebrow_font = ImageFont.truetype(str(font_file), 15)
         title_font = ImageFont.truetype(str(font_file), 44)
@@ -2735,6 +2743,8 @@ def render_watch_list_card(
         f"全局 {int(view.get('global_items') or 0)} 种",
         f"每 {int(view.get('refresh_minutes') or 2)} 分钟",
     ]
+    if pages > 1:
+        chips.append(f"第 {page}/{pages} 页")
     chip_right = width - margin
     for text in reversed(chips):
         chip_w = int(chip_font.getlength(text)) + 24
@@ -2794,6 +2804,8 @@ def render_watch_list_card(
                     fill=accent,
                 )
             user_name = str(user.get("user_name") or "未知用户")
+            if user.get("continued"):
+                user_name += "（续）"
             fitted_name = _fit_text(draw, user_name, user_font, 500)
             draw.text(
                 (margin + 26, y + 18),
@@ -2811,7 +2823,7 @@ def render_watch_list_card(
                 draw.text((badge_x + 8, y + 25), "你", font=badge_font, fill="#07120D")
             draw.text(
                 (width - margin - 26, y + 24),
-                f"{len(items)} 项",
+                f"{int(user.get('total_items') or len(items))} 项",
                 font=chip_font,
                 fill=muted,
                 anchor="ra",
@@ -2866,9 +2878,14 @@ def render_watch_list_card(
             y += block_h + block_gap
 
     draw.line((margin, height - footer_h + 6, width - margin, height - footer_h + 6), fill="#26384A", width=1)
+    footer_text = (
+        "普通用户只能取消/续期自己的关注；管理员/群主/群管可操作本群其他人的关注"
+    )
+    if pages > 1:
+        footer_text = f"普通用户只能操作自己的关注｜翻页：/sz 关注列表 <页码>（共 {pages} 页）"
     draw.text(
         (margin, height - footer_h + 22),
-        "普通用户只能取消/续期自己的关注；管理员/群主/群管可操作本群其他人的关注",
+        footer_text,
         font=footer_font,
         fill=muted,
     )
@@ -3001,11 +3018,16 @@ def render_watch_action_card(
         outline="#26384A",
         width=1,
     )
-    fields = [
-        ("目标价", str(view.get("target") or "—")),
-        ("有效期", str(view.get("expiry") or "—")),
-        ("说明", str(view.get("detail") or "")),
-    ]
+    if has_item:
+        fields = [
+            ("目标价", str(view.get("target") or "—")),
+            ("有效期", str(view.get("expiry") or "—")),
+            ("说明", str(view.get("detail") or "")),
+        ]
+    else:
+        # The headline is already drawn above the panel; repeating it as a
+        # labeled "target price" made the clear-all card read "目标价 3 条".
+        fields = [("说明", str(view.get("detail") or ""))]
     y = info_y + 20
     for label, value in fields:
         if not value:
@@ -3013,7 +3035,12 @@ def render_watch_action_card(
         draw.text((margin + 24, y), label, font=label_font, fill=muted)
         draw.text(
             (margin + 130, y - 4),
-            _fit_text(draw, value, value_font if label != "说明" else body_font, 850),
+            _fit_text(
+                draw,
+                value,
+                value_font if label != "说明" else body_font,
+                width - (margin + 130) - margin - 10,
+            ),
             font=value_font if label != "说明" else body_font,
             fill=body if label != "说明" else "#C6D3E2",
         )
@@ -3172,9 +3199,16 @@ def render_watch_created_card(
     rule_y = panel_y + 154
     box_gap = 18
     box_w = (width - margin * 2 - box_gap) // 2
+    auction_alerts = bool(view.get("auction_alerts", True))
     rules = [
         ("买断命中", "发送提醒后自动取消该条关注；没买到需重新关注", accent),
-        ("竞拍命中", "只发送提醒，不取消关注；同挂单不重复提醒", "#FFB454"),
+        (
+            "竞拍命中" if auction_alerts else "竞拍提醒已关闭",
+            "只发送提醒，不取消关注；同挂单不重复提醒"
+            if auction_alerts
+            else "配置中已关闭，当前只监控买断价",
+            "#FFB454",
+        ),
     ]
     for index, (heading, text, color) in enumerate(rules):
         x = margin + index * (box_w + box_gap)
@@ -3357,11 +3391,29 @@ def render_watch_alert_card(
         font=price_label_font,
         fill=muted,
     )
-    draw.text((margin + 26, hero_y + 46), f"{int(view.get('price') or 0):,}", font=price_font, fill=accent)
+    price_text = f"{int(view.get('price') or 0):,}"
+    target_text = f"≤ {int(view.get('target') or 0):,}"
+    # Keep the price and target the same size (the user explicitly asked for
+    # that), but shrink both together before they collide with the divider or
+    # the optional buyout column.
+    price_room = 420 - 26 - 14
+    target_room = (width - margin - 24) - (margin + 450) - 14
+    font_size = 44
+    while font_size > 24:
+        probe = ImageFont.truetype(str(font_file), font_size)
+        if (
+            probe.getlength(price_text) <= price_room
+            and probe.getlength(target_text) <= target_room
+        ):
+            break
+        font_size -= 2
+    price_font = ImageFont.truetype(str(font_file), font_size)
+    value_font = ImageFont.truetype(str(font_file), font_size)
+    draw.text((margin + 26, hero_y + 46), price_text, font=price_font, fill=accent)
     draw.text((margin + 26, hero_y + 116), "卢布", font=chip_font, fill=muted)
     draw.line((margin + 420, hero_y + 24, margin + 420, hero_y + 136), fill="#33465A", width=1)
     draw.text((margin + 450, hero_y + 22), "目标价", font=price_label_font, fill=muted)
-    draw.text((margin + 450, hero_y + 50), f"≤ {int(view.get('target') or 0):,}", font=value_font, fill=blue)
+    draw.text((margin + 450, hero_y + 50), target_text, font=value_font, fill=blue)
     draw.text((margin + 450, hero_y + 116), str(view.get("remaining") or ""), font=chip_font, fill="#C6D3E2")
     if view.get("buyout") and view.get("kind") == "auction":
         draw.text(

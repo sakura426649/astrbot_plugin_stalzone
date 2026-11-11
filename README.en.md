@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.17-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.18-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -84,6 +84,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | `/sz clans [page]` | Clan list |
 | `/sz operations [map]` | Recent operation sessions |
 | `/sz regions` | Official region list |
+| `/sz 检查` / `/sz 物品库检查` / `/sz 物品库更新` | Check full icons, then supplement the index/icons from the official EXBO database; keeps existing Chinese and writes blank translation slots (admin) |
 | `/sz diag` / `/sz 状态` | Runtime, API health/circuit breaker, auto-alert status, data, cache, storage and render status (no secrets) |
 | `/sz help` | Image help menu |
 
@@ -112,6 +113,15 @@ The leading slash is optional, but a space is required after `sz`: `sz auction A
 | `emission_notify_target` | empty | Optional platform-prefix seed for numeric allow-list entries; never an extra recipient |
 | `emission_group_whitelist` | empty | QQ group allow-list; add one group number per entry. Empty sends nothing; every listed group gets the alert |
 | `emission_group_blacklist` | empty | QQ group deny-list; add one group number per entry. Takes priority over the allow-list |
+| `price_watch_enabled` | `true` | Artifact price-watch switch; no polling when there are no subscriptions |
+| `price_watch_interval` | `120` | Poll interval in seconds, 60–600 |
+| `price_watch_per_user` | `2` | Maximum distinct artifact types per user; re-sending the same item updates it |
+| `price_watch_user_total` | `8` | Maximum total subscriptions per user (quality/level variants each count), 1–100 |
+| `price_watch_session_items` | `5` | Maximum distinct artifacts per session |
+| `price_watch_batch` | `5` | Distinct artifacts polled per tick; extra items rotate fairly |
+| `price_watch_group_restrict` | `false` | When on, only admins/group owners/managers can create watches in groups |
+| `price_watch_auction_alerts` | `true` | Also alert on auction/start price hits; off means buyout-only monitoring |
+| `price_watch_ttl_days` | `7` | Watch lifetime in days; expiry notifies once and removes it |
 
 ### Automatic emission alerts
 
@@ -191,12 +201,25 @@ The official history endpoint returns at most **200 records per request**. The p
 - `-20%`: alert when it is 20% below the 3-day median for the same level/quality;
 - `-20% 12000`: relative threshold with an absolute cap;
 - level and quality are required;
-- each user has at most 2 artifact types and each session at most 5; re-sending the same item updates the rule;
+- each user has at most 2 artifact types and 8 total subscriptions (quality/level variants each count; configurable), and each session at most 5 distinct artifacts; re-sending the same item updates the rule;
+- a watch captures the default region when it is created; changing the default later does not migrate existing watches, and the list shows each watch's actual region;
 - users watching the same artifact share one API fetch per cycle, while thresholds, quality/level and dedupe state stay per user;
 - every 2 minutes the scheduler polls at most 5 distinct artifacts and rotates fairly if there are more;
 - a buyout hit sends an alert and then cancels that subscription; if it was sniped, re-follow manually;
 - an auction hit only sends an alert and keeps the subscription; the same lot is never alerted twice, but a different low auction lot will alert again;
-- `/sz 关注列表` shows everyone in the current session with your own entries pinned; normal users can only cancel their own, admins can cancel anyone in the session.
+- `/sz 关注列表 [page]` shows everyone in the current session with your own entries pinned, up to eight subscriptions per page (e.g. `/sz 关注列表 2`); normal users can only cancel their own, admins can cancel anyone in the session.
+
+## Item database check/update
+
+`/sz 检查`, `/sz 物品库检查` and `/sz 物品库更新` are the same admin command. It first checks `item_icons/` coverage against `item_index.json`; below 90% (or more than 24 icons missing) it downloads the project's latest full package and extracts only its complete icon set into the plugin data directory. When the official commit changes, it downloads the EXBO `stalzone-database` snapshot and supplements item IDs, English/Russian names, colors, categories and icons; an unchanged commit only refreshes blank translation slots.
+
+- Existing Chinese names and `source: supplemental` entries are preserved.
+- New official items fall back to English and get blank slots in `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`.
+- Fill `{item_id: "Chinese name"}` in that file and reload the plugin.
+- Backups are written to `data/plugin_data/astrbot_plugin_stalzone/item_db_backups/`; only the latest three are kept.
+- The official database has no Chinese; this command also does not update `item_details.json` stats/descriptions.
+
+See [`docs/official-item-database.md`](docs/official-item-database.md) for the manual workflow and verification commands.
 
 ## Development
 

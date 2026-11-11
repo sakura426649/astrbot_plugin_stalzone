@@ -9,6 +9,7 @@ import sys
 import tempfile
 import types
 import unittest
+import zipfile
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -740,6 +741,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0][0], "plain")
         self.assertIn("已关闭", results[0][1])
 
+    async def test_item_db_command_requires_admin(self):
+        text = await collect(self.make_plugin(), "/sz 物品库检查")
+        self.assertIn("管理员", text)
+
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
 
@@ -834,6 +839,106 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(call[0] == "apply" for call in calls))
         self.assertIs(scheduled[0]["event"], event)
         self.assertIn("热重载完成", scheduled[0]["notify_text"])
+
+    async def test_item_db_runtime_update_preserves_chinese_and_writes_slots(self):
+        plugin = self.make_plugin()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            data = root / "data"
+            data.mkdir()
+            index_path = root / "item_index.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "abc",
+                                "en": "Old Gun",
+                                "ru": "Старая",
+                                "zh": "旧枪",
+                                "zh_source": "exact",
+                                "cat": "weapon/rifle",
+                                "source": "official",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            plugin.item_index = main_module.ItemIndex(
+                index_path,
+                overrides_path=data / "item_name_overrides.json",
+                aliases_path=data / "item_aliases.json",
+            )
+            plugin._cache_dir = lambda: data  # type: ignore[assignment]
+
+            async def status(_event, _text):
+                return None
+
+            async def no_full(_event):
+                return False, "skip"
+
+            async def download(_url, destination, *, timeout=180.0):
+                with zipfile.ZipFile(destination, "w") as archive:
+                    archive.writestr(
+                        "db-main/ru/items/weapon/rifle/abc.json",
+                        json.dumps(
+                            {"name": {"lines": {"en": "New Gun", "ru": "Новая"}}}
+                        ),
+                    )
+                    archive.writestr(
+                        "db-main/ru/items/supply/food/food1.json",
+                        json.dumps(
+                            {"name": {"lines": {"en": "Food", "ru": "Еда"}}}
+                        ),
+                    )
+                    for index in range(100):
+                        archive.writestr(
+                            f"db-main/ru/items/other/misc/filler{index}.json",
+                            json.dumps(
+                                {
+                                    "name": {
+                                        "lines": {"en": f"Filler {index}"}
+                                    }
+                                }
+                            ),
+                        )
+                    archive.writestr(
+                        "db-main/ru/icons/weapon/rifle/abc.png",
+                        bytes([137]) + b"PNG" + bytes([13, 10, 26, 10]) + b"x",
+                    )
+                    archive.writestr(
+                        "db-main/ru/icons/supply/food/food1.png",
+                        bytes([137]) + b"PNG" + bytes([13, 10, 26, 10]) + b"x",
+                    )
+
+            async def commit():
+                return "abc123"
+
+            plugin._update_status = status  # type: ignore[assignment]
+            plugin._install_item_db_full_icons = no_full  # type: ignore[assignment]
+            plugin._download_update_asset = download  # type: ignore[assignment]
+            plugin._fetch_official_commit = commit  # type: ignore[assignment]
+            text = await plugin._run_item_db_update(FakeEvent("/sz"))
+            self.assertIn("物品库检查/补全完成", text)
+            merged = json.loads(index_path.read_text(encoding="utf-8"))
+            by_id = {item["id"]: item for item in merged["items"]}
+            self.assertEqual(by_id["abc"]["zh"], "旧枪")
+            self.assertEqual(by_id["food1"]["zh"], "Food")
+            self.assertEqual(merged["official_commit"], "abc123")
+            overrides = json.loads(
+                (data / "item_name_overrides.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(overrides["food1"], "")
+            self.assertTrue((data / "item_icons" / "food1.png").is_file())
+
+            async def unexpected_download(*_args, **_kwargs):
+                raise AssertionError("official archive should not be downloaded")
+
+            plugin._download_update_asset = unexpected_download  # type: ignore[assignment]
+            second = await plugin._run_item_db_update(FakeEvent("/sz"))
+            self.assertIn("无需重新下载", second)
 
     async def test_self_update_package_choice(self):
         plugin = self.make_plugin()

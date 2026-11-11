@@ -30,11 +30,48 @@ RAW_ROOT = (
 )
 USER_AGENT = "astrbot-plugin-stalzone-sync/1.0"
 PROXIES = ("https://gh-proxy.com/", "https://v4.gh-proxy.org/")
+ROUTE_PREFIXES = ("", *PROXIES)
+_PREFERRED_PREFIX = ""
+
+
+def _select_route() -> None:
+    """Probe direct and both proxies once, then use the fastest for all files."""
+    global _PREFERRED_PREFIX
+    url = f"{API_ROOT}/commits/main"
+    best_speed = -1.0
+    best_prefix = ""
+    print("probing GitHub routes (direct / gh-proxy / v4.gh-proxy)...")
+    for prefix in ROUTE_PREFIXES:
+        candidate = f"{prefix}{url}"
+        started = time.monotonic()
+        try:
+            request = urllib.request.Request(
+                candidate, headers={"User-Agent": USER_AGENT}
+            )
+            with urllib.request.urlopen(request, timeout=8.0) as response:
+                data = response.read(64 * 1024)
+            elapsed = max(0.05, time.monotonic() - started)
+            speed = len(data) / elapsed
+            label = prefix or "direct"
+            print(f"  {label}: {speed / 1024:.0f} KiB/s")
+            if speed > best_speed:
+                best_speed = speed
+                best_prefix = prefix
+        except Exception as exc:
+            print(f"  {prefix or 'direct'}: failed ({exc})")
+    _PREFERRED_PREFIX = best_prefix
+    print(f"route selected: {best_prefix or 'direct'}")
 
 
 def _request(url: str, timeout: float = 20.0) -> bytes:
     last_error: Exception | None = None
-    candidates = [url] + [f"{proxy}{url}" for proxy in PROXIES]
+    candidates: list[str] = []
+    if _PREFERRED_PREFIX:
+        candidates.append(f"{_PREFERRED_PREFIX}{url}")
+    for prefix in ROUTE_PREFIXES:
+        candidate = f"{prefix}{url}"
+        if candidate not in candidates:
+            candidates.append(candidate)
     for candidate in candidates:
         try:
             request = urllib.request.Request(
@@ -131,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         "--icons-only", action="store_true", help="skip ru/items downloads"
     )
     args = parser.parse_args(argv)
+    _select_route()
 
     dest = Path(args.dest).resolve()
     commit = _resolve_commit(args.ref)

@@ -159,10 +159,12 @@ def _parse_price_token(token: str, label: str) -> int:
         else:
             # No suffix: commas/dots are thousands separators, not decimals.
             numeric = float(number.replace(",", "").replace("_", ""))
-    except ValueError:
+    except (ValueError, OverflowError):
         raise WatchQueryError(
             f"{label}格式不正确，支持 8000、3K、3M、3kk 或 3,000,000。"
         ) from None
+    if not (0 < numeric < 1e15):
+        raise WatchQueryError(f"{label}过大，请填写 1～999,999,999,999,999 之间的价格。")
     value = int(round(numeric))
     if value <= 0:
         raise WatchQueryError(f"{label}必须大于 0。")
@@ -284,6 +286,7 @@ def watch_lot_rows(
                 f"et{lot.get('endTime') or ''}",
             ]
         )
+        end_raw = lot.get("endTime")
         rows.append(
             {
                 "buyout": buyout if buyout and buyout > 0 else None,
@@ -292,7 +295,10 @@ def watch_lot_rows(
                 "quality": quality,
                 "level": level,
                 "start": lot.get("startTime"),
-                "end": lot.get("endTime"),
+                "end": end_raw,
+                # Parsed once per lot; _watch_matches reuses it for every
+                # subscriber instead of reparsing the same ISO string.
+                "end_dt": parse_time(end_raw),
                 "signature": signature,
             }
         )
@@ -445,6 +451,7 @@ def build_watch_alert_view(
         "hint": hint,
         "footer": "STALZONE · 神器价格关注",
         "auto_cancel": kind == "buyout",
+        "extra": max(0, int(extra or 0)),
     }
 
 
@@ -456,8 +463,11 @@ def format_watch_alert_text(view: dict[str, Any]) -> str:
         f"当前价格：{int(view.get('price') or 0):,} 卢布",
         f"目标价：≤ {int(view.get('target') or 0):,} 卢布",
         f"{view.get('remaining')}",
-        str(view.get("hint") or ""),
     ]
+    extra = int(view.get("extra") or 0)
+    if extra:
+        lines.append(f"同轮另有 {extra} 条符合条件的挂单。")
+    lines.append(str(view.get("hint") or ""))
     return "\n".join(line for line in lines if line)
 
 
@@ -468,19 +478,29 @@ def format_watch_list(view: dict[str, Any]) -> str:
         f"｜全局 {int(view.get('global_items') or 0)} 种"
         f"｜预计每 {int(view.get('refresh_minutes') or 2)} 分钟刷新",
     ]
+    pages = max(1, int(view.get("pages") or 1))
+    page = max(1, int(view.get("page") or 1))
+    if pages > 1:
+        subtitle.append(f"第 {page}/{pages} 页")
     users = [user for user in (view.get("users") or []) if isinstance(user, dict)]
     sections: list[tuple[str, list[str]]] = []
     if users:
         for user in users:
             name = str(user.get("user_name") or "未知用户")
+            if user.get("continued"):
+                name += "（续）"
             if user.get("own"):
                 name += "  [你]"
             rows: list[str] = []
             for item in user.get("items") or []:
                 if not isinstance(item, dict):
                     continue
+                quality = str(item.get("quality_short") or "")
+                label = str(item.get("item_label") or "")
+                if quality and quality != "全部品质":
+                    label = f"{label}｜{quality}"
                 rows.append(
-                    f"#{item.get('index')} {item.get('item_label')}"
+                    f"#{item.get('index')} {label}"
                     f"｜{item.get('target_short') or item.get('target')}｜{item.get('remaining')}"
                 )
             if rows:
@@ -501,4 +521,6 @@ def format_watch_list(view: dict[str, Any]) -> str:
         "买断命中会提醒后自动取消；竞拍命中只提醒、不取消"
         "｜普通用户只能取消自己的关注"
     )
+    if pages > 1:
+        footer += f"｜翻页：/sz 关注列表 <页码>（共 {pages} 页）"
     return _card("STALZONE · 神器价格关注", subtitle, sections, footer, limit=5000)

@@ -409,6 +409,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"official items : {len(official)}")
     print(f"supplemental   : {output['supplemental_count']}")
     print(f"total          : {len(items)}")
+    untranslated = [
+        item
+        for item in items
+        if item.get("source") == "official"
+        and item.get("zh_source") == "fallback"
+    ]
+    print(f"untranslated   : {len(untranslated)}")
+    for item in untranslated[:10]:
+        print(f"  {item['id']}  {item.get('en') or item.get('ru') or ''}")
+    if len(untranslated) > 10:
+        print(f"  ... and {len(untranslated) - 10} more")
     if duplicates:
         print(f"duplicate ids  : {len(duplicates)} ({', '.join(duplicates[:5])})")
     if missing_icons:

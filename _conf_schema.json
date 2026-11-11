@@ -205,6 +205,12 @@
     "default": 2,
     "hint": "同一用户最多同时关注多少种不同神器；同一神器重复发送是更新规则，不新增。"
   },
+  "price_watch_user_total": {
+    "description": "每位用户最多关注条数",
+    "type": "int",
+    "default": 8,
+    "hint": "同一用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），默认 8，范围 1–100；防止单用户刷大量变体。"
+  },
   "price_watch_session_items": {
     "description": "每个会话最多关注神器数",
     "type": "int",

@@ -139,6 +139,15 @@ try:  # Package import (normal AstrBot plugin loading).
         display_name,
         display_translation,
     )
+    from .item_db_update import (
+        OFFICIAL_ARCHIVE_URL,
+        build_merged_index,
+        extract_full_icons,
+        extract_official_items,
+        icon_coverage,
+        load_json,
+        write_json_atomic,
+    )
     from .lunar_client import LunarProfileClient
     from .price_watch import (
         WATCH_DEFAULT_TTL_DAYS,
@@ -246,6 +255,15 @@ except ImportError:  # Direct execution / flat import fallback.
         display_name,
         display_translation,
     )
+    from item_db_update import (  # type: ignore[no-redef]
+        OFFICIAL_ARCHIVE_URL,
+        build_merged_index,
+        extract_full_icons,
+        extract_official_items,
+        icon_coverage,
+        load_json,
+        write_json_atomic,
+    )
     from lunar_client import LunarProfileClient  # type: ignore[no-redef]
     from price_watch import (  # type: ignore[no-redef]
         WATCH_DEFAULT_TTL_DAYS,
@@ -286,7 +304,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.17"
+PLUGIN_VERSION = "1.14.18"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -296,6 +314,8 @@ UPDATE_LIGHT_ASSET_NAME = "astrbot_plugin_stalzone.zip"
 # counting them as "missing" would force a full download on every update.
 ICONLESS_COMMON_IDS = frozenset({"1rk6g", "5lrg1", "96jyz", "3gp95"})
 UPDATE_BACKUP_KEEP = 3
+ITEM_DB_BACKUP_KEEP = 3
+ITEM_DB_FULL_RATIO = 0.90
 GITHUB_PROXY_PREFIXES = (
     "https://gh-proxy.com/",
     "https://v4.gh-proxy.org/",
@@ -466,6 +486,10 @@ class PendingChoice:
     region: str | None = None
     affix: str | None = None
     level: int | None = None
+    watch_mode: str | None = None
+    watch_threshold: int | None = None
+    watch_relative_pct: int | None = None
+    watch_cap: int | None = None
 
 USAGE = {
     "auction": (
@@ -530,14 +554,17 @@ USAGE = {
         "  /sz 关注 原子 红 +15 3M\n"
         "  /sz 关注 原子 金 +15 -20%\n"
         "  /sz 关注 原子 金 +15 -20% 12000\n"
-        "  /sz 关注列表\n"
+        "  /sz 关注 列表 2\n"
         "  /sz 取消关注 2"
     ),
     "watch_list": (
-        "用法：/sz 关注列表\n"
-        "说明：查看当前会话所有人的神器价格关注；自己的关注置顶\n"
+        "用法：/sz 关注列表 [页码]\n"
+        "说明：查看当前会话所有人的神器价格关注；自己的关注置顶；每页最多 8 条关注\n"
+        "参数：\n"
+        "  页码   可选，从 1 开始；不填为第 1 页\n"
         "示例：\n"
-        "  /sz 关注列表"
+        "  /sz 关注列表\n"
+        "  /sz 关注列表 2"
     ),
     "watch_cancel": (
         "用法：/sz 取消关注 <序号>\n"
@@ -615,6 +642,13 @@ USAGE = {
         "示例：\n"
         "  /sz 1\n"
         "  /sz 候选 1"
+    ),
+    "item_db": (
+        "用法：/sz 检查 / 物品库检查 / 物品库更新\n"
+        "说明：先检查项目完整图标，不足时下载 full 包；再用 EXBO 官方物品库补全索引与图标。保留现有中文，未翻译条目写入 item_name_overrides.json 留空。\n"
+        "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
+        "示例：\n"
+        "  /sz 物品库检查"
     ),
     "alert": (
         "用法：/sz 风暴提醒 白名单 <QQ群号> 或 /sz 风暴提醒 黑名单 <QQ群号>\n"
@@ -713,11 +747,13 @@ class StalzonePlugin(Star):
         self._load_arsenal_cache()
         self._prune_arsenal_cache()
         self._update_lock = asyncio.Lock()
+        self._item_db_lock = asyncio.Lock()
         self._reload_task: asyncio.Task | None = None
         self._update_auto_task: asyncio.Task | None = None
         self._watch_path = data_dir / "price_watch.json"
         self._watch_state = self._load_watch_state()
         self._watch_task: asyncio.Task | None = None
+        self._watch_lock = asyncio.Lock()
         self._watch_median_cache: dict[tuple[str, str, int], tuple[float, dict[int | None, int]]] = {}
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
@@ -728,6 +764,16 @@ class StalzonePlugin(Star):
             self._cfg("card_background_custom", ""),
             self._cfg("card_panel_opacity", 0.90),
         )
+
+    def _sync_render_config(self) -> None:
+        """Apply live WebUI changes before rendering a card.
+
+        The renderer keeps the watermark/background in module globals for
+        speed, so without this a change made while the plugin is running would
+        only take effect after a reload.
+        """
+        set_creator_watermark_hidden(self._hide_creator_watermark())
+        self._apply_card_background()
 
     # ------------------------------------------------------------------ config
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -828,6 +874,78 @@ class StalzonePlugin(Star):
             f"{'any' if quality is None else quality}|{int(level)}"
         )
 
+    def _watch_cap_error(
+        self,
+        subs: dict[str, dict[str, Any]],
+        target: dict[str, Any],
+        item_id: str,
+        quality: int | None,
+        level: int,
+        region: str,
+    ) -> tuple[str, str, dict[str, Any] | None]:
+        """Return (error, key, existing) for the per-user/session caps."""
+        key = self._watch_key(
+            target["session"],
+            target["user_id"],
+            item_id,
+            quality,
+            level,
+        )
+        existing = subs.get(key)
+        user_items = {
+            str(sub.get("item_id") or "")
+            for sub in subs.values()
+            if str(sub.get("user_id") or "") == target["user_id"]
+        }
+        try:
+            per_user = max(1, int(self._cfg("price_watch_per_user", 2) or 2))
+        except (TypeError, ValueError):
+            per_user = 2
+        if existing is None and item_id not in user_items and len(user_items) >= per_user:
+            return f"每位用户最多关注 {per_user} 种神器；请先取消一个再添加。", key, existing
+        user_total = 0
+        if existing is None:
+            user_total = sum(
+                1
+                for sub in subs.values()
+                if str(sub.get("user_id") or "") == target["user_id"]
+            )
+            try:
+                total_limit = max(
+                    1,
+                    min(100, int(self._cfg("price_watch_user_total", 8) or 8)),
+                )
+            except (TypeError, ValueError):
+                total_limit = 8
+            if user_total >= total_limit:
+                return (
+                    f"每位用户最多同时保留 {total_limit} 条关注；"
+                    "请先取消一条再添加。",
+                    key,
+                    existing,
+                )
+        session_items = {
+            (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
+            for sub in subs.values()
+            if str(sub.get("session") or "") == target["session"]
+        }
+        try:
+            session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
+        except (TypeError, ValueError):
+            session_limit = 5
+        if (
+            existing is None
+            and (region, item_id) not in session_items
+            and len(session_items) >= session_limit
+        ):
+            return (
+                f"本会话最多同时关注 {session_limit} 种不同神器；"
+                "请先取消一个再添加。",
+                key,
+                existing,
+            )
+        return "", key, existing
+
     def _load_watch_state(self) -> dict[str, Any]:
         try:
             payload = json.loads(self._watch_path.read_text(encoding="utf-8"))
@@ -915,6 +1033,17 @@ class StalzonePlugin(Star):
         raw = self._watch_state.get("subscriptions")
         return raw if isinstance(raw, dict) else {}
 
+    def _cfg_bool(self, key: str, default: bool = False) -> bool:
+        value = self._cfg(key, default)
+        if value is None:
+            return default
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if not text:
+                return default
+            return text in {"1", "true", "yes", "on"}
+        return bool(value)
+
     def _watch_enabled(self) -> bool:
         value = self._cfg("price_watch_enabled", True)
         if value is None:
@@ -923,6 +1052,16 @@ class StalzonePlugin(Star):
             text = value.strip().lower()
             return not text or text not in {"0", "false", "no", "off"}
         return bool(value)
+
+    def _watch_ttl_days(self) -> int:
+        try:
+            value = int(
+                self._cfg("price_watch_ttl_days", WATCH_DEFAULT_TTL_DAYS)
+                or WATCH_DEFAULT_TTL_DAYS
+            )
+        except (TypeError, ValueError):
+            value = WATCH_DEFAULT_TTL_DAYS
+        return max(1, min(WATCH_MAX_TTL_DAYS, value))
 
 
     def _auto_notify_enabled(self) -> bool:
@@ -1557,7 +1696,8 @@ class StalzonePlugin(Star):
             return [], targets
         text = str(view.get("text", "风暴已开始"))
         image_path: Path | None = None
-        try:
+        if self._render_mode() != "text":
+            self._sync_render_config()
             try:
                 image_path = await asyncio.to_thread(
                     render_emission_alert_card,
@@ -1566,6 +1706,7 @@ class StalzonePlugin(Star):
                 )
             except Exception:
                 logger.exception("STALZONE automatic emission alert render failed")
+        try:
             sent: list[str] = []
             failed: list[str] = []
             for target in targets:
@@ -2216,6 +2357,7 @@ class StalzonePlugin(Star):
         return self._cache_dir() / "help" / f"help_{self._region()}_{env}_{key}.png"
 
     async def _help_image(self) -> Path | None:
+        self._sync_render_config()
         cache = self._help_cache_path()
         try:
             if cache.is_file() and cache.stat().st_size > 1024:
@@ -2266,6 +2408,7 @@ class StalzonePlugin(Star):
     async def _usage_image(self, key: str) -> Path | None:
         if self._render_mode() == "text" or key not in USAGE:
             return None
+        self._sync_render_config()
         try:
             cache = self._usage_cache_path(key)
         except Exception:
@@ -2839,6 +2982,7 @@ class StalzonePlugin(Star):
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
+        self._sync_render_config()
         try:
             icon_path = await self._fetch_icon(icon_url)
             if icon_path is None and faction:
@@ -3018,6 +3162,7 @@ class StalzonePlugin(Star):
     # ------------------------------------------------------------- candidates
     CHOICE_TTL_SECONDS = 600
     MAX_PENDING_CHOICES = 200
+    WATCH_LIST_ROWS_PER_PAGE = 8
     # Poll slowly even outside the usual 2–4h window; game updates have
     # shifted the storm cadence before, and a missed window meant no alert.
     AUTO_SLOW_PROBE_SECONDS = 180
@@ -3053,6 +3198,10 @@ class StalzonePlugin(Star):
         region: str | None = None,
         affix: str | None = None,
         level: int | None = None,
+        watch_mode: str | None = None,
+        watch_threshold: int | None = None,
+        watch_relative_pct: int | None = None,
+        watch_cap: int | None = None,
     ) -> None:
         if event is None or len(candidates) <= 1:
             return
@@ -3080,6 +3229,10 @@ class StalzonePlugin(Star):
             region=region,
             affix=affix,
             level=level,
+            watch_mode=watch_mode,
+            watch_threshold=watch_threshold,
+            watch_relative_pct=watch_relative_pct,
+            watch_cap=watch_cap,
         )
 
     @staticmethod
@@ -3196,7 +3349,7 @@ class StalzonePlugin(Star):
             )
         return rows
 
-    def _watch_list_view(self, event: Any) -> dict[str, Any]:
+    def _watch_list_view(self, event: Any, page: int = 1) -> dict[str, Any]:
         rows = self._watch_rows(event)
         own = [row for row in rows if row["own"]]
         others = [row for row in rows if not row["own"]]
@@ -3237,9 +3390,51 @@ class StalzonePlugin(Star):
                     "mode": str(sub.get("mode") or "absolute"),
                 }
             )
-        users = list(users_map.values())
+        all_users = list(users_map.values())
         subs = list(self._watch_subs().values())
         session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        regions = sorted(
+            {
+                str(sub.get("region") or self._region()).upper()
+                for sub in subs
+                if str(sub.get("session") or "") == session
+            }
+        )
+        all_rows = [
+            (user, item)
+            for user in all_users
+            for item in (user.get("items") or [])
+        ]
+        total_users = len(all_users)
+        total_items = len(all_rows)
+        pages = max(
+            1,
+            (total_items + self.WATCH_LIST_ROWS_PER_PAGE - 1)
+            // self.WATCH_LIST_ROWS_PER_PAGE,
+        )
+        try:
+            page = max(1, int(page or 1))
+        except (TypeError, ValueError):
+            page = 1
+        start = (page - 1) * self.WATCH_LIST_ROWS_PER_PAGE
+        page_rows = all_rows[start : start + self.WATCH_LIST_ROWS_PER_PAGE]
+        seen_users = {user.get("user_id") for user, _item in all_rows[:start]}
+        page_users_map: dict[str, dict[str, Any]] = {}
+        for user, item in page_rows:
+            user_id = str(user.get("user_id") or "")
+            entry = page_users_map.setdefault(
+                user_id,
+                {
+                    "user_id": user_id,
+                    "user_name": user.get("user_name"),
+                    "own": bool(user.get("own")),
+                    "continued": user_id in seen_users,
+                    "total_items": len(user.get("items") or []),
+                    "items": [],
+                },
+            )
+            entry["items"].append(item)
+        users = list(page_users_map.values())
         session_items = len(
             {
                 (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
@@ -3253,23 +3448,60 @@ class StalzonePlugin(Star):
                 for sub in subs
             }
         )
-        interval = max(60, int(self._cfg("price_watch_interval", 120) or 120))
-        session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
-        batch = max(1, int(self._cfg("price_watch_batch", 5) or 5))
+        interval = self._watch_interval()
+        try:
+            session_limit = max(
+                1, int(self._cfg("price_watch_session_items", 5) or 5)
+            )
+        except (TypeError, ValueError):
+            session_limit = 5
+        try:
+            # The scheduler hard-caps a tick at 10 items; don't advertise a
+            # faster refresh than it can actually deliver.
+            batch = max(1, min(10, int(self._cfg("price_watch_batch", 5) or 5)))
+        except (TypeError, ValueError):
+            batch = 5
         refresh_minutes = max(1, -(-global_items // batch)) * max(1, interval // 60)
         return {
-            "region": self._region().upper(),
+            "region": "/".join(regions) if regions else self._region().upper(),
+            "regions": regions,
             "own": own,
             "others": others,
             "users": users,
+            "page": page,
+            "pages": pages,
+            "total_users": total_users,
+            "total_items": total_items,
             "session_items": session_items,
             "session_limit": session_limit,
             "global_items": global_items,
             "refresh_minutes": refresh_minutes,
         }
 
-    async def _handle_watch_list(self, event: Any) -> PluginReply:
-        view = self._watch_list_view(event)
+    async def _handle_watch_list(
+        self, event: Any, page: Any = 1
+    ) -> PluginReply | str:
+        raw_page = str(page or "").strip()
+        if raw_page and not raw_page.isdigit():
+            return "页码必须是正整数；用法：/sz 关注列表 [页码]"
+        try:
+            page_number = int(raw_page) if raw_page else 1
+        except (TypeError, ValueError):
+            page_number = 1
+        if page_number < 1:
+            return "页码从 1 开始；用法：/sz 关注列表 [页码]"
+        if page_number > 10000:
+            return "页码过大，请使用更小的页码。"
+        # Covers the case where credentials were added after plugin startup
+        # while subscriptions already existed on disk.
+        if self._watch_subs():
+            self._start_price_watch()
+        view = self._watch_list_view(event, page_number)
+        if page_number > int(view.get("pages") or 1):
+            return (
+                f"关注列表只有 {int(view.get('pages') or 1)} 页；"
+                "请使用 /sz 关注列表 查看第一页。"
+            )
         return PluginReply(
             format_watch_list(view),
             watch_list_view=view,
@@ -3284,11 +3516,15 @@ class StalzonePlugin(Star):
             and self._event_is_admin(event)
         )
         removed = 0
+        removed_regions: set[str] = set()
         for key, sub in list(self._watch_subs().items()):
             if str(sub.get("session") or "") != session:
                 continue
             if clear_all or str(sub.get("user_id") or "") == user_id:
                 self._watch_subs().pop(key, None)
+                removed_regions.add(
+                    str(sub.get("region") or self._region()).upper()
+                )
                 removed += 1
         if not removed:
             return "本会话没有可清空的关注。"
@@ -3298,7 +3534,11 @@ class StalzonePlugin(Star):
             "title": "已清空关注",
             "badge": "已清空",
             "accent": "#FFB454",
-            "region": self._region().upper(),
+            "region": (
+                "/".join(sorted(removed_regions))
+                if removed_regions
+                else self._region().upper()
+            ),
             "headline": f"{removed} 条关注已清空",
             "target": f"{removed} 条",
             "expiry": "—",
@@ -3378,7 +3618,7 @@ class StalzonePlugin(Star):
         sub = self._watch_subs().get(key)
         if not isinstance(sub, dict):
             return "该关注已不存在，请刷新关注列表。"
-        ttl = max(1, min(30, int(self._cfg("price_watch_ttl_days", WATCH_DEFAULT_TTL_DAYS) or WATCH_DEFAULT_TTL_DAYS)))
+        ttl = self._watch_ttl_days()
         base = datetime.now(timezone.utc)
         current = parse_time(sub.get("expires_at"))
         if current is not None and current > base:
@@ -3417,8 +3657,11 @@ class StalzonePlugin(Star):
         if not text:
             return USAGE["watch"]
         lowered = text.lower()
-        if lowered in {"列表", "list"}:
-            return await self._handle_watch_list(event)
+        if lowered in {"列表", "list"} or lowered.startswith(("列表 ", "list ")):
+            parts = text.split(None, 1)
+            return await self._handle_watch_list(
+                event, parts[1].strip() if len(parts) > 1 else 1
+            )
         if lowered.startswith("清空"):
             return await self._handle_watch_clear(event, text[2:].strip())
         if lowered.startswith(("续期", "renew")):
@@ -3436,7 +3679,7 @@ class StalzonePlugin(Star):
             return error
         if (
             not target["private"]
-            and bool(self._cfg("price_watch_group_restrict", False))
+            and self._cfg_bool("price_watch_group_restrict", False)
             and not self._event_is_admin(event)
         ):
             return "本群价格关注仅管理员/群主/群管可设置。"
@@ -3449,7 +3692,26 @@ class StalzonePlugin(Star):
         if item is None:
             if matches:
                 candidates = [self._decorate(candidate) for candidate in matches]
-                return format_item_candidates(query["item"], candidates)
+                self._remember_choice(
+                    event,
+                    "watch",
+                    query["item"],
+                    candidates,
+                    quality=query.get("quality"),
+                    level=query.get("level"),
+                    watch_mode=query.get("mode"),
+                    watch_threshold=query.get("threshold"),
+                    watch_relative_pct=query.get("relative_pct"),
+                    watch_cap=query.get("cap"),
+                )
+                text = format_item_candidates(query["item"], candidates)
+                if len(candidates) <= 1:
+                    return text
+                return PluginReply(
+                    text,
+                    candidate_view=build_item_candidate_view(query["item"], candidates),
+                    sub="candidates",
+                )
             return self._not_found(
                 "item",
                 query["item"],
@@ -3461,6 +3723,17 @@ class StalzonePlugin(Star):
         level = int(query["level"])
         quality = query.get("quality")
         region = self._region()
+        cap_error, key, existing = self._watch_cap_error(
+            self._watch_subs(),
+            target,
+            item_id,
+            int(quality) if quality is not None else None,
+            level,
+            region,
+        )
+        if cap_error:
+            return cap_error
+        auction_alerts = self._cfg_bool("price_watch_auction_alerts", True)
         medians_map: dict[int | None, int] = {}
         async with self._make_client() as client:
             try:
@@ -3517,78 +3790,62 @@ class StalzonePlugin(Star):
         auction_note = ""
         if current_auctions:
             best = current_auctions[0]
-            auction_note = (
-                f"{chr(10)}注意：当前竞拍价 {int(best['price']):,} 已达到目标价，"
-                "关注已创建，下一轮会发竞拍提醒（不会自动取消关注）。"
+            if auction_alerts:
+                auction_note = (
+                    f"{chr(10)}注意：当前竞拍价 {int(best['price']):,} 已达到目标价，"
+                    "关注已创建，下一轮会发竞拍提醒（不会自动取消关注）。"
+                )
+            else:
+                auction_note = (
+                    f"{chr(10)}注意：当前竞拍价 {int(best['price']):,} 已达到目标价，"
+                    "但竞拍提醒已在配置中关闭；当前只监控买断价。"
+                )
+        # Re-check caps and insert under a lock.  The API pre-check above
+        # awaits, so two concurrent /sz 关注 commands could otherwise both
+        # pass the cap check and exceed the per-user/session limits.
+        async with self._watch_lock:
+            subs = self._watch_subs()
+            cap_error, key, existing = self._watch_cap_error(
+                subs,
+                target,
+                item_id,
+                int(quality) if quality is not None else None,
+                level,
+                region,
             )
-        key = self._watch_key(
-            target["session"],
-            target["user_id"],
-            item_id,
-            int(quality) if quality is not None else None,
-            level,
-        )
-        subs = self._watch_subs()
-        existing = subs.get(key)
-        user_items = {
-            str(sub.get("item_id") or "")
-            for sub in subs.values()
-            if str(sub.get("user_id") or "") == target["user_id"]
-        }
-        try:
-            per_user = max(1, int(self._cfg("price_watch_per_user", 2) or 2))
-        except (TypeError, ValueError):
-            per_user = 2
-        if existing is None and item_id not in user_items and len(user_items) >= per_user:
-            return f"每位用户最多关注 {per_user} 种神器；请先取消一个再添加。"
-        session_items = {
-            (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
-            for sub in subs.values()
-            if str(sub.get("session") or "") == target["session"]
-        }
-        try:
-            session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
-        except (TypeError, ValueError):
-            session_limit = 5
-        if existing is None and (region, item_id) not in session_items and len(session_items) >= session_limit:
-            return f"本会话最多同时关注 {session_limit} 种不同神器；请先取消一个再添加。"
-        ttl = max(
-            1,
-            min(
-                30,
-                int(
-                    self._cfg("price_watch_ttl_days", WATCH_DEFAULT_TTL_DAYS)
-                    or WATCH_DEFAULT_TTL_DAYS
+            if cap_error:
+                return cap_error
+            ttl = self._watch_ttl_days()
+            entry = {
+                "session": target["session"],
+                "user_id": target["user_id"],
+                "user_name": target["user_name"],
+                "private": target["private"],
+                "platform": target["platform"],
+                "region": region,
+                "item_id": item_id,
+                "quality": int(quality) if quality is not None else None,
+                "level": level,
+                "mode": query["mode"],
+                "threshold": query.get("threshold"),
+                "relative_pct": query.get("relative_pct"),
+                "cap": query.get("cap"),
+                "created_at": (
+                    str(existing.get("created_at"))
+                    if isinstance(existing, dict) and existing.get("created_at")
+                    else now.isoformat()
                 ),
-            ),
-        )
-        entry = {
-            "session": target["session"],
-            "user_id": target["user_id"],
-            "user_name": target["user_name"],
-            "private": target["private"],
-            "platform": target["platform"],
-            "region": region,
-            "item_id": item_id,
-            "quality": int(quality) if quality is not None else None,
-            "level": level,
-            "mode": query["mode"],
-            "threshold": query.get("threshold"),
-            "relative_pct": query.get("relative_pct"),
-            "cap": query.get("cap"),
-            "created_at": (
-                str(existing.get("created_at"))
-                if isinstance(existing, dict) and existing.get("created_at")
-                else now.isoformat()
-            ),
-            "expires_at": (now + timedelta(days=ttl)).isoformat(),
-            "last_checked": "",
-            "last_notified": "",
-            "last_median": None,
-            "seen": {},
-        }
-        subs[key] = entry
-        self._save_watch_state()
+                "expires_at": (now + timedelta(days=ttl)).isoformat(),
+                "last_checked": "",
+                "last_notified": "",
+                "last_median": None,
+                "seen": {},
+            }
+            subs[key] = entry
+            self._save_watch_state()
+        # If the plugin booted before credentials were entered in the WebUI,
+        # no loop exists yet; the first successful watch starts it.
+        self._start_price_watch()
         label = self._watch_target_label(entry)
         action = "已更新关注" if existing is not None else "已创建关注"
         expiry = parse_time(entry["expires_at"])
@@ -3600,7 +3857,11 @@ class StalzonePlugin(Star):
         text = (
             f"{action}：{label}{chr(10)}"
             f"有效期至 {expiry_text} UTC+8。{chr(10)}"
-            "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
+            + (
+                "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
+                if auction_alerts
+                else "买断命中会提醒并自动取消；竞拍提醒已在配置中关闭。"
+            )
             + auction_note
         )
         created_view = {
@@ -3616,6 +3877,7 @@ class StalzonePlugin(Star):
             "target": self._watch_target_text(entry),
             "expiry": expiry_text,
             "auction_note": auction_note.strip(),
+            "auction_alerts": auction_alerts,
         }
         return PluginReply(
             text,
@@ -3668,7 +3930,9 @@ class StalzonePlugin(Star):
             row_quality = int(row.get("quality") or 0)
             if quality_filter is not None and row_quality != int(quality_filter):
                 continue
-            end = parse_time(row.get("end"))
+            end = row.get("end_dt")
+            if not isinstance(end, datetime):
+                end = parse_time(row.get("end"))
             if end is None or end <= min_end:
                 continue
             target = threshold
@@ -3773,6 +4037,9 @@ class StalzonePlugin(Star):
             extra=extra,
         )
         text = format_watch_alert_text(alert)
+        if self._render_mode() == "text":
+            return await self._watch_send_message(sub, text, None)
+        self._sync_render_config()
         image_path: Path | None = None
         try:
             try:
@@ -3841,6 +4108,13 @@ class StalzonePlugin(Star):
                 "神器价格关注已到期，未达到目标价，任务已自动取消。"
                 "如仍需要，请重新发送 /sz 关注。",
             )
+            # The send awaits; the user may have renewed or cancelled while it
+            # was in flight. Only remove the entry we actually expired.
+            if subs.get(key) is not sub:
+                continue
+            current_expiry = parse_time(sub.get("expires_at"))
+            if current_expiry is not None and current_expiry > now:
+                continue
             subs.pop(key, None)
             changed = True
         return changed
@@ -3862,6 +4136,17 @@ class StalzonePlugin(Star):
             groups.setdefault((region, item_id), []).append((key, sub))
         if not groups:
             return changed
+        # Median entries for artefacts nobody watches any more are dead
+        # weight; prune them as the watch set rotates.
+        active_median_keys = {
+            (region, item_id, int(sub.get("level") or 0))
+            for (region, item_id), group_subs in groups.items()
+            for _key, sub in group_subs
+            if str(sub.get("mode") or "absolute") == "relative"
+        }
+        for cache_key in list(self._watch_median_cache):
+            if cache_key not in active_median_keys:
+                self._watch_median_cache.pop(cache_key, None)
         keys = sorted(groups)
         try:
             batch_size = max(1, min(10, int(self._cfg("price_watch_batch", 5) or 5)))
@@ -3875,7 +4160,13 @@ class StalzonePlugin(Star):
         self._watch_state["cursor"] = (cursor + len(selected)) % len(keys)
         interval = self._watch_interval()
         for region, item_id in selected:
-            group_subs = groups[(region, item_id)]
+            group_subs = [
+                (key, sub)
+                for key, sub in groups[(region, item_id)]
+                if self._watch_subs().get(key) is sub
+            ]
+            if not group_subs:
+                continue
             try:
                 async with self._api_gate():
                     async with self._make_client(region=region) as client:
@@ -3908,52 +4199,81 @@ class StalzonePlugin(Star):
             rows = watch_lot_rows(lots_payload, item_id)
             item = self.item_index.get(item_id) or {"id": item_id}
             for key, sub in group_subs:
-                medians = medians_by_level.get(
-                    int(sub.get("level") or 0), {}
-                )
-                buyouts, auctions = self._watch_matches(
-                    sub, rows, medians, now, interval
-                )
-                if not bool(self._cfg("price_watch_auction_alerts", True)):
-                    auctions = []
-                median = medians.get(
-                    int(sub["quality"])
-                    if sub.get("quality") is not None
-                    else None
-                ) or medians.get(None)
-                if median:
-                    sub["last_median"] = int(median)
-                sub["last_checked"] = now.isoformat()
-                if buyouts:
-                    matches = buyouts
-                    kind = "buyout"
-                elif auctions:
-                    matches = auctions
-                    kind = "auction"
-                else:
+                # A command may have cancelled or replaced this subscription
+                # while the API query was in flight.
+                if self._watch_subs().get(key) is not sub:
+                    continue
+                try:
+                    medians = medians_by_level.get(
+                        int(sub.get("level") or 0), {}
+                    )
+                    buyouts, auctions = self._watch_matches(
+                        sub, rows, medians, now, interval
+                    )
+                    if not self._cfg_bool("price_watch_auction_alerts", True):
+                        auctions = []
+                    median = medians.get(
+                        int(sub["quality"])
+                        if sub.get("quality") is not None
+                        else None
+                    ) or medians.get(None)
+                    if median:
+                        sub["last_median"] = int(median)
+                    sub["last_checked"] = now.isoformat()
+                    if buyouts:
+                        matches = buyouts
+                        kind = "buyout"
+                    elif auctions:
+                        matches = auctions
+                        kind = "auction"
+                    else:
+                        changed = True
+                        continue
+                    best = matches[0]
+                    expiry_snapshot = str(sub.get("expires_at") or "")
+                    # Re-check immediately before the send as well; the
+                    # evaluation above can yield (median computation).
+                    if self._watch_subs().get(key) is not sub:
+                        continue
+                    sent = await self._watch_send_alert(
+                        sub,
+                        item,
+                        best,
+                        extra=max(0, len(matches) - 1),
+                        now=now,
+                    )
+                    if not sent:
+                        continue
+                    current = self._watch_subs().get(key)
+                    if current is not sub:
+                        # Cancelled/replaced while rendering/sending. Do not
+                        # write seen state into a detached record or pop the
+                        # replacement.
+                        continue
+                    renewed = (
+                        str(current.get("expires_at") or "") != expiry_snapshot
+                    )
+                    stamp = now.isoformat()
+                    # The card only shows the best lot.  Mark just that lot as
+                    # seen; another qualifying auction lot should get its own
+                    # alert on a later tick (the user asked for different low
+                    # auction lots, not a single "N others" notice).
+                    sub.setdefault("seen", {})[
+                        str(best.get("signature") or "")
+                    ] = stamp
+                    sub["last_notified"] = stamp
+                    if kind == "buyout" and not renewed:
+                        subs.pop(key, None)
+                    else:
+                        seen = sub.get("seen") or {}
+                        if len(seen) > 100:
+                            sub["seen"] = dict(list(seen.items())[-100:])
                     changed = True
+                except Exception:
+                    logger.exception(
+                        "STALZONE price-watch evaluation failed for %s", item_id
+                    )
                     continue
-                best = matches[0]
-                sent = await self._watch_send_alert(
-                    sub,
-                    item,
-                    best,
-                    extra=max(0, len(matches) - 1),
-                    now=now,
-                )
-                if not sent:
-                    continue
-                stamp = now.isoformat()
-                for match in matches:
-                    sub.setdefault("seen", {})[str(match.get("signature") or "")] = stamp
-                sub["last_notified"] = stamp
-                if kind == "buyout":
-                    subs.pop(key, None)
-                else:
-                    seen = sub.get("seen") or {}
-                    if len(seen) > 100:
-                        sub["seen"] = dict(list(seen.items())[-100:])
-                changed = True
         if changed:
             self._save_watch_state()
         return changed
@@ -4006,6 +4326,22 @@ class StalzonePlugin(Star):
         selected = str(candidate.get("id") or "").strip()
         if not selected:
             return "该候选缺少物品 ID，无法自动查询。"
+        if pending.kind == "watch":
+            quality = pending.quality
+            if quality is None:
+                return "候选关注缺少品质，请重新发送 /sz 关注。"
+            color = QUALITY_NAMES.get(int(quality), ("", ""))[1]
+            level = int(pending.level or 0)
+            if pending.watch_mode == "relative":
+                target = f"-{int(pending.watch_relative_pct or 0)}%"
+                if pending.watch_cap:
+                    target += f" {int(pending.watch_cap)}"
+            else:
+                target = str(int(pending.watch_threshold or 0))
+            result = await self._handle_watch(
+                event, f"{selected} {color} +{level} {target}"
+            )
+            return self._with_render_sub(result, "watch")
         if pending.kind == "item":
             result = await self._handle_item(selected, event=event)
             return self._with_render_sub(result, "item")
@@ -4197,7 +4533,9 @@ class StalzonePlugin(Star):
         elapsed = max(0.05, time.monotonic() - started)
         return received / elapsed
 
-    async def _download_update_asset(self, url: str, destination: Path) -> None:
+    async def _download_update_asset(
+        self, url: str, destination: Path, *, timeout: float = 180.0
+    ) -> None:
         headers = {
             "Accept": "application/octet-stream",
             "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
@@ -4208,7 +4546,7 @@ class StalzonePlugin(Star):
         candidates = _github_url_candidates(url)
         download_started = time.monotonic()
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(180.0, connect=20.0),
+            timeout=httpx.Timeout(timeout, connect=20.0),
             follow_redirects=True,
             headers=headers,
         ) as client:
@@ -4530,6 +4868,312 @@ class StalzonePlugin(Star):
         except asyncio.CancelledError:
             raise
 
+    def _item_db_icon_dirs(self) -> list[Path]:
+        return [
+            Path(__file__).resolve().parent / "item_icons",
+            self._cache_dir() / "item_icons",
+        ]
+
+    async def _install_item_db_full_icons(
+        self, event: Any
+    ) -> tuple[bool, str]:
+        """Download the project's full package and extract only its icons."""
+        try:
+            release = await self._fetch_latest_release()
+            assets = release.get("assets")
+            by_name = {
+                str(asset.get("name")): asset
+                for asset in (assets if isinstance(assets, list) else [])
+                if isinstance(asset, dict)
+            }
+            asset = by_name.get(UPDATE_ASSET_NAME)
+            if not isinstance(asset, dict):
+                return False, "最新 Release 没有完整包，跳过完整图标下载。"
+            url = str(asset.get("browser_download_url") or "").strip()
+            if not url:
+                return False, "完整包没有下载地址，跳过。"
+            temp_dir = self._cache_dir() / "item_db"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
+            archive = temp_dir / f"project-full-{stamp}.zip"
+            try:
+                await self._download_update_asset(url, archive, timeout=600.0)
+                count = await asyncio.to_thread(
+                    extract_full_icons,
+                    archive,
+                    self._cache_dir() / "item_icons",
+                )
+            finally:
+                archive.unlink(missing_ok=True)
+            if count <= 0:
+                return False, "完整包中没有可用图标，跳过。"
+            return True, f"已从完整包补充 {count} 个图标。"
+        except Exception as exc:
+            logger.warning("STALZONE item-db full icon update failed: %s", exc)
+            return False, f"完整包下载/解压失败：{type(exc).__name__}: {exc}"
+
+    async def _fetch_official_commit(self) -> str:
+        url = (
+            "https://api.github.com/repos/EXBO-Studio/stalzone-database/"
+            "commits/main"
+        )
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                follow_redirects=True,
+                headers=headers,
+            ) as client:
+                for candidate in _github_url_candidates(url):
+                    try:
+                        response = await client.get(candidate)
+                    except httpx.RequestError:
+                        continue
+                    if response.status_code != 200:
+                        continue
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        continue
+                    if isinstance(payload, dict):
+                        return str(payload.get("sha") or "").strip()
+        except Exception as exc:
+            logger.debug("STALZONE official commit lookup failed: %s", exc)
+        return ""
+
+    def _backup_item_db(
+        self, data_dir: Path, index_path: Path, overrides: Path
+    ) -> Path:
+        stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S-%f")
+        backup = data_dir / "item_db_backups" / stamp
+        backup.mkdir(parents=True, exist_ok=True)
+        for path in (index_path, overrides):
+            if path.is_file():
+                shutil.copy2(path, backup / path.name)
+        root = data_dir / "item_db_backups"
+        backups = sorted(
+            (path for path in root.iterdir() if path.is_dir()),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+        for old in backups[ITEM_DB_BACKUP_KEEP:]:
+            shutil.rmtree(old, ignore_errors=True)
+        return backup
+
+    async def _handle_item_db_check(self, event: Any) -> str:
+        if not self._event_is_admin(event):
+            return "物品库检查/更新仅 AstrBot 管理员、QQ 群主或群管理员可用。"
+        if self._item_db_lock.locked():
+            return "已有物品库检查/更新正在进行，请稍后再试。"
+        if self._update_lock.locked():
+            return "插件更新正在进行，请等更新完成后再检查物品库。"
+        async with self._item_db_lock:
+            try:
+                return await self._run_item_db_update(event)
+            except Exception as exc:
+                logger.exception("STALZONE item-db update failed")
+                return (
+                    "物品库检查/更新失败："
+                    f"{type(exc).__name__}: {exc}"
+                    + chr(10)
+                    + "旧索引已保留；可查看日志或稍后重试。"
+                )
+
+    async def _run_item_db_update(self, event: Any) -> str:
+        index_path = Path(self.item_index.path)
+        overrides_path = Path(self.item_index.overrides_path)
+        aliases_path = Path(self.item_index.aliases_path)
+        data_dir = self._cache_dir()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        await self._update_status(event, "开始检查物品库：先核对完整图标…")
+
+        item_ids = {
+            str(item.get("id") or "").strip()
+            for item in self.item_index.items
+            if isinstance(item, dict) and item.get("id")
+        }
+        coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
+        full_note = ""
+        if (
+            coverage["ratio"] < ITEM_DB_FULL_RATIO
+            or len(coverage["missing"]) > 24
+        ):
+            await self._update_status(
+                event,
+                f"完整图标不足（{coverage['matched']}/{coverage['total']}），"
+                "正在下载项目完整包…",
+            )
+            _ok, full_note = await self._install_item_db_full_icons(event)
+            coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
+        else:
+            full_note = "本地完整图标已齐全。"
+
+        existing_payload = load_json(index_path, {})
+        overlay_payload = load_json(overrides_path, {})
+        if not isinstance(overlay_payload, dict):
+            overlay_payload = {}
+        await self._update_status(event, "正在检查 EXBO 官方物品库版本…")
+        official_commit = await self._fetch_official_commit()
+        current_commit = (
+            str(existing_payload.get("official_commit") or "")
+            if isinstance(existing_payload, dict)
+            else ""
+        )
+        if official_commit and current_commit and official_commit == current_commit:
+            untranslated = [
+                str(item.get("id") or "")
+                for item in (
+                    existing_payload.get("items")
+                    if isinstance(existing_payload.get("items"), list)
+                    else []
+                )
+                if isinstance(item, dict)
+                and str(item.get("id") or "")
+                and str(item.get("source") or "") in {"official", "supplemental"}
+                and str(item.get("zh_source") or "") == "fallback"
+            ]
+            overrides = {
+                str(key): str(value)
+                for key, value in overlay_payload.items()
+                if isinstance(value, str)
+            }
+            for item_id in untranslated:
+                overrides.setdefault(item_id, "")
+            if untranslated:
+                await asyncio.to_thread(
+                    write_json_atomic, overrides_path, overrides, indent=1
+                )
+            coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
+            return chr(10).join(
+                [
+                    "STALZONE · 物品库检查完成",
+                    f"官方库 commit 未变化（{official_commit[:12]}），无需重新下载。",
+                    f"完整图标：{coverage['matched']}/{coverage['total']}（{coverage['ratio']:.1%}）；{full_note}",
+                    f"未翻译条目：{len(untranslated)} 项"
+                    f"；汉化占位：{overrides_path}",
+                    "填写中文名后重载插件即可生效。",
+                ]
+            )
+
+        await self._update_status(event, "官方库有更新，正在下载并核对…")
+        temp_dir = data_dir / "item_db"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
+        official_archive = temp_dir / f"official-{stamp}.zip"
+        try:
+            await self._download_update_asset(
+                OFFICIAL_ARCHIVE_URL, official_archive, timeout=600.0
+            )
+            official = await asyncio.to_thread(
+                extract_official_items,
+                official_archive,
+                data_dir / "item_icons",
+            )
+        except Exception as exc:
+            logger.warning("STALZONE item-db official download failed: %s", exc)
+            return "\n".join(
+                [
+                    "物品库更新未完成：官方物品库下载/解压失败。",
+                    f"原因：{type(exc).__name__}: {exc}",
+                    f"完整图标：{full_note}",
+                    "旧索引未修改，可稍后重试。",
+                ]
+            )
+        finally:
+            official_archive.unlink(missing_ok=True)
+        if len(official["items"]) < 100:
+            return (
+                "物品库更新未完成：官方压缩包里没有足够的基础物品，"
+                "可能是官方仓库目录结构变化。旧索引未修改。"
+            )
+
+        if not official_commit and isinstance(existing_payload, dict):
+            official_commit = str(existing_payload.get("official_commit") or "")
+        merged, stats = await asyncio.to_thread(
+            build_merged_index,
+            existing_payload,
+            official["items"],
+            overlay_payload,
+            official_commit=official_commit,
+        )
+
+        # Preserve every existing Chinese name and add blank slots for new
+        # official/supplemental entries that still need a translation.
+        overrides = {
+            str(key): str(value)
+            for key, value in overlay_payload.items()
+            if isinstance(value, str)
+        }
+        for item_id in stats["untranslated"]:
+            overrides.setdefault(item_id, "")
+        backup = self._backup_item_db(data_dir, index_path, overrides_path)
+        # Write the placeholder overlay first: if it fails, the old index is
+        # still intact.  Blank entries are ignored by ItemIndex until filled.
+        await asyncio.to_thread(
+            write_json_atomic, overrides_path, overrides, indent=1
+        )
+        await asyncio.to_thread(write_json_atomic, index_path, merged)
+
+        reload_note = "物品索引已重新加载。"
+        try:
+            new_index = await asyncio.to_thread(
+                ItemIndex,
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+            self.item_index = new_index
+            self._sc_item_keys.clear()
+        except Exception:
+            logger.exception("STALZONE item-db index reload failed")
+            reload_note = "索引已写入，但重新加载失败；请重启/重载插件。"
+
+        coverage = icon_coverage(
+            {str(item.get("id") or "") for item in merged["items"]},
+            self._item_db_icon_dirs(),
+        )
+        existing_official = 0
+        if isinstance(existing_payload, dict):
+            existing_official = sum(
+                1
+                for item in (
+                    existing_payload.get("items")
+                    if isinstance(existing_payload.get("items"), list)
+                    else []
+                )
+                if isinstance(item, dict)
+                and str(item.get("source") or "") == "official"
+            )
+        new_official = max(0, stats["official_count"] - existing_official)
+        missing = coverage["missing"]
+        details = [
+            "STALZONE · 物品库检查/补全完成",
+            f"完整图标：{coverage['matched']}/{coverage['total']}"
+            f"（{coverage['ratio']:.1%}）；{full_note}",
+            f"官方物品：{stats['official_count']} 项"
+            f"｜历史补充：{stats['supplemental_count']} 项",
+            f"新合并官方条目：约 {new_official} 项"
+            f"｜未翻译：{len(stats['untranslated'])} 项",
+            f"汉化占位文件：{overrides_path}",
+            "把未翻译条目按 ID 填入中文名后，重载插件即可生效。",
+            f"索引：{index_path}",
+            f"备份：{backup}",
+            reload_note,
+        ]
+        if missing:
+            shown = "、".join(missing[:8])
+            details.append(
+                f"仍缺图标：{len(missing)} 个（{shown}"
+                + ("…" if len(missing) > 8 else "")
+                + "），可能是官方无图标条目或补充皮肤。"
+            )
+        else:
+            details.append("图标：官方基础物品与本地补充条目均已覆盖。")
+        return "\n".join(details)
+
     async def _handle_version_check(self) -> str:
         try:
             release = await self._fetch_latest_release()
@@ -4555,6 +5199,8 @@ class StalzonePlugin(Star):
             )
         if self._update_lock.locked():
             return "已有更新正在进行，请稍后再试。"
+        if self._item_db_lock.locked():
+            return "物品库检查/更新正在进行，请稍后再试。"
         async with self._update_lock:
             data_dir = self._cache_dir()
             updates_dir = data_dir / "updates"
@@ -4807,6 +5453,9 @@ class StalzonePlugin(Star):
         if sub == "check_version":
             yield event.plain_result(await self._handle_version_check())
             return
+        if sub == "item_db":
+            yield event.plain_result(await self._handle_item_db_check(event))
+            return
         if sub == "emission_subscribe":
             yield self._handle_emission_subscribe(event, arg)
             return
@@ -4860,6 +5509,8 @@ class StalzonePlugin(Star):
             "pass",
             "arsenal",
             "watch",
+            "watch_list",
+            "watch_cancel",
         }:
             try:
                 cooldown = max(0.0, float(self._cfg("command_cooldown", 1.0) or 0))
@@ -4881,11 +5532,13 @@ class StalzonePlugin(Star):
                 if len(self._last_command_at) > 500:
                     self._last_command_at.pop(next(iter(self._last_command_at)), None)
         if not sub or sub == "help":
-            try:
-                image = await self._help_image()
-            except Exception:
-                logger.exception("STALZONE help image generation failed")
-                image = None
+            image = None
+            if self._render_mode() != "text":
+                try:
+                    image = await self._help_image()
+                except Exception:
+                    logger.exception("STALZONE help image generation failed")
+                    image = None
             if image is not None:
                 try:
                     if AstrImage is not None:
@@ -4928,7 +5581,7 @@ class StalzonePlugin(Star):
                 return
             coro = self._handle_watch(event, arg)
         elif sub == "watch_list":
-            coro = self._handle_watch_list(event)
+            coro = self._handle_watch_list(event, arg)
         elif sub == "watch_cancel":
             if not arg:
                 yield await self._usage_reply(event, "watch_cancel")

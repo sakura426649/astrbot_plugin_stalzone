@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.18 - 2026-11-11
+
+### Added
+
+- Admin commands `/sz 检查`, `/sz 物品库检查` and `/sz 物品库更新` now check the full icon set first, install missing icons from the project full package, merge the official EXBO item database while preserving existing Chinese, and write blank translation slots to `item_name_overrides.json`. The in-memory index is reloaded after the update; the previous index/overlay is backed up (latest three kept).
+- Ambiguous artifact names in `/sz 关注` now register a pending choice, so `/sz 候选 1` can continue the watch creation flow.
+
+### Fixed
+
+- Price-watch creation now serializes the final cap check and insert, so concurrent `/sz 关注` commands cannot exceed the per-user type/session limits; added a per-user total subscription cap (`price_watch_user_total`, default 8).
+- Watch scheduling no longer cancels a subscription that was renewed while an alert/expiry message was in flight, and a single failing subscriber no longer aborts the rest of the tick.
+- Huge or infinite price tokens are rejected with a friendly message instead of raising `OverflowError`.
+- Each qualifying auction lot now gets its own alert instead of all lots being marked seen after the first card.
+- Watch list is paginated by user (`/sz 关注列表 [页码]`, `/sz 关注 列表 [页码]`), and shows the actual regions of its subscriptions instead of always the current default region.
+- Live WebUI changes to `hide_creator_watermark`, card background/opacity, `font_path` and `render_mode` now apply without reloading; text mode also covers help, storm alerts and watch alerts.
+- Clear-watch action card no longer labels its count as a target price; text watch lists now show quality; malformed watch-related config values no longer crash list/create.
+
 ## 1.14.17 - 2026-11-11
 
 ### Fixed

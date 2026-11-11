@@ -68,6 +68,8 @@ class WatchParserTests(unittest.TestCase):
         self.assertEqual(capped["cap"], 3_000_000)
         with self.assertRaises(WatchQueryError):
             parse_watch_query("原子 红 +15 3X")
+        with self.assertRaises(WatchQueryError):
+            parse_watch_query("原子 红 +15 " + "9" * 400)
 
     def test_parse_requires_level(self):
         with self.assertRaises(WatchQueryError):
