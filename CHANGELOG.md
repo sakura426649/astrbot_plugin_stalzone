@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.8 - 2026-11-11
+
+### Fixed
+
+- Appraisal range bar: when the active buyout is below the historical low or above the high, its "当前 X" label no longer overlaps the min/max labels. Edge cases keep the current label inside the bar area (shifted inward), and the max label is right-aligned.
+
+### Tests
+
+- Added low/high out-of-range appraisal visual signatures; 302 tests and 19 visual signatures pass.
+
 ## 1.14.7 - 2026-11-11
 
 ### Added

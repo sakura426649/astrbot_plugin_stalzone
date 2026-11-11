@@ -455,6 +455,47 @@ def _appraisal() -> Path | None:
     )
 
 
+def _appraisal_range(current: int) -> Path | None:
+    item = {
+        "id": "wg53",
+        "zh": "原子",
+        "en": "Atom",
+        "cat": "artefact/electrophysical",
+        "color": "RANK_MASTER",
+    }
+    lots = {
+        "lots": [
+            {
+                "amount": 1,
+                "currentPrice": current,
+                "buyoutPrice": current,
+                "endTime": "2026-10-24T12:00:00Z",
+                "additional": {"qlt": 4, "ptn": 15},
+            }
+        ]
+    }
+    history = {
+        "prices": [
+            {"amount": 1, "price": 7000, "time": "2026-10-23T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            {"amount": 1, "price": 12000, "time": "2026-10-22T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+        ]
+    }
+    view = build_appraisal_view(
+        item, history, lots, "eu", level_filter=15, now=NOW
+    )
+    return render_appraisal_card(
+        view, icon_path=PLUGIN_ROOT / "item_icons" / "wg53.png"
+    )
+
+
+def _appraisal_low() -> Path | None:
+    return _appraisal_range(5000)
+
+
+def _appraisal_high() -> Path | None:
+    return _appraisal_range(15000)
+
+
 def _watch_alert() -> Path | None:
     item = {"id": "wg53", "zh": "原子", "en": "Atom"}
     match = {
@@ -563,6 +604,8 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "emission": _emission,
     "emission_alert": _alert,
     "appraisal": _appraisal,
+    "appraisal_low": _appraisal_low,
+    "appraisal_high": _appraisal_high,
     "watch_alert": _watch_alert,
     "watch_list": _watch_list,
     "item": _item,

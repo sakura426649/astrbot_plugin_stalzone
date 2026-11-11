@@ -2454,18 +2454,29 @@ def render_appraisal_card(
             fill=accent,
         )
         draw.text(
-            (range_right - 60, bar_y + 20),
+            (range_right, bar_y + 20),
             money(high),
             font=chip_font,
             fill=muted,
+            anchor="ra",
         )
         if active.get("lowest_buyout") is not None:
             current = int(active["lowest_buyout"])
             cx = _x(current)
             draw.line((cx, bar_y - 6, cx, bar_y + 14), fill="#4EA8FF", width=2)
+            current_label = f"当前 {money(current)}"
+            label_w = int(chip_font.getlength(current_label))
+            # Keep the current-price label out of the min/max labels when the
+            # active buyout is below the historical low or above the high.
+            if current <= low or cx <= range_left + max(70, (range_right - range_left) * 0.12):
+                label_x = range_left + 90
+            elif current >= high or cx >= range_right - max(70, (range_right - range_left) * 0.12):
+                label_x = range_right - label_w - 90
+            else:
+                label_x = min(cx + 6, range_right - label_w - 12)
             draw.text(
-                (min(cx + 6, range_right - 92), bar_y + 20),
-                f"当前 {money(current)}",
+                (label_x, bar_y + 20),
+                current_label,
                 font=chip_font,
                 fill="#4EA8FF",
             )
