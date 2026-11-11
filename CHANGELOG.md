@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.15 - 2026-11-11
+
+### Fixed
+
+- Watch list headers and values now share the same x positions (`品质`/chip at 540, `目标价`/value at 610, `剩余` at 896).
+- Long artifact names truncate the base name with `…` but always preserve the trailing `+等级`; the full `伊里奇 灯泡(Ilyich Lamp) +15` still fits.
+
 ## 1.14.14 - 2026-11-11
 
 ### Changed
