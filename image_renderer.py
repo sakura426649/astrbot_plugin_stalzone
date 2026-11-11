@@ -1690,7 +1690,7 @@ def _fit_auction_name(
     """Truncate the base name but keep `＋level` / `×amount` visible."""
     value = str(text)
     marker = ""
-    for candidate in ("＋", "×"):
+    for candidate in ("＋", "+", "×"):
         index = value.rfind(candidate)
         if index <= 0:
             continue
@@ -1706,7 +1706,8 @@ def _fit_auction_name(
     if max_width <= suffix_w + 12:
         return _fit_text(draw, suffix, font, max_width)
     fitted = _fit_text(draw, base, font, max_width - suffix_w - 4)
-    return f"{fitted}{suffix}"
+    separator = " " if marker == "+" else ""
+    return f"{fitted}{separator}{suffix}"
 
 
 def _draw_colored_name(
@@ -2821,7 +2822,9 @@ def render_watch_list_card(
                 draw.text((margin + 20, row_y + 22), f"#{item.get('index')}", font=small_font, fill=muted)
                 draw.text(
                     (margin + 68, row_y + 16),
-                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 420),
+                    _fit_auction_name(
+                        draw, str(item.get("item_label") or ""), row_font, 420
+                    ),
                     font=row_font,
                     fill=quality_color,
                 )
@@ -2829,20 +2832,20 @@ def render_watch_list_card(
                 if quality_short and quality_short != "全部品质":
                     chip_w = int(quality_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (margin + 540, row_y + 19, margin + 540 + chip_w, row_y + 49),
+                        (540, row_y + 19, 540 + chip_w, row_y + 49),
                         radius=8,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
                     draw.text(
-                        (margin + 549, row_y + 23),
+                        (549, row_y + 23),
                         quality_short,
                         font=quality_font,
                         fill=quality_color,
                     )
                 draw.text(
-                    (margin + 610, row_y + 18),
+                    (610, row_y + 18),
                     _fit_text(
                         draw,
                         str(item.get("target_short") or item.get("target") or ""),

@@ -7,7 +7,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Watch list columns shifted right: the item column now has 420px, and the quality/target columns moved to 540/610px. This guarantees the full `伊里奇 灯泡(Ilyich Lamp) +15` label is shown without an ellipsis while keeping the target and remaining columns inside the block.
+- Watch list columns shifted right: the item column now has 420px, and the quality/target columns moved to 540/610px. Header labels and values now share the same x positions. The full `伊里奇 灯泡(Ilyich Lamp) +15` fits; longer names truncate the base name but always keep the `+等级` suffix.
 
 ## 1.14.13 - 2026-11-11
 
