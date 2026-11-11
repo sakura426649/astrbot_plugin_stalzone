@@ -938,6 +938,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             )
             overrides = json.loads(strip_json_comments(override_text))
             self.assertEqual(overrides["food1"], "")
+            self.assertEqual(overrides["abc"], "旧枪")
             self.assertIn("// en: Food", override_text)
             self.assertIn("| key: item.food.food1.name", override_text)
             self.assertTrue((data / "item_icons" / "food1.png").is_file())

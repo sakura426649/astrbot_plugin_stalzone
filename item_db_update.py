@@ -80,6 +80,57 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int | None = None) ->
     temporary.replace(path)
 
 
+def _is_translated_item(item: dict[str, Any]) -> bool:
+    zh = str(item.get("zh") or "").strip()
+    if not zh:
+        return False
+    if str(item.get("zh_source") or "").lower() == "fallback":
+        return False
+    if zh in {
+        str(item.get("en") or "").strip(),
+        str(item.get("ru") or "").strip(),
+        str(item.get("id") or "").strip(),
+    }:
+        return False
+    return True
+
+
+def build_translation_overrides(
+    items: list[Any],
+    existing: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Export every item into one editable translation table.
+
+    Existing user values win, including explicit empty strings.  Items that
+    already have a real Chinese name are pre-filled; untranslated/English-only
+    items are left blank for optional manual work.
+    """
+    current = {
+        str(key): str(value)
+        for key, value in (existing or {}).items()
+        if isinstance(value, str)
+    }
+    result: dict[str, str] = {}
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        seen.add(item_id)
+        if item_id in current:
+            result[item_id] = current[item_id]
+        elif _is_translated_item(item):
+            result[item_id] = str(item.get("zh") or "")
+        else:
+            result[item_id] = ""
+    for item_id, value in current.items():
+        if item_id not in seen:
+            result[item_id] = value
+    return result
+
+
 def write_overrides_jsonc(
     path: Path,
     values: dict[str, str],

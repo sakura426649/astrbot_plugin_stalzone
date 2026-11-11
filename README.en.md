@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.19-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.20-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -214,8 +214,9 @@ The official history endpoint returns at most **200 records per request**. The p
 `/sz 检查`, `/sz 物品库检查` and `/sz 物品库更新` are the same admin command. It first checks `item_icons/` coverage against `item_index.json`; below 90% (or more than 24 icons missing) it downloads the project's latest full package and extracts only its complete icon set into the plugin data directory. When the official commit changes, it downloads the EXBO `stalzone-database` snapshot and supplements item IDs, English/Russian names, colors, categories and icons; an unchanged commit only refreshes blank translation slots.
 
 - Existing Chinese names and `source: supplemental` entries are preserved.
-- New official items fall back to English and get blank slots in `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`.
+- Every item, including existing Chinese names, is exported to `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`; Chinese names are pre-filled and new untranslated items are blank.
 - The file is JSONC with a trailing `// en: official English name | key: localization key` comment per entry; English-only items such as AK-308 can stay blank.
+- Any existing Chinese name can be edited directly, even if it was already translated.
 - Fill `{item_id: "Chinese name"}` in that file and reload the plugin; `//` comments are ignored by the loader.
 - Backups are written to `data/plugin_data/astrbot_plugin_stalzone/item_db_backups/`; only the latest three are kept.
 - The official database has no Chinese; this command also does not update `item_details.json` stats/descriptions.

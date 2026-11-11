@@ -146,6 +146,7 @@ try:  # Package import (normal AstrBot plugin loading).
         extract_full_icons,
         extract_official_items,
         icon_coverage,
+        build_translation_overrides,
         load_json,
         write_json_atomic,
         write_overrides_jsonc,
@@ -264,6 +265,7 @@ except ImportError:  # Direct execution / flat import fallback.
         extract_full_icons,
         extract_official_items,
         icon_coverage,
+        build_translation_overrides,
         load_json,
         write_json_atomic,
         write_overrides_jsonc,
@@ -308,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.19"
+PLUGIN_VERSION = "1.14.20"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -659,7 +661,7 @@ USAGE = {
     ),
     "item_db": (
         "用法：/sz 检查 / 物品库检查 / 物品库更新\n"
-        "说明：先检查项目完整图标，不足时下载 full 包；再用 EXBO 官方物品库补全索引与图标。保留现有中文，未翻译条目写入 item_name_overrides.json 留空，每行附 en/key 注释。\n"
+        "说明：先检查项目完整图标，不足时下载 full 包；再用 EXBO 官方物品库补全索引与图标。保留现有中文，全部条目导出到 item_name_overrides.json（现有中文预填，未翻译留空），每行附 en/key 注释。\n"
         "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
         "示例：\n"
         "  /sz 物品库检查"
@@ -5037,51 +5039,36 @@ class StalzonePlugin(Star):
             else ""
         )
         if official_commit and current_commit and official_commit == current_commit:
-            untranslated = [
-                str(item.get("id") or "")
-                for item in (
-                    existing_payload.get("items")
-                    if isinstance(existing_payload.get("items"), list)
-                    else []
-                )
-                if isinstance(item, dict)
-                and str(item.get("id") or "")
-                and str(item.get("source") or "") in {"official", "supplemental"}
-                and str(item.get("zh_source") or "") == "fallback"
-            ]
-            overrides = {
-                str(key): str(value)
-                for key, value in overlay_payload.items()
-                if isinstance(value, str)
-            }
-            for item_id in untranslated:
-                overrides.setdefault(item_id, "")
-            if untranslated:
-                metadata = {
-                    str(item.get("id") or ""): {
-                        "en": str(item.get("en") or ""),
-                        "ru": str(item.get("ru") or ""),
-                        "key": str(item.get("key") or ""),
-                    }
-                    for item in (
-                        existing_payload.get("items")
-                        if isinstance(existing_payload.get("items"), list)
-                        else []
-                    )
-                    if isinstance(item, dict) and item.get("id")
+            existing_items = (
+                existing_payload.get("items")
+                if isinstance(existing_payload.get("items"), list)
+                else []
+            )
+            overrides = build_translation_overrides(
+                existing_items, overlay_payload
+            )
+            metadata = {
+                str(item.get("id") or ""): {
+                    "en": str(item.get("en") or ""),
+                    "ru": str(item.get("ru") or ""),
+                    "key": str(item.get("key") or ""),
                 }
-                await asyncio.to_thread(
-                    write_overrides_jsonc, overrides_path, overrides, metadata
-                )
+                for item in existing_items
+                if isinstance(item, dict) and item.get("id")
+            }
+            await asyncio.to_thread(
+                write_overrides_jsonc, overrides_path, overrides, metadata
+            )
+            blank_count = sum(1 for value in overrides.values() if not value)
             coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
             return chr(10).join(
                 [
                     "STALZONE · 物品库检查完成",
                     f"官方库 commit 未变化（{official_commit[:12]}），无需重新下载。",
                     f"完整图标：{coverage['matched']}/{coverage['total']}（{coverage['ratio']:.1%}）；{full_note}",
-                    f"未翻译条目：{len(untranslated)} 项"
-                    f"；汉化占位：{overrides_path}",
-                    "填写中文名后重载插件即可生效。",
+                    f"汉化文件：{len(overrides)} 条，已有中文已导出，空白 {blank_count} 条"
+                    f"；{overrides_path}",
+                    "编辑中文名后重载插件即可生效；英文本身即名称的物品可留空。",
                 ]
             )
 
@@ -5127,15 +5114,12 @@ class StalzonePlugin(Star):
             official_commit=official_commit,
         )
 
-        # Preserve every existing Chinese name and add blank slots for new
-        # official/supplemental entries that still need a translation.
-        overrides = {
-            str(key): str(value)
-            for key, value in overlay_payload.items()
-            if isinstance(value, str)
-        }
-        for item_id in stats["untranslated"]:
-            overrides.setdefault(item_id, "")
+        # Export every item into one editable translation table.  Current
+        # Chinese names are pre-filled; user edits and explicit blanks win.
+        overrides = build_translation_overrides(
+            merged.get("items", []), overlay_payload
+        )
+        blank_count = sum(1 for value in overrides.values() if not value)
         backup = self._backup_item_db(data_dir, index_path, overrides_path)
         # Write the placeholder overlay first: if it fails, the old index is
         # still intact.  Blank entries are ignored by ItemIndex until filled.
@@ -5192,9 +5176,9 @@ class StalzonePlugin(Star):
             f"官方物品：{stats['official_count']} 项"
             f"｜历史补充：{stats['supplemental_count']} 项",
             f"新合并官方条目：约 {new_official} 项"
-            f"｜未翻译：{len(stats['untranslated'])} 项",
-            f"汉化占位文件：{overrides_path}",
-            "把未翻译条目按 ID 填入中文名后，重载插件即可生效。",
+            f"｜汉化条目：{len(overrides)} 条，空白 {blank_count} 条",
+            f"汉化文件：{overrides_path}",
+            "已有中文已导出；编辑任意条目后重载插件即可生效，英文本身即名称的物品可留空。",
             f"索引：{index_path}",
             f"备份：{backup}",
             reload_note,

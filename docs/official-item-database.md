@@ -29,7 +29,7 @@
 
 1. 按当前 `item_index.json` 检查 `item_icons/` 覆盖率；低于 90% 或缺失超过 24 个时下载项目最新 Release 的 `astrbot_plugin_stalzone_full.zip`，只提取 `item_icons/*.png` 到插件数据目录；
 2. 先查官方 commit；有变化才下载 EXBO `stalzone-database` 快照，保留现有中文和 `supplemental` 条目，补全官方 ID/英文/俄文/品质色/类别/图标；commit 未变化时跳过官方压缩包，只刷新未翻译占位；
-3. 未翻译条目写入插件数据目录的 `item_name_overrides.json`，值为空字符串；文件为 JSONC，每条后面带 `// en: 官方英文名 | key: 官方键值`，本身是英文的物品可留空；
+3. 所有条目写入插件数据目录的 `item_name_overrides.json`，已有中文预填、官方新增未翻译条目为空；文件为 JSONC，每条后面带 `// en: 官方英文名 | key: 官方键值`，可以直接改任意已有中文，本身是英文的物品可留空；
 4. 索引更新前备份到 `item_db_backups/`（保留最近 3 份），成功后立即重载内存索引。
 
 这个指令不会更新 `item_details.json` 的属性/描述，也不会把官方英文当成中文；中文仍由社区/使用者维护。

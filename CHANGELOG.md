@@ -3,11 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.20 - 2026-11-11
+
+### Changed
+
+- The item DB update command now exports **every** item into `item_name_overrides.json`, not just untranslated slots. Existing Chinese names are pre-filled and can be edited directly; explicit user values/blanks are preserved. Each line still carries `// en: ... | key: ...` for recognition, so English-only items can remain blank.
+
 ## 1.14.19 - 2026-11-11
 
 ### Changed
 
-- `item_name_overrides.json` is now comment-friendly JSONC. Each entry carries a trailing `// en: official English name | key: localization key` comment so English-only items (for example AK-308) can be recognized and left blank. `ItemIndex` strips `//` and `/* */` comments before parsing; the update command preserves existing comments/values when regenerating.
+- `item_name_overrides.json` is now a complete comment-friendly JSONC translation table. It exports every item, pre-fills existing Chinese names, and leaves untranslated/English-only items blank; each entry carries a trailing `// en: official English name | key: localization key` comment so items such as AK-308 can be recognized. Existing Chinese names can be edited directly. `ItemIndex` strips `//` and `/* */` comments before parsing; the update command preserves user edits and explicit blanks when regenerating.
 
 ## 1.14.18 - 2026-11-11
 

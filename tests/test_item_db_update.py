@@ -9,6 +9,7 @@ from pathlib import Path
 from command_parser import parse_command
 from item_db_update import (
     build_merged_index,
+    build_translation_overrides,
     extract_full_icons,
     extract_official_items,
     icon_coverage,
@@ -188,6 +189,34 @@ class ItemDBUpdateTests(unittest.TestCase):
             self.assertIn("// en: Food | key: item.food.food1.name", text)
             parsed = json.loads(strip_json_comments(text))
             self.assertEqual(parsed, {"abc": "", "food1": "食物"})
+
+    def test_full_translation_table_prefills_chinese_and_keeps_edits(self):
+        items = [
+            {
+                "id": "abc",
+                "en": "Old Gun",
+                "zh": "旧枪",
+                "zh_source": "exact",
+            },
+            {
+                "id": "ak",
+                "en": "AK-308",
+                "zh": "AK-308",
+                "zh_source": "exact",
+            },
+            {
+                "id": "food1",
+                "en": "Food",
+                "zh": "Food",
+                "zh_source": "fallback",
+            },
+        ]
+        values = build_translation_overrides(
+            items, {"abc": "自定义枪", "food1": "食物"}
+        )
+        self.assertEqual(values["abc"], "自定义枪")
+        self.assertEqual(values["food1"], "食物")
+        self.assertEqual(values["ak"], "")
 
     def test_item_index_loads_commented_overrides(self):
         with tempfile.TemporaryDirectory() as raw:
