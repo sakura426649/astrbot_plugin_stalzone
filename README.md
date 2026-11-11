@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.18-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.19-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -238,7 +238,8 @@
 
 - 现有 `item_index.json` 里的中文名和 `source: supplemental` 历史条目会保留；
 - 官方新增条目会以英文回退，并自动在 `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json` 写入空值占位；
-- 用户只需在 `item_name_overrides.json` 里按 `{物品ID: 中文名}` 填写，重载插件后生效；
+- 文件是带注释的 JSONC，每条后面附 `// en: 官方英文名 | key: 官方键值`；本身是英文、无需翻译的物品（如 AK-308）可直接留空；
+- 用户只需在 `item_name_overrides.json` 里按 `{物品ID: 中文名}` 填写，重载插件后生效；插件读取时会自动忽略 `//` 注释；
 - 更新前会备份到 `data/plugin_data/astrbot_plugin_stalzone/item_db_backups/`，只保留最近 3 份；
 - 官方库没有中文，中文仍由社区/使用者维护；此指令不会更新 `item_details.json` 的属性与描述。
 

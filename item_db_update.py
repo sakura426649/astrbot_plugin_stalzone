@@ -80,6 +80,43 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int | None = None) ->
     temporary.replace(path)
 
 
+def write_overrides_jsonc(
+    path: Path,
+    values: dict[str, str],
+    metadata: dict[str, dict[str, Any]],
+) -> None:
+    """Write a comment-friendly translation index (JSONC, not strict JSON).
+
+    Each entry carries the official English name and localization key so a
+    user can recognize items (such as AK-308) that need no Chinese name.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "{",
+        "  // 物品 ID -> 中文名；留空表示暂不翻译",
+        "  // en: 官方英文名；key: 官方本地化键；本身是英文、无需翻译的物品可留空",
+    ]
+    items = sorted(values.items())
+    for index, (item_id, value) in enumerate(items):
+        meta = metadata.get(item_id) or {}
+        en = str(meta.get("en") or meta.get("ru") or "—")
+        key = str(meta.get("key") or "—")
+        en = " ".join(en.split())
+        key = " ".join(key.split())
+        line = (
+            f"  {json.dumps(item_id, ensure_ascii=False)}: "
+            f"{json.dumps(str(value), ensure_ascii=False)}"
+        )
+        if index + 1 < len(items):
+            line += ","
+        line += f"  // en: {en} | key: {key}"
+        lines.append(line)
+    lines.append("}")
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
+    temporary.replace(path)
+
+
 def official_category_name(category: str) -> str:
     if category in CATEGORY_MAP:
         return CATEGORY_MAP[category]
@@ -296,6 +333,8 @@ def _build_official_item(
     translated = bool(overlay_name) or (
         bool(existing_zh) and not existing_is_fallback
     )
+    if existing_is_fallback and not overlay_name:
+        zh_source = "fallback"
     cat = str(existing.get("cat") or "").strip() or official_category_name(category)
     icon = str(existing.get("icon") or "").strip() or official_icon_url(
         category, item_id
@@ -350,6 +389,8 @@ def _build_supplemental_item(
     translated = bool(overlay_name) or (
         bool(existing_zh) and not existing_is_fallback
     )
+    if existing_is_fallback and not overlay_name:
+        zh_source = "fallback"
     item = {
         "id": item_id,
         "en": str(existing.get("en") or ""),

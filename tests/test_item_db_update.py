@@ -12,7 +12,9 @@ from item_db_update import (
     extract_full_icons,
     extract_official_items,
     icon_coverage,
+    write_overrides_jsonc,
 )
+from item_index import ItemIndex, strip_json_comments
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"test-icon"
 
@@ -112,6 +114,29 @@ class ItemDBUpdateTests(unittest.TestCase):
             self.assertEqual(by_id["food1"]["zh_source"], "overlay")
             self.assertNotIn("food1", stats2["untranslated"])
 
+    def test_english_only_item_is_flagged_for_optional_translation(self):
+        existing = {
+            "items": [
+                {
+                    "id": "ak",
+                    "en": "AK-308",
+                    "zh": "AK-308",
+                    "zh_source": "exact",
+                    "cat": "weapon/rifle",
+                }
+            ]
+        }
+        official = {
+            "ak": {
+                "category": "weapon/rifle",
+                "payload": {"name": {"lines": {"en": "AK-308"}}},
+            }
+        }
+        merged, stats = build_merged_index(existing, official, {})
+        self.assertEqual(merged["items"][0]["zh"], "AK-308")
+        self.assertEqual(merged["items"][0]["zh_source"], "fallback")
+        self.assertEqual(stats["untranslated"], ["ak"])
+
     def test_extract_full_icons_and_coverage(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -127,6 +152,75 @@ class ItemDBUpdateTests(unittest.TestCase):
             coverage = icon_coverage({"abc", "food1"}, [dest])
             self.assertEqual(coverage["matched"], 1)
             self.assertEqual(coverage["missing"], ["food1"])
+
+    def test_jsonc_comments_preserve_strings_and_write_metadata(self):
+        source = {
+            "id": "",
+            "url": "https://example.invalid/a//b",
+            "text": "not // a comment",
+        }
+        text = chr(10).join(
+            [
+                "{",
+                "  // header",
+                '  "id": "",',
+                '  "url": "https://example.invalid/a//b",',
+                '  "text": "not // a comment"',
+                "  // tail",
+                "}",
+            ]
+        )
+        parsed = json.loads(strip_json_comments(text))
+        self.assertEqual(parsed, source)
+
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "item_name_overrides.json"
+            write_overrides_jsonc(
+                path,
+                {"abc": "", "food1": "食物"},
+                {
+                    "abc": {"en": "AK-308", "key": "item.wpn.abc.name"},
+                    "food1": {"en": "Food", "key": "item.food.food1.name"},
+                },
+            )
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("// en: AK-308 | key: item.wpn.abc.name", text)
+            self.assertIn("// en: Food | key: item.food.food1.name", text)
+            parsed = json.loads(strip_json_comments(text))
+            self.assertEqual(parsed, {"abc": "", "food1": "食物"})
+
+    def test_item_index_loads_commented_overrides(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            index_path = root / "item_index.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "abc",
+                                "en": "AK-308",
+                                "zh": "AK-308",
+                                "cat": "weapon/rifle",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            overrides = root / "item_name_overrides.json"
+            overrides.write_text(
+                chr(10).join(
+                    [
+                        "{",
+                        '  "abc": "AK-308", // en: AK-308 | key: item.wpn.abc.name',
+                        "}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            index = ItemIndex(index_path, overrides_path=overrides)
+            self.assertEqual(index.get("abc")["zh"], "AK-308")
 
     def test_command_aliases_do_not_shadow_version_check(self):
         self.assertEqual(parse_command("/sz 检查")[0], "item_db")

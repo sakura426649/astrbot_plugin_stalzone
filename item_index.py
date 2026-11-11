@@ -15,6 +15,51 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+
+def strip_json_comments(text: str) -> str:
+    """Remove // and /* */ comments while preserving quoted strings."""
+    value = str(text or "")
+    result: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if in_string:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < len(value):
+            following = value[index + 1]
+            if following == "/":
+                index += 2
+                while index < len(value) and value[index] not in '\r\n':
+                    index += 1
+                continue
+            if following == "*":
+                index += 2
+                while index + 1 < len(value) and not (
+                    value[index] == "*" and value[index + 1] == "/"
+                ):
+                    index += 1
+                index = index + 2 if index + 1 < len(value) else len(value)
+                continue
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
 CATEGORY_LABELS = {
     "weapon": "武器",
     "weapon/assault_rifle": "武器 / 突击步枪",
@@ -191,7 +236,11 @@ class ItemIndex:
 
     def _load_overrides(self) -> dict[str, str]:
         try:
-            payload = json.loads(self.overrides_path.read_text(encoding="utf-8"))
+            payload = json.loads(
+                strip_json_comments(
+                    self.overrides_path.read_text(encoding="utf-8")
+                )
+            )
         except (OSError, ValueError):
             return {}
         if not isinstance(payload, dict):

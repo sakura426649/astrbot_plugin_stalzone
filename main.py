@@ -138,6 +138,7 @@ try:  # Package import (normal AstrBot plugin loading).
         display_english,
         display_name,
         display_translation,
+        strip_json_comments,
     )
     from .item_db_update import (
         OFFICIAL_ARCHIVE_URL,
@@ -147,6 +148,7 @@ try:  # Package import (normal AstrBot plugin loading).
         icon_coverage,
         load_json,
         write_json_atomic,
+        write_overrides_jsonc,
     )
     from .lunar_client import LunarProfileClient
     from .price_watch import (
@@ -254,6 +256,7 @@ except ImportError:  # Direct execution / flat import fallback.
         display_english,
         display_name,
         display_translation,
+        strip_json_comments,
     )
     from item_db_update import (  # type: ignore[no-redef]
         OFFICIAL_ARCHIVE_URL,
@@ -263,6 +266,7 @@ except ImportError:  # Direct execution / flat import fallback.
         icon_coverage,
         load_json,
         write_json_atomic,
+        write_overrides_jsonc,
     )
     from lunar_client import LunarProfileClient  # type: ignore[no-redef]
     from price_watch import (  # type: ignore[no-redef]
@@ -304,7 +308,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.18"
+PLUGIN_VERSION = "1.14.19"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -472,6 +476,16 @@ def _github_url_candidates(url: str) -> list[str]:
     return [value] + [
         prefix.rstrip("/") + "/" + value for prefix in GITHUB_PROXY_PREFIXES
     ]
+
+
+def _load_jsonc(path: Path, default: Any) -> Any:
+    """Load JSON with optional // / /* */ comments (translation overlay)."""
+    try:
+        return json.loads(
+            strip_json_comments(path.read_text(encoding="utf-8"))
+        )
+    except (OSError, ValueError):
+        return default
 
 
 @dataclass
@@ -645,7 +659,7 @@ USAGE = {
     ),
     "item_db": (
         "用法：/sz 检查 / 物品库检查 / 物品库更新\n"
-        "说明：先检查项目完整图标，不足时下载 full 包；再用 EXBO 官方物品库补全索引与图标。保留现有中文，未翻译条目写入 item_name_overrides.json 留空。\n"
+        "说明：先检查项目完整图标，不足时下载 full 包；再用 EXBO 官方物品库补全索引与图标。保留现有中文，未翻译条目写入 item_name_overrides.json 留空，每行附 en/key 注释。\n"
         "权限：AstrBot 管理员 / QQ 群主 / QQ 群管理员\n"
         "示例：\n"
         "  /sz 物品库检查"
@@ -5012,7 +5026,7 @@ class StalzonePlugin(Star):
             full_note = "本地完整图标已齐全。"
 
         existing_payload = load_json(index_path, {})
-        overlay_payload = load_json(overrides_path, {})
+        overlay_payload = _load_jsonc(overrides_path, {})
         if not isinstance(overlay_payload, dict):
             overlay_payload = {}
         await self._update_status(event, "正在检查 EXBO 官方物品库版本…")
@@ -5043,8 +5057,21 @@ class StalzonePlugin(Star):
             for item_id in untranslated:
                 overrides.setdefault(item_id, "")
             if untranslated:
+                metadata = {
+                    str(item.get("id") or ""): {
+                        "en": str(item.get("en") or ""),
+                        "ru": str(item.get("ru") or ""),
+                        "key": str(item.get("key") or ""),
+                    }
+                    for item in (
+                        existing_payload.get("items")
+                        if isinstance(existing_payload.get("items"), list)
+                        else []
+                    )
+                    if isinstance(item, dict) and item.get("id")
+                }
                 await asyncio.to_thread(
-                    write_json_atomic, overrides_path, overrides, indent=1
+                    write_overrides_jsonc, overrides_path, overrides, metadata
                 )
             coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
             return chr(10).join(
@@ -5112,8 +5139,17 @@ class StalzonePlugin(Star):
         backup = self._backup_item_db(data_dir, index_path, overrides_path)
         # Write the placeholder overlay first: if it fails, the old index is
         # still intact.  Blank entries are ignored by ItemIndex until filled.
+        metadata = {
+            str(item.get("id") or ""): {
+                "en": str(item.get("en") or ""),
+                "ru": str(item.get("ru") or ""),
+                "key": str(item.get("key") or ""),
+            }
+            for item in merged.get("items", [])
+            if isinstance(item, dict) and item.get("id")
+        }
         await asyncio.to_thread(
-            write_json_atomic, overrides_path, overrides, indent=1
+            write_overrides_jsonc, overrides_path, overrides, metadata
         )
         await asyncio.to_thread(write_json_atomic, index_path, merged)
 

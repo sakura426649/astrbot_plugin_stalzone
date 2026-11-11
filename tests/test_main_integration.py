@@ -67,6 +67,7 @@ astrbot.api.event = event_mod
 astrbot.api.star = star_mod
 
 import main as main_module  # noqa: E402
+from item_index import strip_json_comments
 from main import (  # noqa: E402
     PluginReply,
     SZ_BARE_RE,
@@ -890,7 +891,12 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                     archive.writestr(
                         "db-main/ru/items/supply/food/food1.json",
                         json.dumps(
-                            {"name": {"lines": {"en": "Food", "ru": "Еда"}}}
+                            {
+                                "name": {
+                                    "key": "item.food.food1.name",
+                                    "lines": {"en": "Food", "ru": "Еда"},
+                                }
+                            }
                         ),
                     )
                     for index in range(100):
@@ -927,10 +933,13 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(by_id["abc"]["zh"], "旧枪")
             self.assertEqual(by_id["food1"]["zh"], "Food")
             self.assertEqual(merged["official_commit"], "abc123")
-            overrides = json.loads(
-                (data / "item_name_overrides.json").read_text(encoding="utf-8")
+            override_text = (data / "item_name_overrides.json").read_text(
+                encoding="utf-8"
             )
+            overrides = json.loads(strip_json_comments(override_text))
             self.assertEqual(overrides["food1"], "")
+            self.assertIn("// en: Food", override_text)
+            self.assertIn("| key: item.food.food1.name", override_text)
             self.assertTrue((data / "item_icons" / "food1.png").is_file())
 
             async def unexpected_download(*_args, **_kwargs):

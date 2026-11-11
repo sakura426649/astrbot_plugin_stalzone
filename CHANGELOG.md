@@ -3,11 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.19 - 2026-11-11
+
+### Changed
+
+- `item_name_overrides.json` is now comment-friendly JSONC. Each entry carries a trailing `// en: official English name | key: localization key` comment so English-only items (for example AK-308) can be recognized and left blank. `ItemIndex` strips `//` and `/* */` comments before parsing; the update command preserves existing comments/values when regenerating.
+
 ## 1.14.18 - 2026-11-11
 
 ### Added
 
-- Admin commands `/sz 检查`, `/sz 物品库检查` and `/sz 物品库更新` now check the full icon set first, install missing icons from the project full package, merge the official EXBO item database while preserving existing Chinese, and write blank translation slots to `item_name_overrides.json`. The in-memory index is reloaded after the update; the previous index/overlay is backed up (latest three kept).
+- Admin commands `/sz 检查`, `/sz 物品库检查` and `/sz 物品库更新` now check the full icon set first, install missing icons from the project full package, merge the official EXBO item database while preserving existing Chinese, and write blank translation slots to `item_name_overrides.json`. The generated JSONC adds a trailing `// en: ... | key: ...` comment per entry; the loader ignores comments. The in-memory index is reloaded after the update; the previous index/overlay is backed up (latest three kept).
 - Ambiguous artifact names in `/sz 关注` now register a pending choice, so `/sz 候选 1` can continue the watch creation flow.
 
 ### Fixed
