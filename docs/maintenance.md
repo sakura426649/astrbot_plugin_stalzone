@@ -71,27 +71,42 @@ https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1818450&count=20
 
 ## 3. 官方新增神器/物品
 
-新物品不能只靠运行时“猜”，因为名称、属性、图标和中文翻译需要保持同一份快照。维护流程：
+物品 ID、英文/俄文名、品质色、类别和图标以 **EXBO 官方物品库**为准（<https://github.com/EXBO-Studio/stalzone-database>）。中文名由本项目维护在 `translations/zh_items.json`。完整说明见 [`official-item-database.md`](official-item-database.md)。
 
-1. 更新 `data/category_all.json`（官方/WIKI 物品分类）和 `data/wiki_items.json`（属性/描述）。
-2. 准备当前游戏版本的社区汉化 `zh.lang`（玩家社区维护，**非官方**；游戏官方不支持中文，需自行从社区渠道获取并校对）。
-3. 重新生成索引：
+维护流程：
+
+1. 下载官方快照（基础物品 JSON + 图标，自动跳过 `_variants` 皮肤）：
 
 ```bash
-python scripts/build_item_catalog.py --lang "路径/zh.lang"
+python tools/fetch_official_database.py --dest ../stalzone-official-db
 ```
 
-4. 查看未翻译报告（`dist/导入参考/未翻译物品_待补全.tsv`）；能自动解析的会保留，无法解析的补到 `MANUAL_NAMES` 或运行时 `item_name_overrides.json`。
-5. 新图标下载为 `item_icons/{item_id}.png`。基础包只按 `tools/build_package.py` 里的常用分类选图标；完整图标放在 `icons-full` 分支供用户下载，master 只保留常用图标。如果新增一整个常用分类，把前缀加进 `BASE_CATEGORY_PREFIXES`，并同步更新 master 与 `icons-full` 分支。
+2. 重新生成索引，并刷新市场包内置的常用图标：
+
+```bash
+python tools/sync_official_items.py --source ../stalzone-official-db \
+    --sync-icons item_icons
+```
+
+3. 查看输出里的未翻译数量；新物品若回退成英文，在 `translations/zh_items.json` 的 `names` 中补 `{物品ID: 中文名}` 后重新运行第 2 步。社区 `zh.lang` 仍是主要译名来源，但需要人工校对。
+4. 生成完整图标目录（官方图标优先 + 旧补充条目图标）：
+
+```bash
+python tools/sync_official_items.py --source ../stalzone-official-db \
+    --full-icons-out ../full_icons_official/item_icons \
+    --seed-icons ../full_icons_tmp/item_icons
+```
+
+5. 基础包只按 `tools/build_package.py` 的常用分类选图标；完整图标放在 `icons-full` 分支供用户下载，master 只保留常用图标。如果新增一整个常用分类，把前缀加进 `BASE_CATEGORY_PREFIXES`，并同步更新 master 与 `icons-full` 分支。
 6. 跑测试、检查新物品的 `/sz 物品` 和 `/sz 拍卖`，再发版。
 
 为什么不能完全自动：
 
-- `zh.lang` 是玩家社区维护的汉化文件，不是官方本地化，也不是公开 API；新版本需要等社区更新并人工校对。
-- 物品属性/描述和图标来自 WIKI/客户端快照，必须和索引同版本，否则会出现“名字有了但属性是旧的”。
-- 未翻译名称需要人工判断，自动翻译容易把武器/神器译错；社区汉化未覆盖的新物品会暂时回退英文名。
+- 官方数据库不包含中文；中文名依赖社区汉化 + 人工校对，新版本可能暂时回退英文。
+- 官方数据库只收录当前基础物品；旧活动皮肤等历史条目会保留为 `supplemental`，不要因为官方库没有就删除。
+- 物品属性/描述仍来自 WIKI/客户端快照（`item_details.json`），必须和索引同版本，否则会出现“名字有了但属性是旧的”。
 
-可以自动化的部分：检测 WIKI 新增 ID、生成未翻译清单、下载新图标、开 PR。最终合并和发版仍建议人工确认。
+可以自动化的部分：检测官方新增 ID、生成未翻译清单、下载官方图标、开 PR。最终译名确认和发版仍建议人工审核。
 
 ## 4. 发布检查清单
 

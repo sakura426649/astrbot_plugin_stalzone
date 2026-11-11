@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.11.11-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.12.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -73,7 +73,7 @@
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；优先匹配名称括号内的标签，标签长度不限、不区分大小写；支持战队列表 |
-| **物品图鉴** | 2,636 件物品的中/英/俄/ID 索引，1,359 件详情；支持品质与类型筛选（如 `准镜 红`、`准镜 红 瞄具`、`准镜 瞄具`）；基础包内置 828 个常用图标，完整 2,621 图标通过扩展包安装 |
+| **物品图鉴** | 2,636 件物品的中/英/俄/ID 索引（2,367 件来自 EXBO 官方物品库，269 件为官方库未收录的历史补充），1,359 件详情；支持品质与类型筛选（如 `准镜 红`、`准镜 红 瞄具`、`准镜 瞄具`）；基础包内置 828 个官方常用图标，完整 2,621 图标通过扩展包安装 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 171 份 2023–2026 官方补丁公告（含 2026-10-28），按物品列出全部改动，支持武器、神器与配件 |
 | **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；预测等级置顶大字展示，等级变化用颜色区分，不请求游戏 API |
@@ -376,9 +376,10 @@ astrbot_plugin_stalzone/
 ├── image_renderer.py        # Pillow 卡片渲染
 ├── command_parser.py        # /sz 指令与别名解析
 ├── item_index.py            # 中/英/俄物品名 → item_id
-├── item_index.json          # 2,615 件物品双语索引
-├── item_details.json        # 1,338 件物品属性/描述
-├── item_icons/              # 828 个随包常用图标（完整图标在仓库中按需下载）
+├── item_index.json          # 2,636 件物品索引（2,367 官方 + 269 补充）
+├── item_details.json        # 1,359 件物品属性/描述
+├── item_icons/              # 850 个内置常用图标（市场包按分类打包 828 个）
+├── translations/zh_items.json  # 官方物品库的中文名 overlay
 ├── balance_history.py       # 官方平衡公告索引
 ├── season_pass.py           # 通行证计算
 ├── pda_format.py            # PDA §颜色/渐变解析
@@ -387,6 +388,8 @@ astrbot_plugin_stalzone/
 ├── assets/                  # 壁纸、署名字体、阵营徽记
 ├── docs/                    # 文档（预览图在 icons-full 分支）
 ├── tools/build_package.py   # 16 MiB 插件包构建（可选图标扩展包）
+├── tools/sync_official_items.py  # 官方物品库 → item_index.json
+├── tools/fetch_official_database.py  # 下载官方物品/图标快照
 ├── tests/                   # 单元测试与集成测试
 ├── _conf_schema.json
 ├── metadata.yaml
@@ -401,7 +404,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **270 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、官方数据库同步、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **273 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。官方物品库的更新流程见 [`docs/official-item-database.md`](docs/official-item-database.md)。
 
 演示服冒烟测试（需要演示应用凭证）：
 
@@ -441,14 +444,15 @@ python tests/demo_smoke.py
 | 来源 | 用途 |
 | --- | --- |
 | [STALZONE 官方 API](https://eapi.stalzone.com/reference) | 拍卖、风暴、玩家、战队、行动记录、区服 |
-| [STALZONE WIKI](https://stalzone.wiki/) | 物品英文名称、属性、图标 |
+| [EXBO 官方物品库](https://github.com/EXBO-Studio/stalzone-database) | 物品 ID、英文/俄文名、品质色、类别、官方图标 |
+| [STALZONE WIKI](https://stalzone.wiki/) | 物品属性与详情补充 |
 | 社区汉化 `zh.lang` | 物品中文名（玩家社区维护，非官方；官方不支持中文） |
 | [StalzoneHQ](https://stalzonehq.com/) | 阵营图标与开放世界 PvP 公式参考 |
 | [Lunar Zone](https://lunar-zone.com/) | 可选的第三方战队战报 K/D/KDA |
 | [SC CORE](https://sccore.ru/) | 可选的第三方成交历史补全 |
 | [AstrBot](https://github.com/AstrBotDevs/AstrBot) | 插件运行框架 |
 
-物品中文名来自玩家社区维护的 `zh.lang` 汉化文件（**非官方**；游戏官方不支持中文，翻译可能滞后于新物品）；英文名与物品属性来自 STALZONE WIKI。平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
+物品 ID、英文/俄文名、品质色、类别和图标来自 [EXBO 官方物品库](https://github.com/EXBO-Studio/stalzone-database)，随游戏版本更新；物品属性/描述补充自 STALZONE WIKI。中文名来自玩家社区维护的 `zh.lang` 汉化文件与人工校对（**非官方**；游戏官方不支持中文，翻译可能滞后于新物品），由 `translations/zh_items.json` 维护。平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
 
 > 本项目是非官方工具，与 EXBO / STALZONE 没有隶属关系。游戏名称、图标和数据的版权归各自权利人所有；第三方数据仅作补充并在输出中标注。
 

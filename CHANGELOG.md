@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.12.0 - 2026-11-11
+
+### Changed
+
+- Item identity moved to the official **EXBO item database** (`EXBO-Studio/stalzone-database`): 2,367 base items now take IDs, English/Russian names, quality colors, categories and icons from EXBO's auto-updated snapshot instead of the self-maintained wiki catalog. The existing 269 wiki-era entries that EXBO does not publish (old event skins, laptop, etc.) are kept as `supplemental`, so the total stays 2,636.
+- Official data has no Chinese. Chinese names stay in the new community overlay `translations/zh_items.json`; untranslated new items fall back to English and can be filled in without touching the generator.
+- Bundled common icons (828 in the marketplace package) and the full 2,621-icon pack now come from the official icon library. The existing category filters are preserved by mapping official paths (`supply/*`, `bullet`, `misc`, weapon-module subfolders) onto the plugin's `consumables/*`, `other/*` and `weapon_modules/*` groups.
+- Added `tools/fetch_official_database.py` (pinned, concurrent snapshot download with gh-proxy fallback) and `tools/sync_official_items.py` (index regeneration, Chinese overlay, supplemental merge, bundled/full icon export). Workflow documented in `docs/official-item-database.md`.
+- Index metadata now exposes `official_count`, `supplemental_count`, per-item `source`, `official_cat` and `official_icon`; existing `icon` URLs remain only as a network fallback because local icons are preferred.
+
+### Tests
+
+- Added official-index metadata and sync-tool regression tests (overlay merge, category mapping, supplemental preservation, icon overwrite boundaries); 273 tests, 14 visual signatures and 80% coverage pass.
+
 ## 1.11.11 - 2026-11-11
 
 ### Fixed

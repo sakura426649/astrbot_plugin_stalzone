@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.11.11-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.12.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -33,7 +33,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Platform support | Queries and image replies work on OneBot (`aiocqhttp`) and QQ Official Bot (`qq_official` / `qq_official_webhook`); automatic storm alerts are OneBot-only |
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
-| Item | 2,636 bilingual entries, 1,359 detail records, 828 bundled common icons plus an optional 2,621-icon extension pack |
+| Item | 2,636 entries (2,367 from the official EXBO database plus 269 legacy supplements), 1,359 detail records, 828 bundled official common icons plus an optional 2,621-icon extension pack |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction, no game API request |
@@ -130,7 +130,8 @@ The automatic card shares the doomsday emission style but leads with "风暴已�
 
 ## Data notes
 
-- Item Chinese names come from the **community-maintained `zh.lang`** file, not an official localization. The game has no official Chinese support; translations may lag behind new items. English fallback and manual overrides are supported.
+- Item IDs, English/Russian names, quality colors, categories and icons come from the **official [EXBO item database](https://github.com/EXBO-Studio/stalzone-database)**, which updates with game releases. Item stats/descriptions are supplemented from the STALZONE Wiki.
+- Item Chinese names come from the **community-maintained `zh.lang`** file, not an official localization. The game has no official Chinese support; translations may lag behind new items. They are maintained in `translations/zh_items.json`; English fallback and manual overrides are supported.
 - Balance history comes from official Steam announcements.
 - Lunar and SC CORE are third-party sources and are labeled in output.
 - PvP score is an estimate based on the public StalzoneHQ formula, not an official score.

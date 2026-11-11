@@ -2286,6 +2286,38 @@ class ItemIndexTests(unittest.TestCase):
                 (PLUGIN_ROOT / "item_icons" / f"{item_id}.png").is_file()
             )
 
+    def test_official_database_metadata(self):
+        import json
+
+        payload = json.loads(
+            (PLUGIN_ROOT / "item_index.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("EXBO-Studio/stalzone-database", payload["source"])
+        self.assertGreaterEqual(payload["official_count"], 2300)
+        self.assertEqual(payload["count"], len(payload["items"]))
+        official = [
+            item for item in payload["items"] if item.get("source") == "official"
+        ]
+        supplemental = [
+            item
+            for item in payload["items"]
+            if item.get("source") == "supplemental"
+        ]
+        self.assertEqual(len(official), payload["official_count"])
+        self.assertEqual(len(supplemental), payload["supplemental_count"])
+        self.assertTrue(
+            all(
+                item.get("official_cat") and item.get("official_icon")
+                for item in official
+            )
+        )
+        self.assertTrue(all(not item.get("official_cat") for item in supplemental))
+        pistol = next(item for item in payload["items"] if item["id"] == "2onjv")
+        self.assertEqual(pistol["official_cat"], "weapon/pistol")
+        self.assertEqual(pistol["official_icon"], "ru/icons/weapon/pistol/2onjv.png")
+        laptop = next(item for item in payload["items"] if item["id"] == "jptUfEGC")
+        self.assertEqual(laptop["source"], "supplemental")
+
     def test_chinese_artifact(self):
         item, matches = self.index.resolve("寒冰")
         self.assertEqual(item["id"], "ljn2")
