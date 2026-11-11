@@ -2678,11 +2678,11 @@ def render_watch_list_card(
         title_font = ImageFont.truetype(str(display_file), 46)
         subtitle_font = ImageFont.truetype(str(font_file), 18)
         chip_font = ImageFont.truetype(str(font_file), 14)
-        user_font = ImageFont.truetype(str(font_file), 25)
-        badge_font = ImageFont.truetype(str(font_file), 15)
-        row_font = ImageFont.truetype(str(font_file), 22)
-        small_font = ImageFont.truetype(str(font_file), 16)
-        footer_font = ImageFont.truetype(str(font_file), 14)
+        user_font = ImageFont.truetype(str(font_file), 28)
+        badge_font = ImageFont.truetype(str(font_file), 17)
+        row_font = ImageFont.truetype(str(font_file), 28)
+        small_font = ImageFont.truetype(str(font_file), 20)
+        footer_font = ImageFont.truetype(str(font_file), 15)
     except Exception:
         return None
 
@@ -2691,8 +2691,8 @@ def render_watch_list_card(
     body = "#E7EDF5"
     muted = "#8FA2B8"
     blue = "#4EA8FF"
-    block_header = 64
-    row_h = 64
+    block_header = 72
+    row_h = 78
     block_gap = 18
     header_h = 220
     footer_h = 96
@@ -2764,14 +2764,14 @@ def render_watch_list_card(
             )
             if own:
                 draw.rounded_rectangle(
-                    (margin, y + 18, margin + 6, y + block_h - 18),
+                    (margin, y + 20, margin + 6, y + block_h - 20),
                     radius=3,
                     fill=accent,
                 )
             user_name = str(user.get("user_name") or "未知用户")
             fitted_name = _fit_text(draw, user_name, user_font, 500)
             draw.text(
-                (margin + 26, y + 16),
+                (margin + 26, y + 18),
                 fitted_name,
                 font=user_font,
                 fill=accent if own else body,
@@ -2779,13 +2779,13 @@ def render_watch_list_card(
             if own:
                 badge_x = margin + 26 + int(user_font.getlength(fitted_name)) + 12
                 draw.rounded_rectangle(
-                    (badge_x, y + 21, badge_x + 30, y + 49),
-                    radius=6,
+                    (badge_x, y + 22, badge_x + 34, y + 54),
+                    radius=7,
                     fill=accent,
                 )
-                draw.text((badge_x + 7, y + 24), "你", font=badge_font, fill="#07120D")
+                draw.text((badge_x + 8, y + 25), "你", font=badge_font, fill="#07120D")
             draw.text(
-                (width - margin - 26, y + 20),
+                (width - margin - 26, y + 24),
                 f"{len(items)} 项",
                 font=chip_font,
                 fill=muted,
@@ -2794,10 +2794,10 @@ def render_watch_list_card(
             row_y = y + block_header
             for item in items:
                 quality_color = str(item.get("quality_color") or _quality_color(item.get("quality")))
-                draw.text((margin + 26, row_y + 20), f"#{item.get('index')}", font=small_font, fill=muted)
+                draw.text((margin + 26, row_y + 24), f"#{item.get('index')}", font=small_font, fill=muted)
                 draw.text(
-                    (margin + 90, row_y + 13),
-                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 300),
+                    (margin + 90, row_y + 15),
+                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 340),
                     font=row_font,
                     fill=quality_color,
                 )
@@ -2805,21 +2805,21 @@ def render_watch_list_card(
                 if quality_short and quality_short != "全部品质":
                     chip_w = int(small_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (margin + 410, row_y + 18, margin + 410 + chip_w, row_y + 46),
+                        (margin + 460, row_y + 20, margin + 460 + chip_w, row_y + 52),
                         radius=7,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
-                    draw.text((margin + 419, row_y + 21), quality_short, font=small_font, fill=quality_color)
+                    draw.text((margin + 470, row_y + 24), quality_short, font=small_font, fill=quality_color)
                 draw.text(
-                    (margin + 560, row_y + 20),
+                    (margin + 620, row_y + 24),
                     _fit_text(draw, str(item.get("target") or ""), small_font, 330),
                     font=small_font,
                     fill=blue,
                 )
                 draw.text(
-                    (width - margin - 26, row_y + 20),
+                    (width - margin - 26, row_y + 24),
                     str(item.get("remaining") or ""),
                     font=small_font,
                     fill="#C6D3E2",
@@ -2922,36 +2922,31 @@ def render_watch_alert_card(
     )
 
     identity_y = 164
-    icon_size = 96
+    icon_size = 112
+    icon_x = width - margin - icon_size
     if icon_path is not None:
         try:
-            _draw_candidate_icon_frame(canvas, draw, margin, identity_y, icon_size)
+            _draw_candidate_icon_frame(canvas, draw, icon_x, identity_y - 8, icon_size)
             canvas.alpha_composite(
                 _load_normalized_icon(str(icon_path), icon_size),
-                (margin, identity_y),
+                (icon_x, identity_y - 8),
             )
         except Exception:
-            icon_size = 0
-    text_x = margin + (icon_size + 22 if icon_size else 0)
+            pass
+    text_x = margin
     draw.text(
-        (text_x, identity_y + 4),
-        _fit_text(draw, str(view.get("item_label") or ""), item_font, width - text_x - margin),
+        (text_x, identity_y + 6),
+        _fit_text(
+            draw,
+            str(view.get("item_label") or ""),
+            item_font,
+            icon_x - text_x - 26,
+        ),
         font=item_font,
-        fill=quality_color,
+        fill=body,
     )
-    quality_short = str(view.get("quality_short") or "")
-    if quality_short and quality_short != "全部品质":
-        chip_w = int(chip_font.getlength(quality_short)) + 22
-        draw.rounded_rectangle(
-            (text_x, identity_y + 58, text_x + chip_w, identity_y + 88),
-            radius=8,
-            fill="#0C1621",
-            outline=quality_color,
-            width=1,
-        )
-        draw.text((text_x + 11, identity_y + 63), quality_short, font=chip_font, fill=quality_color)
     draw.text(
-        (width - margin, identity_y + 10),
+        (width - margin, identity_y - 28),
         str(view.get("region") or "EU").upper(),
         font=chip_font,
         fill=muted,

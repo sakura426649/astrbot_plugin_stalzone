@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.2 - 2026-11-11
+
+### Changed
+
+- Alert card: the artifact name is now normal white text, the quality word/dot was removed, and the matching artifact icon moved to the right side. Price and target stay the same size.
+- Watch list: enlarged every in-block font (artifact name 28px, target/remaining 20px, nickname 28px) and increased row/block height so the content no longer looks tiny inside large panels.
+- Regenerated the watch list and alert visual signatures.
+
 ## 1.14.1 - 2026-11-11
 
 ### Changed
