@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.11 - 2026-11-11
+
+### Changed
+
+- Watch cards are now 960px wide (same order as the other cards) instead of 1200–1280px, and the list uses larger 30px labels. QQ scales wide images down to chat width, so the narrower canvas plus larger text keeps the card readable instead of looking squeezed.
+- Watch list rows now show the artifact name and target on two lines: target price is white 30px (same size as the name), with remaining time on the first line.
+- Added dedicated action cards for cancel, clear and renew instead of plain text; cancel shows the removed item/target, clear shows the count, renew shows the new remaining time.
+- Removed the quality-word badge from the created card and vertically centered the artifact name against the icon. Watch titles use the regular CJK font instead of the bold display font, preventing the narrow `关` glyph.
+
+### Tests
+
+- Added the watch-action visual signature; 302 tests and 21 visual signatures pass.
+
 ## 1.14.10 - 2026-11-11
 
 ### Changed

@@ -2669,7 +2669,7 @@ def render_watch_list_card(
     view: dict[str, Any] | None,
     *,
     font_path: str | None = None,
-    width: int = 1280,
+    width: int = 960,
 ) -> Path | None:
     """Render per-user price-watch blocks with the caller's block pinned."""
     if (
@@ -2685,26 +2685,26 @@ def render_watch_list_card(
     display_file = _find_display_font(font_path) or font_file
     users = [user for user in (view.get("users") or []) if isinstance(user, dict)]
     try:
-        eyebrow_font = ImageFont.truetype(str(font_file), 14)
-        title_font = ImageFont.truetype(str(display_file), 46)
-        subtitle_font = ImageFont.truetype(str(font_file), 18)
-        chip_font = ImageFont.truetype(str(font_file), 14)
-        user_font = ImageFont.truetype(str(font_file), 28)
-        badge_font = ImageFont.truetype(str(font_file), 17)
-        row_font = ImageFont.truetype(str(font_file), 28)
-        target_font = ImageFont.truetype(str(font_file), 28)
-        small_font = ImageFont.truetype(str(font_file), 20)
+        eyebrow_font = ImageFont.truetype(str(font_file), 15)
+        title_font = ImageFont.truetype(str(font_file), 44)
+        subtitle_font = ImageFont.truetype(str(font_file), 19)
+        chip_font = ImageFont.truetype(str(font_file), 15)
+        user_font = ImageFont.truetype(str(font_file), 30)
+        badge_font = ImageFont.truetype(str(font_file), 18)
+        row_font = ImageFont.truetype(str(font_file), 30)
+        target_font = ImageFont.truetype(str(font_file), 30)
+        small_font = ImageFont.truetype(str(font_file), 22)
         footer_font = ImageFont.truetype(str(font_file), 15)
     except Exception:
         return None
 
-    margin = 52
+    margin = 44
     accent = "#54D6A1"
     body = "#E7EDF5"
     muted = "#8FA2B8"
     blue = "#4EA8FF"
     block_header = 72
-    row_h = 78
+    row_h = 100
     block_gap = 18
     header_h = 220
     footer_h = 96
@@ -2806,10 +2806,10 @@ def render_watch_list_card(
             row_y = y + block_header
             for item in items:
                 quality_color = str(item.get("quality_color") or _quality_color(item.get("quality")))
-                draw.text((margin + 26, row_y + 24), f"#{item.get('index')}", font=small_font, fill=muted)
+                draw.text((margin + 24, row_y + 18), f"#{item.get('index')}", font=small_font, fill=muted)
                 draw.text(
-                    (margin + 90, row_y + 15),
-                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 340),
+                    (margin + 80, row_y + 10),
+                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 300),
                     font=row_font,
                     fill=quality_color,
                 )
@@ -2817,25 +2817,25 @@ def render_watch_list_card(
                 if quality_short and quality_short != "全部品质":
                     chip_w = int(small_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (margin + 460, row_y + 20, margin + 460 + chip_w, row_y + 52),
+                        (margin + 390, row_y + 13, margin + 390 + chip_w, row_y + 45),
                         radius=7,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
-                    draw.text((margin + 470, row_y + 24), quality_short, font=small_font, fill=quality_color)
+                    draw.text((margin + 399, row_y + 17), quality_short, font=small_font, fill=quality_color)
                 draw.text(
-                    (margin + 610, row_y + 21),
-                    _fit_text(draw, str(item.get("target") or ""), target_font, 420),
-                    font=target_font,
-                    fill=body,
-                )
-                draw.text(
-                    (width - margin - 26, row_y + 24),
+                    (width - margin - 24, row_y + 18),
                     str(item.get("remaining") or ""),
                     font=small_font,
                     fill="#C6D3E2",
                     anchor="ra",
+                )
+                draw.text(
+                    (margin + 80, row_y + 56),
+                    _fit_text(draw, str(item.get("target") or ""), target_font, width - margin - 24 - (margin + 80)),
+                    font=target_font,
+                    fill=body,
                 )
                 row_y += row_h
             y += block_h + block_gap
@@ -2868,12 +2868,166 @@ def render_watch_list_card(
     return target
 
 
+def render_watch_action_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    icon_path: str | Path | None = None,
+    width: int = 960,
+) -> Path | None:
+    """Render a completed watch action (cancel, renew or clear)."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    font_file = find_cjk_font(font_path)
+    if font_file is None:
+        return None
+    try:
+        eyebrow_font = ImageFont.truetype(str(font_file), 14)
+        title_font = ImageFont.truetype(str(font_file), 42)
+        badge_font = ImageFont.truetype(str(font_file), 15)
+        item_font = ImageFont.truetype(str(font_file), 40)
+        label_font = ImageFont.truetype(str(font_file), 15)
+        value_font = ImageFont.truetype(str(font_file), 28)
+        body_font = ImageFont.truetype(str(font_file), 18)
+        footer_font = ImageFont.truetype(str(font_file), 14)
+    except Exception:
+        return None
+    margin = 52
+    accent = str(view.get("accent") or "#54D6A1")
+    body = "#E7EDF5"
+    muted = "#8FA2B8"
+    quality_color = str(view.get("quality_color") or accent)
+    has_item = bool(str(view.get("item_label") or "").strip())
+    height = 610 if has_item else 560
+    canvas = _card_canvas(width, height, alpha=242)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+    draw.text((margin, 28), "STALZONE / PRICE WATCH", font=eyebrow_font, fill=accent)
+    badge_text = "已完成"
+    badge_w = 82
+    draw.rounded_rectangle(
+        (width - margin - badge_w, 38, width - margin, 72),
+        radius=17,
+        fill=accent,
+    )
+    draw.text(
+        (width - margin - badge_w + 17, 45),
+        badge_text,
+        font=badge_font,
+        fill="#07120D",
+    )
+    draw.rounded_rectangle((margin, 64, margin + 6, 118), radius=3, fill=accent)
+    draw.text(
+        (margin + 22, 54),
+        str(view.get("title") or "操作完成"),
+        font=title_font,
+        fill=body,
+    )
+    draw.text(
+        (margin + 24, 110),
+        f"神器价格关注 · {str(view.get('region') or 'EU').upper()}",
+        font=body_font,
+        fill="#A9BACD",
+    )
+
+    info_y = 300
+    if has_item:
+        identity_y = 164
+        icon_size = 100
+        if icon_path is not None:
+            try:
+                _draw_candidate_icon_frame(canvas, draw, margin, identity_y, icon_size)
+                canvas.alpha_composite(
+                    _load_normalized_icon(str(icon_path), icon_size),
+                    (margin, identity_y),
+                )
+            except Exception:
+                icon_size = 0
+        text_x = margin + (icon_size + 24 if icon_size else 0)
+        draw.text(
+            (text_x, identity_y + 28),
+            _fit_text(
+                draw,
+                str(view.get("item_label") or ""),
+                item_font,
+                width - text_x - margin,
+            ),
+            font=item_font,
+            fill=quality_color,
+        )
+    else:
+        draw.text(
+            (margin, 158),
+            str(view.get("headline") or ""),
+            font=item_font,
+            fill=accent,
+        )
+
+    draw.rounded_rectangle(
+        (margin, info_y, width - margin, info_y + 150),
+        radius=16,
+        fill="#0A131D",
+        outline="#26384A",
+        width=1,
+    )
+    fields = [
+        ("目标价", str(view.get("target") or "—")),
+        ("有效期", str(view.get("expiry") or "—")),
+        ("说明", str(view.get("detail") or "")),
+    ]
+    y = info_y + 20
+    for label, value in fields:
+        if not value:
+            continue
+        draw.text((margin + 24, y), label, font=label_font, fill=muted)
+        draw.text(
+            (margin + 130, y - 4),
+            _fit_text(draw, value, value_font if label != "说明" else body_font, 850),
+            font=value_font if label != "说明" else body_font,
+            fill=body if label != "说明" else "#C6D3E2",
+        )
+        y += 42
+
+    draw.line((margin, height - 88, width - margin, height - 88), fill="#26384A", width=1)
+    draw.text(
+        (margin, height - 68),
+        "买断命中提醒后自动取消；竞拍命中只提醒｜/sz 关注列表 查看当前关注",
+        font=footer_font,
+        fill=muted,
+    )
+    _draw_signature(
+        draw,
+        width,
+        height - 46,
+        font_path,
+        footer_font,
+        max_bottom=height,
+        more_tip=True,
+        tip_x=margin,
+    )
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    target = out_dir / f"sz_watch_action_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
+    except OSError:
+        return None
+    return target
+
+
 def render_watch_created_card(
     view: dict[str, Any] | None,
     *,
     font_path: str | None = None,
     icon_path: str | Path | None = None,
-    width: int = 1200,
+    width: int = 960,
 ) -> Path | None:
     """Render the confirmation for a newly created/updated price watch."""
     if (
@@ -2889,7 +3043,7 @@ def render_watch_created_card(
     display_file = _find_display_font(font_path) or font_file
     try:
         eyebrow_font = ImageFont.truetype(str(font_file), 14)
-        title_font = ImageFont.truetype(str(display_file), 42)
+        title_font = ImageFont.truetype(str(font_file), 42)
         subtitle_font = ImageFont.truetype(str(font_file), 17)
         item_font = ImageFont.truetype(str(font_file), 40)
         chip_font = ImageFont.truetype(str(font_file), 15)
@@ -2950,7 +3104,7 @@ def render_watch_created_card(
             icon_size = 0
     text_x = margin + (icon_size + 24 if icon_size else 0)
     draw.text(
-        (text_x, identity_y + 4),
+        (text_x, identity_y + 30),
         _fit_text(
             draw,
             str(view.get("item_label") or ""),
@@ -3057,7 +3211,7 @@ def render_watch_alert_card(
     *,
     font_path: str | None = None,
     icon_path: str | Path | None = None,
-    width: int = 1200,
+    width: int = 960,
 ) -> Path | None:
     """Render a price alert with an explicit buyout/auction badge."""
     if (

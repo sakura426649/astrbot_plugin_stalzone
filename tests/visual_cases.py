@@ -31,6 +31,7 @@ from image_renderer import (
     render_profile_card,
     render_text_card,
     render_usage_card,
+    render_watch_action_card,
     render_watch_alert_card,
     render_watch_created_card,
     render_watch_list_card,
@@ -497,6 +498,22 @@ def _appraisal_high() -> Path | None:
     return _appraisal_range(15000)
 
 
+def _watch_action() -> Path | None:
+    view = {
+        "title": "已取消关注",
+        "accent": "#FF7A5C",
+        "region": "EU",
+        "item_label": "原子 +15",
+        "quality_color": "#FF5C5C",
+        "target": "≤ 8,000",
+        "expiry": "剩 6 天",
+        "detail": "该条价格关注已移除。",
+    }
+    return render_watch_action_card(
+        view, icon_path=PLUGIN_ROOT / "item_icons" / "wg53.png"
+    )
+
+
 def _watch_created() -> Path | None:
     view = {
         "updated": False,
@@ -623,6 +640,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "appraisal": _appraisal,
     "appraisal_low": _appraisal_low,
     "appraisal_high": _appraisal_high,
+    "watch_action": _watch_action,
     "watch_created": _watch_created,
     "watch_alert": _watch_alert,
     "watch_list": _watch_list,

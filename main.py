@@ -126,6 +126,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_text_card,
         render_usage_card,
         render_watch_alert_card,
+        render_watch_action_card,
         render_watch_created_card,
         render_watch_list_card,
         set_card_background,
@@ -232,6 +233,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_text_card,
         render_usage_card,
         render_watch_alert_card,
+        render_watch_action_card,
         render_watch_created_card,
         render_watch_list_card,
         set_card_background,
@@ -284,7 +286,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.10"
+PLUGIN_VERSION = "1.14.11"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -413,6 +415,7 @@ class PluginReply:
     appraisal_view: dict[str, Any] | None = None
     watch_list_view: dict[str, Any] | None = None
     watch_created_view: dict[str, Any] | None = None
+    watch_action_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -2832,6 +2835,7 @@ class StalzonePlugin(Star):
         appraisal_view: dict[str, Any] | None = None,
         watch_list_view: dict[str, Any] | None = None,
         watch_created_view: dict[str, Any] | None = None,
+        watch_action_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -2858,6 +2862,13 @@ class StalzonePlugin(Star):
                     render_watch_list_card,
                     watch_list_view,
                     font_path=font_path,
+                )
+            elif sub in {"watch", "watch_cancel"} and watch_action_view:
+                path = await asyncio.to_thread(
+                    render_watch_action_card,
+                    watch_action_view,
+                    font_path=font_path,
+                    icon_path=icon_path,
                 )
             elif sub == "watch" and watch_created_view:
                 path = await asyncio.to_thread(
@@ -3265,12 +3276,25 @@ class StalzonePlugin(Star):
             if clear_all or str(sub.get("user_id") or "") == user_id:
                 self._watch_subs().pop(key, None)
                 removed += 1
-        if removed:
-            self._save_watch_state()
-        return (
-            f"已清空 {removed} 条价格关注。"
-            if removed
-            else "本会话没有可清空的关注。"
+        if not removed:
+            return "本会话没有可清空的关注。"
+        self._save_watch_state()
+        text = f"已清空 {removed} 条价格关注。"
+        action_view = {
+            "title": "已清空关注",
+            "accent": "#FFB454",
+            "region": self._region().upper(),
+            "headline": f"{removed} 条关注已清空",
+            "target": f"{removed} 条",
+            "expiry": "—",
+            "detail": "仅清除了你自己的关注。"
+            if not clear_all
+            else "已清除本群全部价格关注。",
+        }
+        return PluginReply(
+            text,
+            watch_action_view=action_view,
+            sub="watch",
         )
 
     async def _handle_watch_cancel(self, event: Any, argument: str) -> str:
@@ -3298,9 +3322,31 @@ class StalzonePlugin(Star):
             return "没有找到对应的关注序号或神器；发送 /sz 关注列表 查看。"
         if not target["own"] and not self._event_is_admin(event):
             return "只能取消自己的关注；管理员/群主/群管可以取消本群其他关注。"
+        sub = target["sub"]
+        item_id = str(sub.get("item_id") or "")
         self._watch_subs().pop(str(target["key"]), None)
         self._save_watch_state()
-        return f"已取消关注 #{target['index']}：{self._watch_target_label(target['sub'])}"
+        text = f"已取消关注 #{target['index']}：{self._watch_target_label(sub)}"
+        item = self.item_index.get(item_id) or {}
+        action_view = {
+            "title": "已取消关注",
+            "accent": "#FF7A5C",
+            "region": str(sub.get("region") or self._region()).upper(),
+            "item_label": f"{self._watch_name(item_id)} +{int(sub.get('level') or 0)}",
+            "quality_color": watch_quality_color(
+                int(sub["quality"]) if sub.get("quality") is not None else None
+            ),
+            "target": self._watch_target_text(sub),
+            "expiry": self._watch_remaining_label(sub),
+            "detail": "该条价格关注已移除。",
+        }
+        return PluginReply(
+            text,
+            icon_url=item.get("icon"),
+            watch_action_view=action_view,
+            sub="watch_cancel",
+            item_meta=self._decorate(item) if item else None,
+        )
 
     async def _handle_watch_renew(self, event: Any, argument: str) -> str:
         value = str(argument or "").strip()
@@ -3326,7 +3372,28 @@ class StalzonePlugin(Star):
             datetime.now(timezone.utc) + timedelta(days=WATCH_MAX_TTL_DAYS),
         ).isoformat()
         self._save_watch_state()
-        return f"已续期 #{target['index']}：{self._watch_target_label(sub)}｜{self._watch_remaining_label(sub)}"
+        text = f"已续期 #{target['index']}：{self._watch_target_label(sub)}｜{self._watch_remaining_label(sub)}"
+        item_id = str(sub.get("item_id") or "")
+        item = self.item_index.get(item_id) or {}
+        action_view = {
+            "title": "已续期",
+            "accent": "#54D6A1",
+            "region": str(sub.get("region") or self._region()).upper(),
+            "item_label": f"{self._watch_name(item_id)} +{int(sub.get('level') or 0)}",
+            "quality_color": watch_quality_color(
+                int(sub["quality"]) if sub.get("quality") is not None else None
+            ),
+            "target": self._watch_target_text(sub),
+            "expiry": self._watch_remaining_label(sub),
+            "detail": "关注任务已延长有效期。",
+        }
+        return PluginReply(
+            text,
+            icon_url=item.get("icon"),
+            watch_action_view=action_view,
+            sub="watch",
+            item_meta=self._decorate(item) if item else None,
+        )
 
     async def _handle_watch(self, event: Any, argument: str) -> str:
         text = str(argument or "").strip()
@@ -4900,6 +4967,7 @@ class StalzonePlugin(Star):
         appraisal_view = None
         watch_list_view = None
         watch_created_view = None
+        watch_action_view = None
         faction = None
         render_sub = sub
         try:
@@ -4920,6 +4988,7 @@ class StalzonePlugin(Star):
                 appraisal_view = result.appraisal_view
                 watch_list_view = result.watch_list_view
                 watch_created_view = result.watch_created_view
+                watch_action_view = result.watch_action_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -4969,6 +5038,7 @@ class StalzonePlugin(Star):
             appraisal_view,
             watch_list_view,
             watch_created_view,
+            watch_action_view,
         )
         if image is not None:
             try:
