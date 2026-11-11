@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.3 - 2026-11-11
+
+### Fixed
+
+- Alert card: restored the quality color on the `神器 +等级` label. Only the extra quality word (`红`) was meant to be removed; the artifact name itself should stay quality-colored. The artifact icon moved back to the left of the name, the region is vertically centered on the far right, and the price/target stay the same size.
+
 ## 1.14.2 - 2026-11-11
 
 ### Changed

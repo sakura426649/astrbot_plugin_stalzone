@@ -2923,34 +2923,35 @@ def render_watch_alert_card(
 
     identity_y = 164
     icon_size = 112
-    icon_x = width - margin - icon_size
+    icon_x = margin
     if icon_path is not None:
         try:
-            _draw_candidate_icon_frame(canvas, draw, icon_x, identity_y - 8, icon_size)
+            _draw_candidate_icon_frame(canvas, draw, icon_x, identity_y, icon_size)
             canvas.alpha_composite(
                 _load_normalized_icon(str(icon_path), icon_size),
-                (icon_x, identity_y - 8),
+                (icon_x, identity_y),
             )
         except Exception:
-            pass
-    text_x = margin
+            icon_size = 0
+    text_x = margin + (icon_size + 24 if icon_size else 0)
+    identity_center = identity_y + (icon_size // 2 if icon_size else 28)
     draw.text(
-        (text_x, identity_y + 6),
+        (text_x, identity_center - 26),
         _fit_text(
             draw,
             str(view.get("item_label") or ""),
             item_font,
-            icon_x - text_x - 26,
+            width - margin - text_x - 120,
         ),
         font=item_font,
-        fill=body,
+        fill=quality_color,
     )
     draw.text(
-        (width - margin, identity_y - 28),
+        (width - margin, identity_center),
         str(view.get("region") or "EU").upper(),
         font=chip_font,
         fill=muted,
-        anchor="ra",
+        anchor="rm",
     )
 
     hero_y = 300
