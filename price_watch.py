@@ -208,7 +208,8 @@ def watch_quality_color(quality: int | None) -> str:
 def watch_quality_short(quality: int | None) -> str:
     if quality is None:
         return "全部品质"
-    return QUALITY_NAMES.get(int(quality), ("", "品质"))[1]
+    # The quality column uses the quality name (独特/传奇), not its color (红/金).
+    return QUALITY_NAMES.get(int(quality), ("品质", ""))[0]
 
 
 def _safe_int(value: Any) -> int | None:

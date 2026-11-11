@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.13 - 2026-11-11
+
+### Fixed
+
+- Watch list remaining-time column now has 20px right padding inside the user block instead of sitting on the border.
+- Watch list quality column now shows the quality name (`独特` / `传奇` / `特殊` / `稀有` / `罕见` / `常见`) instead of the color word (`红` / `金` / `蓝` / ...). The chip still uses the quality color for its border/text.
+
 ## 1.14.12 - 2026-11-11
 
 ### Changed

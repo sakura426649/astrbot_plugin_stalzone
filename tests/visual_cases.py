@@ -518,7 +518,7 @@ def _watch_created() -> Path | None:
     view = {
         "updated": False,
         "item_label": "原子 +15",
-        "quality_short": "红",
+        "quality_short": "独特",
         "quality_color": "#FF5C5C",
         "region": "EU",
         "target": "≤ 8,000",
@@ -563,7 +563,7 @@ def _watch_list() -> Path | None:
                     {
                         "index": 1,
                         "item_label": "原子 +15",
-                        "quality_short": "红",
+                        "quality_short": "独特",
                         "quality_color": "#FF5C5C",
                         "target": "≤ 8,000",
                         "remaining": "剩 6 天",
@@ -578,7 +578,7 @@ def _watch_list() -> Path | None:
                     {
                         "index": 2,
                         "item_label": "寒冰 +10",
-                        "quality_short": "金",
+                        "quality_short": "传奇",
                         "quality_color": "#FFD166",
                         "target": "低于中位 20%（≈6,000）",
                         "target_short": "-20% ≈6,000",
@@ -587,7 +587,7 @@ def _watch_list() -> Path | None:
                     {
                         "index": 3,
                         "item_label": "电水晶 +0",
-                        "quality_short": "蓝",
+                        "quality_short": "特殊",
                         "quality_color": "#4EA8FF",
                         "target": "≤ 3,500",
                         "remaining": "剩 4 天",

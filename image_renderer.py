@@ -2755,7 +2755,7 @@ def render_watch_list_card(
     ]
     for label, x in columns:
         draw.text((x, 220), label, font=chip_font, fill=muted)
-    draw.text((width - margin, 220), "剩余", font=chip_font, fill=muted, anchor="ra")
+    draw.text((width - margin - 20, 220), "剩余", font=chip_font, fill=muted, anchor="ra")
     draw.line((margin, 248, width - margin, 248), fill="#26384A", width=1)
 
     y = header_h
@@ -2853,7 +2853,7 @@ def render_watch_list_card(
                     fill=body,
                 )
                 draw.text(
-                    (width - margin, row_y + 22),
+                    (width - margin - 20, row_y + 22),
                     str(item.get("remaining") or ""),
                     font=small_font,
                     fill="#C6D3E2",
