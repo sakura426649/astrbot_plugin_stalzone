@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.10 - 2026-11-11
+
+### Changed
+
+- Watch-created card: removed the quality word (`红`) chip under the artifact name. The name itself keeps its quality color; only the extra text badge is gone.
+
 ## 1.14.9 - 2026-11-11
 
 ### Changed

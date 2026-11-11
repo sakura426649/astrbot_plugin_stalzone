@@ -2960,23 +2960,6 @@ def render_watch_created_card(
         font=item_font,
         fill=quality_color,
     )
-    quality_short = str(view.get("quality_short") or "")
-    if quality_short and quality_short != "全部品质":
-        chip_w = int(chip_font.getlength(quality_short)) + 22
-        draw.rounded_rectangle(
-            (text_x, identity_y + 54, text_x + chip_w, identity_y + 84),
-            radius=8,
-            fill="#0C1621",
-            outline=quality_color,
-            width=1,
-        )
-        draw.text(
-            (text_x + 11, identity_y + 59),
-            quality_short,
-            font=chip_font,
-            fill=quality_color,
-        )
-
     panel_y = 306
     draw.rounded_rectangle(
         (margin, panel_y, width - margin, panel_y + 126),
