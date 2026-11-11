@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.12.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.13.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -34,6 +34,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Player | Tactical dossier, faction emblem, clan, PvP estimate and full stats; the region badge is centered and no online inference is made |
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
 | Item | 2,636 entries (2,367 from the official EXBO database plus 269 legacy supplements), 1,359 detail records, 828 bundled official common icons plus an optional 2,621-icon extension pack |
+| Artifact appraisal | `/sz 估价` estimates artifact prices from recent sales and active buyouts: min/max/median, P25/P75, current lowest buyout, `+0`–`+15` level breakdown, quality split and a fair-buy line; artifacts only |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction, no game API request |
@@ -168,6 +169,18 @@ The official history endpoint returns at most **200 records per request**. The p
 - Normal `/sz auction` still shows only recent sales to avoid pulling the entire history on every query. Date-filtered queries scan pages internally with a 4,000-record safety cap.
 - Only official sale history is read; no complete history is uploaded to a third party.
 
+## Artifact appraisal
+
+`/sz 估价 <artifact> [quality] [+level]` estimates artifact prices from official sale history and active lots. Only artifacts are supported for now; weapons, armor and materials are out of scope.
+
+- Without a level it shows a `+0` to `+15` overview; `+15` (or `15`) narrows to that level.
+- Quality accepts `白/绿/蓝/粉/红/金`; omitting it mixes all qualities and the card says so.
+- Stats use the last 7 days of sales; if fewer than 5 samples exist it falls back to 30 days and marks the sample as small.
+- The card shows median, min, max, P25/P75, current lowest buyout, active count, a fair-buy line and a bargain line.
+- The range bar marks min/max, median and the current buyout; a buyout below median is highlighted green.
+- The level table lists sale count, min/median/max and the lowest active buyout per level; a selected level also gets a quality breakdown.
+- Data comes from official `/history` and `/lots`; buyouts can be sniped, so the estimate is advisory only.
+
 ## Development
 
 ```bash
@@ -176,7 +189,7 @@ coverage run --source=. --omit="tests/*" -m unittest discover -s tests
 coverage report
 ```
 
-Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 14 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
+Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 15 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
 
 The default branch is `master`; pull requests target `master`.
 

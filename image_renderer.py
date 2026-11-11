@@ -2172,6 +2172,444 @@ def render_arsenal_card(
     return target
 
 
+def render_appraisal_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    icon_path: str | Path | None = None,
+    width: int = 1280,
+) -> Path | None:
+    """Render artifact price appraisal with level/quality breakdown."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    font_file = find_cjk_font(font_path)
+    if font_file is None:
+        return None
+    display_file = _find_display_font(font_path) or font_file
+    levels = [row for row in (view.get("levels") or []) if isinstance(row, dict)]
+    qualities = [
+        row for row in (view.get("qualities") or []) if isinstance(row, dict)
+    ]
+    try:
+        title_font = ImageFont.truetype(str(display_file), 46)
+        eyebrow_font = ImageFont.truetype(str(font_file), 14)
+        name_font = ImageFont.truetype(str(font_file), 32)
+        subtitle_font = ImageFont.truetype(str(font_file), 18)
+        chip_font = ImageFont.truetype(str(font_file), 14)
+        hero_label_font = ImageFont.truetype(str(font_file), 14)
+        hero_value_font = ImageFont.truetype(str(font_file), 32)
+        hero_value_small = ImageFont.truetype(str(font_file), 25)
+        section_font = ImageFont.truetype(str(font_file), 20)
+        head_font = ImageFont.truetype(str(font_file), 14)
+        body_font = ImageFont.truetype(str(font_file), 18)
+        row_font = ImageFont.truetype(str(font_file), 16)
+        note_font = ImageFont.truetype(str(font_file), 14)
+        footer_font = ImageFont.truetype(str(font_file), 15)
+    except Exception:
+        return None
+
+    margin = 52
+    accent = "#FFD166"
+    body = "#E7EDF5"
+    muted = "#8FA2B8"
+    panel = (10, 19, 29, 196)
+    border = "#26384A"
+
+    def money(value: Any) -> str:
+        try:
+            number = int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return "—"
+        if number >= 1_000_000:
+            return f"{number / 1_000_000:.2f}M"
+        if number >= 10_000:
+            return f"{number:,.0f}"
+        return f"{number:,}"
+
+    stats = view.get("stats") if isinstance(view.get("stats"), dict) else None
+    active = view.get("active") if isinstance(view.get("active"), dict) else {}
+    verdict = view.get("verdict") if isinstance(view.get("verdict"), dict) else {}
+
+    # Height: header + hero + range + verdict + tables + notes + footer.
+    header_h = 300
+    hero_h = 152
+    range_h = 84
+    verdict_h = 52
+    level_section_h = 58 + max(1, len(levels)) * 42 if levels else 0
+    quality_section_h = 58 + max(1, len(qualities)) * 42 if qualities else 0
+    note_lines = min(3, max(1, len(view.get("notes") or [])))
+    notes_h = 30 + note_lines * 22
+    footer_h = 86
+    height = max(
+        720,
+        header_h
+        + hero_h
+        + range_h
+        + verdict_h
+        + 28
+        + level_section_h
+        + quality_section_h
+        + notes_h
+        + footer_h,
+    )
+    canvas = _card_canvas(width, height, alpha=240)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+    quality = view.get("quality")
+    item_color = _quality_color(int(quality)) if isinstance(quality, int) else accent
+    if not item_color:
+        item_color = accent
+
+    # Header ----------------------------------------------------------------
+    draw.text(
+        (margin, 26),
+        "STALZONE / ARTEFACT APPRAISAL",
+        font=eyebrow_font,
+        fill=accent,
+    )
+    draw.rounded_rectangle(
+        (margin, 62, margin + 6, 118), radius=3, fill=item_color
+    )
+    draw.text((margin + 22, 52), "神器估价", font=title_font, fill=body)
+    draw.text(
+        (margin + 24, 110),
+        "近期成交 · 当前买断 · 按等级拆分",
+        font=subtitle_font,
+        fill="#A9BACD",
+    )
+    chips = [
+        str(view.get("region") or "EU").upper(),
+        str(view.get("sample_label") or "近期"),
+        f"{int(view.get('sample_count') or 0)} 笔",
+    ]
+    chip_right = width - margin
+    for text in reversed(chips):
+        chip_w = int(chip_font.getlength(text)) + 24
+        draw.rounded_rectangle(
+            (chip_right - chip_w, 44, chip_right, 76),
+            radius=16,
+            fill="#0C1621",
+            outline=border,
+            width=1,
+        )
+        draw.text(
+            (chip_right - chip_w + 12, 52), text, font=chip_font, fill="#C6D3E2"
+        )
+        chip_right -= chip_w + 8
+
+    identity_y = 164
+    icon_size = 108
+    if icon_path is not None:
+        try:
+            _draw_candidate_icon_frame(canvas, draw, margin, identity_y, icon_size)
+            icon = _load_normalized_icon(str(icon_path), icon_size)
+            canvas.alpha_composite(icon, (margin, identity_y))
+        except Exception:
+            icon_size = 0
+    text_x = margin + (icon_size + 24 if icon_size else 0)
+    draw.text(
+        (text_x, identity_y - 4),
+        _fit_text(draw, str(view.get("name") or "未知神器"), name_font, width - text_x - margin),
+        font=name_font,
+        fill=item_color,
+    )
+    scope_bits = [str(view.get("scope") or "")]
+    if view.get("item_id"):
+        scope_bits.append(f"ID {view.get('item_id')}")
+    draw.text(
+        (text_x, identity_y + 46),
+        " · ".join(bit for bit in scope_bits if bit),
+        font=subtitle_font,
+        fill="#C6D3E2",
+    )
+    if stats:
+        draw.text(
+            (text_x, identity_y + 80),
+            f"近 {int(stats.get('count') or 0)} 笔成交 · "
+            f"{int(stats.get('units') or 0)} 件样本",
+            font=chip_font,
+            fill=muted,
+        )
+
+    # Hero stats ------------------------------------------------------------
+    hero_y = header_h
+    box_gap = 14
+    box_w = (width - margin * 2 - box_gap * 3) // 4
+    hero_items = [
+        ("中位价", money(stats.get("median")) if stats else "—", accent),
+        ("最低成交", money(stats.get("min")) if stats else "—", "#54D6A1"),
+        ("最高成交", money(stats.get("max")) if stats else "—", "#FF7A5C"),
+        (
+            "当前最低买断",
+            money(active.get("lowest_buyout")),
+            "#4EA8FF",
+        ),
+    ]
+    for index, (label, value, color) in enumerate(hero_items):
+        x = margin + index * (box_w + box_gap)
+        draw.rounded_rectangle(
+            (x, hero_y, x + box_w, hero_y + 118),
+            radius=14,
+            fill="#0A131D",
+            outline="#26384A",
+            width=1,
+        )
+        draw.text((x + 20, hero_y + 18), label, font=hero_label_font, fill=muted)
+        value_font = hero_value_small if len(value) > 7 else hero_value_font
+        draw.text((x + 20, hero_y + 48), value, font=value_font, fill=color)
+        if index == 3:
+            detail = (
+                f"在售 {int(active.get('count') or 0)} 条"
+                if active.get("count")
+                else "暂无买断"
+            )
+            draw.text(
+                (x + 20, hero_y + 88), detail, font=chip_font, fill="#8FA2B8"
+            )
+
+    # Range bar -------------------------------------------------------------
+    range_y = hero_y + 138
+    range_left = margin + 8
+    range_right = width - margin - 8
+    draw.text(
+        (margin, range_y),
+        "成交区间",
+        font=section_font,
+        fill=body,
+    )
+    bar_y = range_y + 42
+    draw.rounded_rectangle(
+        (range_left, bar_y, range_right, bar_y + 8),
+        radius=4,
+        fill="#1A2939",
+    )
+    if stats and stats.get("median") is not None:
+        low = int(stats.get("min") or 0)
+        high = int(stats.get("max") or 0)
+        median = int(stats.get("median") or 0)
+        span = max(1, high - low)
+
+        def _x(value: int) -> int:
+            ratio = max(0.0, min(1.0, (value - low) / span))
+            return int(range_left + ratio * (range_right - range_left))
+
+        draw.rounded_rectangle(
+            (range_left, bar_y, _x(median), bar_y + 8),
+            radius=4,
+            fill="#6B5A2A",
+        )
+        draw.ellipse(
+            (_x(median) - 7, bar_y - 3, _x(median) + 7, bar_y + 11),
+            fill=accent,
+        )
+        draw.text(
+            (range_left, bar_y + 20),
+            money(low),
+            font=chip_font,
+            fill=muted,
+        )
+        draw.text(
+            (_x(median) - 30, bar_y - 32),
+            f"中位 {money(median)}",
+            font=chip_font,
+            fill=accent,
+        )
+        draw.text(
+            (range_right - 60, bar_y + 20),
+            money(high),
+            font=chip_font,
+            fill=muted,
+        )
+        if active.get("lowest_buyout") is not None:
+            current = int(active["lowest_buyout"])
+            cx = _x(current)
+            draw.line((cx, bar_y - 6, cx, bar_y + 14), fill="#4EA8FF", width=2)
+            draw.text(
+                (min(cx + 6, range_right - 92), bar_y + 20),
+                f"当前 {money(current)}",
+                font=chip_font,
+                fill="#4EA8FF",
+            )
+
+    # Verdict / suggestion --------------------------------------------------
+    verdict_y = range_y + 78
+    verdict_color = str(verdict.get("color") or "#4EA8FF")
+    label = str(verdict.get("label") or "—")
+    delta = view.get("delta_pct")
+    delta_text = f"　{float(delta):+.1f}%" if delta is not None else ""
+    pill_w = int(chip_font.getlength(label + delta_text)) + 34
+    draw.rounded_rectangle(
+        (margin, verdict_y, margin + pill_w, verdict_y + 38),
+        radius=19,
+        fill="#0C1621",
+        outline=verdict_color,
+        width=1,
+    )
+    draw.text(
+        (margin + 16, verdict_y + 9),
+        label + delta_text,
+        font=chip_font,
+        fill=verdict_color,
+    )
+    suggestion = (
+        f"合理买价 ≤ {money(view.get('buy_line'))}    "
+        f"捡漏线 ≤ {money(view.get('steal_line'))}"
+        if stats
+        else "暂无成交样本，无法给出建议买价"
+    )
+    draw.text(
+        (margin + pill_w + 22, verdict_y + 9),
+        suggestion,
+        font=chip_font,
+        fill="#C6D3E2",
+    )
+
+    # Tables ---------------------------------------------------------------
+    table_y = verdict_y + verdict_h + 10
+    columns = [
+        ("等级", 72),
+        ("成交", 250),
+        ("最低", 390),
+        ("中位", 550),
+        ("最高", 720),
+        ("在售最低", 900),
+    ]
+
+    def draw_table(
+        rows: list[dict[str, Any]],
+        start_y: int,
+        heading: str,
+        selected_level: int | None = None,
+        first_column: str = "等级",
+    ) -> int:
+        draw.text((margin, start_y), heading, font=section_font, fill=body)
+        header_y = start_y + 38
+        draw.rounded_rectangle(
+            (margin, header_y, width - margin, header_y + 34),
+            radius=9,
+            fill="#0C1621",
+            outline="#26384A",
+            width=1,
+        )
+        for index, (text, x) in enumerate(columns):
+            draw.text(
+                (x, header_y + 8),
+                first_column if index == 0 else text,
+                font=head_font,
+                fill=muted,
+            )
+        row_y = header_y + 34
+        for index, row in enumerate(rows):
+            row_stats = row.get("stats") if isinstance(row.get("stats"), dict) else {}
+            row_active = (
+                row.get("active") if isinstance(row.get("active"), dict) else {}
+            )
+            if index % 2 == 0:
+                draw.rounded_rectangle(
+                    (margin, row_y, width - margin, row_y + 40),
+                    radius=7,
+                    fill=(12, 22, 33, 132),
+                )
+            is_selected = (
+                selected_level is not None
+                and int(row.get("level") or 0) == selected_level
+            )
+            if is_selected:
+                draw.rounded_rectangle(
+                    (margin, row_y, width - margin, row_y + 40),
+                    radius=7,
+                    outline=accent,
+                    width=1,
+                )
+            label_color = str(row.get("color") or body)
+            draw.text(
+                (columns[0][1], row_y + 10),
+                str(row.get("label") or "—"),
+                font=row_font,
+                fill=label_color,
+            )
+            values = [
+                str(int(row_stats.get("count") or 0)),
+                money(row_stats.get("min")),
+                money(row_stats.get("median")),
+                money(row_stats.get("max")),
+                money(row_active.get("lowest_buyout")),
+            ]
+            for offset, value in enumerate(values, start=1):
+                draw.text(
+                    (columns[offset][1], row_y + 10),
+                    value,
+                    font=row_font,
+                    fill="#C6D3E2",
+                )
+            row_y += 42
+        return row_y
+
+    table_end = table_y
+    if levels:
+        table_end = draw_table(
+            levels,
+            table_y,
+            "等级明细",
+            selected_level=int(view["level"]) if isinstance(view.get("level"), int) else None,
+        )
+    if qualities:
+        table_end = draw_table(
+            qualities,
+            table_end + 18,
+            "品质明细",
+            first_column="品质",
+        )
+
+    # Notes / footer --------------------------------------------------------
+    note_y = table_end + 16
+    for note in (view.get("notes") or [])[:3]:
+        wrapped = _wrap(str(note), note_font, width - margin * 2)
+        for line in wrapped[:1]:
+            draw.text((margin, note_y), f"· {line}", font=note_font, fill="#8FA2B8")
+            note_y += 22
+    draw.line(
+        (margin, height - footer_h + 4, width - margin, height - footer_h + 4),
+        fill="#26384A",
+        width=1,
+    )
+    draw.text(
+        (margin, height - footer_h + 18),
+        "数据来自官方 API｜价格为卢布｜买断价可能已被抢购｜估价仅供参考",
+        font=note_font,
+        fill="#7F92A8",
+    )
+    _draw_signature(
+        draw,
+        width,
+        height - 54,
+        font_path,
+        footer_font,
+        max_bottom=height,
+        more_tip=True,
+        tip_x=margin,
+    )
+
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    target = (
+        out_dir
+        / f"sz_appraisal_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    )
+    try:
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
+    except OSError:
+        return None
+    return target
+
+
 def render_emission_alert_card(
     view: dict[str, Any] | None,
     *,
@@ -2648,10 +3086,10 @@ def render_help_card(
         (
             "其他",
             "MORE",
-            "/sz 军械库 · /sz 拍卖历史 · /sz 帮助",
+            "/sz 军械库 · /sz 估价 · /sz 拍卖历史",
             [
-                "军械库清单、拍卖历史翻页",
-                "战队列表/行动/区服｜候选 /sz 1｜诊断 /sz diag",
+                "神器估价、军械库清单、拍卖历史翻页",
+                "帮助 /sz help｜行动/区服｜候选 /sz 1｜诊断 /sz diag",
             ],
             "#8FA2B8",
         ),

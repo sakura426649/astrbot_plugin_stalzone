@@ -6,6 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -58,6 +59,7 @@ from formatters import (  # noqa: E402
     QUALITY_COLORS,
     _display_price,
     auction_day_cutoff,
+    build_appraisal_view,
     build_auction_view,
     build_clan_candidate_view,
     build_emission_alert_view,
@@ -65,8 +67,10 @@ from formatters import (  # noqa: E402
     build_empty_auction_view,
     build_item_candidate_view,
     calculate_hq_pvp_score,
+    parse_appraisal_query,
     parse_auction_query,
     format_auction,
+    format_appraisal_text,
     format_auction_text,
     format_balance_history,
     format_clan,
@@ -86,6 +90,7 @@ from formatters import (  # noqa: E402
 )
 from image_renderer import (  # noqa: E402
     STAT_GREEN,
+    render_appraisal_card,
     STAT_RED,
     WIDTH,
     card_background_stamp,
@@ -1884,6 +1889,97 @@ class FormatterTests(unittest.TestCase):
         self.assertIn("EU", text)
 
 
+class AppraisalFormatterTests(unittest.TestCase):
+    NOW = datetime(2026, 11, 11, 6, 0, tzinfo=timezone.utc)
+
+    ITEM = {
+        "id": "wg53",
+        "zh": "原子",
+        "en": "Atom",
+        "cat": "artefact/electrophysical",
+        "color": "RANK_MASTER",
+        "icon": "https://cdn.example/wg53.png",
+    }
+
+    def _payloads(self):
+        lots = {
+            "total": 3,
+            "lots": [
+                {"amount": 1, "currentPrice": 7800, "buyoutPrice": 7800, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "currentPrice": 6500, "buyoutPrice": 6500, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+                {"amount": 1, "currentPrice": 9000, "buyoutPrice": 0, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 5, "ptn": 15}},
+            ],
+        }
+        history = {
+            "total": 6,
+            "prices": [
+                {"amount": 1, "price": 7000, "time": "2026-11-10T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "price": 8200, "time": "2026-11-09T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "price": 12000, "time": "2026-11-08T00:00:00Z", "additional": {"qlt": 5, "ptn": 15}},
+                {"amount": 1, "price": 4000, "time": "2026-11-07T00:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+                {"amount": 1, "price": 7500, "time": "2026-11-06T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "price": 8000, "time": "2026-11-05T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            ],
+        }
+        return history, lots
+
+    def test_parse_appraisal_query(self):
+        cases = {
+            "原子": ("原子", None, None),
+            "原子 +15": ("原子", None, 15),
+            "原子 15": ("原子", None, 15),
+            "原子 金 +15": ("原子", 5, 15),
+            "原子 +15 金": ("原子", 5, 15),
+            "寒冰 红": ("寒冰", 4, None),
+            "AK-308": ("AK-308", None, None),
+        }
+        for raw, expected in cases.items():
+            self.assertEqual(parse_appraisal_query(raw), expected, raw)
+
+    def test_build_appraisal_view_stats_and_levels(self):
+        history, lots = self._payloads()
+        view = build_appraisal_view(
+            self.ITEM, history, lots, "eu", now=self.NOW
+        )
+        stats = view["stats"]
+        self.assertEqual(stats["count"], 6)
+        self.assertEqual(stats["min"], 4000)
+        self.assertEqual(stats["max"], 12000)
+        self.assertEqual(stats["median"], 7500)
+        self.assertEqual(stats["p25"], 7000)
+        self.assertEqual(view["active"]["lowest_buyout"], 6500)
+        self.assertEqual(view["active"]["count"], 3)
+        self.assertEqual(view["verdict"]["label"], "低于中位价")
+        levels = {row["level"]: row for row in view["levels"]}
+        self.assertEqual(levels[15]["stats"]["median"], 8000)
+        self.assertEqual(levels[10]["stats"]["median"], 4000)
+        self.assertIn("合理买价", format_appraisal_text(view))
+
+    def test_appraisal_quality_and_level_filter(self):
+        history, lots = self._payloads()
+        view = build_appraisal_view(
+            self.ITEM,
+            history,
+            lots,
+            "eu",
+            quality_filter=4,
+            level_filter=15,
+            now=self.NOW,
+        )
+        self.assertEqual(view["stats"]["count"], 4)
+        self.assertEqual(view["stats"]["median"], 7500)
+        self.assertEqual([row["level"] for row in view["levels"]], [15])
+        self.assertEqual(view["qualities"], [])
+
+    def test_appraisal_empty_view(self):
+        view = build_appraisal_view(
+            self.ITEM, {"prices": []}, {"lots": []}, "eu", now=self.NOW
+        )
+        self.assertTrue(view["empty"])
+        self.assertIsNone(view["stats"])
+        self.assertIn("暂无成交", format_appraisal_text(view))
+
+
 class BalanceHistoryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -2166,6 +2262,10 @@ class ParserTests(unittest.TestCase):
             "/sz 默认区服 ru": ("set_region", "ru"),
             "/sz 拍卖显示模式 1": ("auction_mode", "1"),
             "/sz 拍卖历史 KS-12 2": ("auction_history", "KS-12 2"),
+            "/sz 估价 原子": ("appraisal", "原子"),
+            "/sz 估价 原子 金 +15": ("appraisal", "原子 金 +15"),
+            "sz 查价 寒冰 红": ("appraisal", "寒冰 红"),
+            "/sz appraise Atom +15": ("appraisal", "Atom +15"),
             "/sz 军械库": ("arsenal", ""),
             "/sz arsenal": ("arsenal", ""),
             "/sz 阿森纳": ("arsenal", ""),
@@ -3018,6 +3118,40 @@ class ImageRendererTests(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertTrue(path.exists())
         path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
+    def test_render_appraisal_card(self):
+        from PIL import Image
+
+        history = {
+            "prices": [
+                {"amount": 1, "price": 7000, "time": "2026-11-10T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "price": 8200, "time": "2026-11-09T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                {"amount": 1, "price": 4000, "time": "2026-11-08T00:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+            ]
+        }
+        lots = {
+            "lots": [
+                {"amount": 1, "currentPrice": 7800, "buyoutPrice": 7800, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            ]
+        }
+        view = build_appraisal_view(
+            AppraisalFormatterTests.ITEM,
+            history,
+            lots,
+            "eu",
+            now=AppraisalFormatterTests.NOW,
+        )
+        icon = PLUGIN_ROOT / "item_icons" / "wg53.png"
+        path = render_appraisal_card(
+            view, icon_path=icon if icon.exists() else None
+        )
+        self.assertIsNotNone(path)
+        try:
+            with Image.open(path) as image:
+                self.assertEqual(image.width, 1280)
+        finally:
+            path.unlink(missing_ok=True)
 
     @unittest.skipUnless(find_cjk_font(), "No CJK font installed")
     def test_render_card_to_png(self):

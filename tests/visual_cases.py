@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from formatters import (
+    build_appraisal_view,
     build_auction_view,
     build_diag_view,
     build_empty_auction_view,
@@ -18,6 +19,7 @@ from formatters import (
     format_item,
 )
 from image_renderer import (
+    render_appraisal_card,
     render_auction_card,
     render_candidate_card,
     render_diag_card,
@@ -399,6 +401,57 @@ def _item() -> Path | None:
     )
 
 
+def _appraisal() -> Path | None:
+    item = {
+        "id": "wg53",
+        "zh": "原子",
+        "en": "Atom",
+        "cat": "artefact/electrophysical",
+        "color": "RANK_MASTER",
+    }
+    lots = {
+        "total": 4,
+        "lots": [
+            {
+                "amount": 1,
+                "currentPrice": 7800,
+                "buyoutPrice": 7800,
+                "endTime": "2026-10-24T12:00:00Z",
+                "additional": {"qlt": 4, "ptn": 15},
+            },
+            {
+                "amount": 1,
+                "currentPrice": 6500,
+                "buyoutPrice": 6500,
+                "endTime": "2026-10-24T12:00:00Z",
+                "additional": {"qlt": 4, "ptn": 10},
+            },
+            {
+                "amount": 1,
+                "currentPrice": 9800,
+                "buyoutPrice": 0,
+                "endTime": "2026-10-24T12:00:00Z",
+                "additional": {"qlt": 5, "ptn": 15},
+            },
+        ],
+    }
+    history = {
+        "total": 8,
+        "prices": [
+            {"amount": 1, "price": 7000, "time": "2026-10-23T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            {"amount": 1, "price": 8200, "time": "2026-10-22T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            {"amount": 1, "price": 12000, "time": "2026-10-21T08:00:00Z", "additional": {"qlt": 5, "ptn": 15}},
+            {"amount": 1, "price": 4000, "time": "2026-10-20T08:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+            {"amount": 1, "price": 7500, "time": "2026-10-19T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+            {"amount": 1, "price": 8000, "time": "2026-10-18T08:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+        ],
+    }
+    view = build_appraisal_view(item, history, lots, "eu", now=NOW)
+    return render_appraisal_card(
+        view, icon_path=PLUGIN_ROOT / "item_icons" / "wg53.png"
+    )
+
+
 def _help() -> Path | None:
     return render_help_card(region="EU", version="visual-test")
 
@@ -438,6 +491,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "pass": _pass,
     "emission": _emission,
     "emission_alert": _alert,
+    "appraisal": _appraisal,
     "item": _item,
     "help": _help,
     "usage": _usage,

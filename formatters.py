@@ -2077,6 +2077,504 @@ def format_auction_text(view: dict[str, Any] | None) -> str:
     return _truncate("\n".join(lines))
 
 
+def parse_appraisal_query(
+    argument: str,
+) -> tuple[str, int | None, int | None]:
+    """Split ``item [quality] [+level]`` for the artifact appraisal command.
+
+    Level accepts ``+15``, ``＋15`` or a bare ``15``; quality accepts the same
+    aliases as auction filters.  Both are optional and may appear in either
+    order (``原子 金 +15`` / ``原子 +15 金``).
+    """
+    text = " ".join(str(argument or "").split())
+    if not text:
+        return "", None, None
+    parts = text.split(" ")
+    quality: int | None = None
+    level: int | None = None
+    for _ in range(2):
+        if len(parts) < 2:
+            break
+        last = parts[-1]
+        if level is None:
+            match = re.fullmatch(r"[+＋](\d{1,2})", last)
+            if match is not None:
+                value = int(match.group(1))
+                if 0 <= value <= 15:
+                    level = value
+                    parts.pop()
+                    continue
+        if quality is None:
+            value = QUALITY_ALIASES.get(last.lower())
+            if value is not None:
+                quality = value
+                parts.pop()
+                continue
+        if level is None and last.isdigit() and 0 <= int(last) <= 15:
+            level = int(last)
+            parts.pop()
+            continue
+        break
+    return " ".join(parts).strip(), quality, level
+
+
+APPRAISAL_MIN_SAMPLE = 5
+APPRAISAL_WINDOWS = (7, 30)
+
+
+def _appraisal_weighted_quantile(
+    rows: list[dict[str, Any]], quantile: float
+) -> int | None:
+    ordered = sorted(rows, key=lambda row: int(row.get("price") or 0))
+    total = sum(max(1, int(row.get("amount") or 1)) for row in ordered)
+    if total <= 0:
+        return None
+    target = total * max(0.0, min(1.0, quantile))
+    accumulated = 0
+    for row in ordered:
+        accumulated += max(1, int(row.get("amount") or 1))
+        if accumulated >= target:
+            return int(row.get("price") or 0)
+    return int(ordered[-1].get("price") or 0) if ordered else None
+
+
+def _appraisal_stats(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    prices = [int(row["price"]) for row in rows if int(row.get("price") or 0) > 0]
+    if not prices:
+        return None
+    total_units = sum(max(1, int(row.get("amount") or 1)) for row in rows)
+    weighted_total = sum(
+        int(row["price"]) * max(1, int(row.get("amount") or 1))
+        for row in rows
+        if int(row.get("price") or 0) > 0
+    )
+    return {
+        "count": len(prices),
+        "units": total_units,
+        "min": min(prices),
+        "max": max(prices),
+        "median": _appraisal_weighted_quantile(rows, 0.5),
+        "p25": _appraisal_weighted_quantile(rows, 0.25),
+        "p75": _appraisal_weighted_quantile(rows, 0.75),
+        "avg": int(weighted_total / total_units) if total_units else None,
+    }
+
+
+def _appraisal_history_rows(
+    payload: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    entries = payload.get("prices") if isinstance(payload, dict) else None
+    rows: list[dict[str, Any]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        amount = max(1, _safe_int(entry.get("amount")) or 1)
+        price = _unit_price(entry.get("price"), amount)
+        if price is None or price <= 0:
+            continue
+        quality = _quality_of(entry)
+        rows.append(
+            {
+                "price": int(price),
+                "amount": amount,
+                "quality": 0 if quality is None else quality,
+                "level": _level_of(entry),
+                "dt": _parse_dt(entry.get("time")),
+            }
+        )
+    return rows
+
+
+def _appraisal_lot_rows(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    entries = payload.get("lots") if isinstance(payload, dict) else None
+    rows: list[dict[str, Any]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        amount = max(1, _safe_int(entry.get("amount")) or 1)
+        buyout = _unit_price(entry.get("buyoutPrice"), amount)
+        current = _unit_price(entry.get("currentPrice"), amount)
+        if not current:
+            current = _unit_price(entry.get("startPrice"), amount)
+        if not buyout and not current:
+            continue
+        quality = _quality_of(entry)
+        rows.append(
+            {
+                "buyout": int(buyout) if buyout and buyout > 0 else None,
+                "current": int(current) if current and current > 0 else None,
+                "amount": amount,
+                "quality": 0 if quality is None else quality,
+                "level": _level_of(entry),
+                "end": _parse_dt(entry.get("endTime")),
+            }
+        )
+    return rows
+
+
+def _appraisal_sample(
+    rows: list[dict[str, Any]], now: datetime
+) -> tuple[list[dict[str, Any]], int | None]:
+    timed = [row for row in rows if row.get("dt") is not None]
+    recent: list[dict[str, Any]] = []
+    for days in APPRAISAL_WINDOWS:
+        cutoff = now - timedelta(days=days)
+        subset = [row for row in timed if row["dt"] >= cutoff]
+        if len(subset) >= APPRAISAL_MIN_SAMPLE:
+            return subset, days
+        if days == APPRAISAL_WINDOWS[-1] and subset:
+            # Keep the 30-day window even when the sample is small; mixing in
+            # year-old sales would make min/max misleading.
+            recent = subset
+    if recent:
+        return recent, APPRAISAL_WINDOWS[-1]
+    if timed:
+        return timed, None
+    return rows, None
+
+
+def _appraisal_window_label(days: int | None, rows: list[dict[str, Any]]) -> str:
+    if days is not None:
+        return f"近 {days} 天"
+    dates = [row["dt"] for row in rows if row.get("dt") is not None]
+    if dates:
+        span = max(1, (max(dates) - min(dates)).days + 1)
+        return f"全部记录（约 {span} 天）"
+    return "全部记录"
+
+
+def _appraisal_active_summary(
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    buyouts = [int(row["buyout"]) for row in rows if row.get("buyout")]
+    currents = [int(row["current"]) for row in rows if row.get("current")]
+    return {
+        "count": len(rows),
+        "lowest_buyout": min(buyouts) if buyouts else None,
+        "lowest_current": min(currents) if currents else None,
+    }
+
+
+def _appraisal_level_rows(
+    history: list[dict[str, Any]],
+    lots: list[dict[str, Any]],
+    now: datetime,
+    *,
+    level_filter: int | None,
+) -> list[dict[str, Any]]:
+    levels: set[int] = {0}
+    levels.update(int(row.get("level") or 0) for row in history)
+    levels.update(int(row.get("level") or 0) for row in lots)
+    if level_filter is not None:
+        levels = {level_filter}
+    result: list[dict[str, Any]] = []
+    for level in sorted(levels):
+        level_history = [
+            row for row in history if int(row.get("level") or 0) == level
+        ]
+        level_lots = [row for row in lots if int(row.get("level") or 0) == level]
+        sample, days = _appraisal_sample(level_history, now)
+        stats = _appraisal_stats(sample)
+        active = _appraisal_active_summary(level_lots)
+        if stats is None and active["count"] == 0:
+            continue
+        result.append(
+            {
+                "level": level,
+                "label": f"+{level}",
+                "stats": stats,
+                "active": active,
+                "window": _appraisal_window_label(days, sample),
+            }
+        )
+    return result
+
+
+def _appraisal_quality_rows(
+    history: list[dict[str, Any]],
+    lots: list[dict[str, Any]],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    qualities = {int(row.get("quality") or 0) for row in history}
+    qualities.update(int(row.get("quality") or 0) for row in lots)
+    result: list[dict[str, Any]] = []
+    for quality in sorted(qualities, reverse=True):
+        q_history = [
+            row for row in history if int(row.get("quality") or 0) == quality
+        ]
+        q_lots = [row for row in lots if int(row.get("quality") or 0) == quality]
+        sample, days = _appraisal_sample(q_history, now)
+        stats = _appraisal_stats(sample)
+        active = _appraisal_active_summary(q_lots)
+        if stats is None and active["count"] == 0:
+            continue
+        result.append(
+            {
+                "quality": quality,
+                "label": quality_label(quality),
+                "color": _quality_color(quality),
+                "stats": stats,
+                "active": active,
+                "window": _appraisal_window_label(days, sample),
+            }
+        )
+    return result
+
+
+def _appraisal_item_name(item: dict[str, Any]) -> str:
+    zh = str(item.get("zh") or "").strip()
+    en = str(item.get("en") or "").strip()
+    if zh and en and en.lower() not in zh.lower():
+        return f"{zh}（{en}）"
+    return zh or en or str(item.get("id") or "")
+
+
+def build_appraisal_view(
+    item: dict[str, Any],
+    history_payload: dict[str, Any] | None,
+    lots_payload: dict[str, Any] | None,
+    region: str,
+    *,
+    quality_filter: int | None = None,
+    level_filter: int | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a price-appraisal view for a single artifact.
+
+    ``level_filter`` is the artifact enhancement level (+0..+15); quality and
+    level both narrow history and active lots.  The returned view is shared by
+    the text fallback and the Pillow card.
+    """
+    now = now or datetime.now(timezone.utc)
+    history = _appraisal_history_rows(history_payload)
+    lots = _appraisal_lot_rows(lots_payload)
+    if quality_filter is not None:
+        history = [
+            row for row in history if int(row.get("quality") or 0) == quality_filter
+        ]
+        lots = [
+            row for row in lots if int(row.get("quality") or 0) == quality_filter
+        ]
+    selected_history = history
+    selected_lots = lots
+    if level_filter is not None:
+        selected_history = [
+            row for row in history if int(row.get("level") or 0) == level_filter
+        ]
+        selected_lots = [
+            row for row in lots if int(row.get("level") or 0) == level_filter
+        ]
+
+    sample, days = _appraisal_sample(selected_history, now)
+    stats = _appraisal_stats(sample)
+    active = _appraisal_active_summary(selected_lots)
+    level_rows = _appraisal_level_rows(
+        history,
+        lots,
+        now,
+        level_filter=level_filter,
+    )
+    quality_rows = (
+        _appraisal_quality_rows(selected_history, selected_lots, now)
+        if level_filter is not None and quality_filter is None
+        else []
+    )
+
+    median = stats.get("median") if stats else None
+    lowest_buyout = active.get("lowest_buyout")
+    delta_pct: float | None = None
+    verdict_label = "样本不足"
+    verdict_color = "#8FA2B8"
+    if stats is None and active["count"] == 0:
+        verdict_label = "暂无数据"
+    elif stats is None:
+        verdict_label = "暂无成交样本"
+    elif lowest_buyout is None:
+        verdict_label = "暂无买断在售"
+    elif median:
+        delta_pct = (lowest_buyout - median) / median * 100
+        if delta_pct <= -20:
+            verdict_label = "明显低于中位价"
+            verdict_color = "#54D6A1"
+        elif delta_pct <= -8:
+            verdict_label = "低于中位价"
+            verdict_color = "#54D6A1"
+        elif delta_pct <= 8:
+            verdict_label = "接近中位价"
+            verdict_color = "#4EA8FF"
+        elif delta_pct <= 20:
+            verdict_label = "高于中位价"
+            verdict_color = "#FFB454"
+        else:
+            verdict_label = "明显高于中位价"
+            verdict_color = "#FF7A5C"
+    if stats is not None and stats.get("count", 0) < APPRAISAL_MIN_SAMPLE:
+        verdict_label += "（样本较少）"
+
+    scope: list[str] = []
+    if quality_filter is not None:
+        scope.append(quality_label(quality_filter))
+    if level_filter is not None:
+        scope.append(f"+{level_filter}")
+    if not scope:
+        scope.append("全部等级")
+    if quality_filter is None:
+        scope.append("全部品质")
+
+    notes: list[str] = []
+    if level_filter is None:
+        notes.append("未指定等级：概览为全部等级混合统计，等级明细见下表。")
+    if quality_filter is None:
+        notes.append("未指定品质：成交价混合了所有品质，指定品质后更准确。")
+    if stats is not None and stats.get("count", 0) < APPRAISAL_MIN_SAMPLE:
+        notes.append(f"样本仅 {stats['count']} 笔，估价波动较大，仅供参考。")
+    if lowest_buyout is not None and median:
+        notes.append(
+            f"当前最低买断比中位价 {delta_pct:+.1f}%；"
+            "买断价可能已被抢购，请以游戏内为准。"
+        )
+    if not notes:
+        notes.append("估价基于近期成交与当前在售，价格随时变化。")
+
+    return {
+        "title": "STALZONE · 神器估价",
+        "item_id": str(item.get("id") or ""),
+        "name": _appraisal_item_name(item),
+        "short_name": str(item.get("zh") or item.get("en") or item.get("id") or ""),
+        "en": str(item.get("en") or ""),
+        "quality": quality_filter,
+        "quality_label": (
+            quality_label(quality_filter) if quality_filter is not None else "全部品质"
+        ),
+        "level": level_filter,
+        "level_label": f"+{level_filter}" if level_filter is not None else "全部等级",
+        "scope": "｜".join(scope),
+        "region": str(region or "EU").upper(),
+        "generated_at": now.astimezone(CST).strftime("%Y-%m-%d %H:%M"),
+        "sample_label": _appraisal_window_label(days, sample),
+        "sample_count": stats.get("count") if stats else 0,
+        "sample_units": stats.get("units") if stats else 0,
+        "sample_from": (
+            min((row["dt"] for row in sample if row.get("dt")), default=None)
+        ),
+        "sample_to": (
+            max((row["dt"] for row in sample if row.get("dt")), default=None)
+        ),
+        "stats": stats,
+        "active": active,
+        "delta_pct": delta_pct,
+        "verdict": {
+            "label": verdict_label,
+            "color": verdict_color,
+        },
+        "buy_line": median,
+        "steal_line": stats.get("p25") if stats else None,
+        "sell_line": stats.get("p75") if stats else None,
+        "levels": level_rows,
+        "qualities": quality_rows,
+        "notes": notes,
+        "empty": stats is None and active["count"] == 0,
+        "icon_url": str(item.get("icon") or ""),
+        "item_color": str(item.get("color") or ""),
+    }
+
+
+def _appraisal_money(value: Any) -> str:
+    number = _safe_int(value)
+    return "—" if number is None else f"{number:,}"
+
+
+def format_appraisal_text(view: dict[str, Any] | None) -> str:
+    if not isinstance(view, dict):
+        return "估价数据暂不可用，请稍后重试。"
+    if view.get("empty"):
+        return _card(
+            "STALZONE · 神器估价",
+            [
+                f"{view.get('name')}｜{view.get('scope')}｜{view.get('region')}",
+                "暂无成交和在售记录",
+            ],
+            [("说明", ["该神器/等级目前没有可用的成交或买断在售数据。"])],
+            "数据来自官方 API｜价格为卢布｜估价仅供参考",
+        )
+    stats = view.get("stats") or {}
+    active = view.get("active") or {}
+    subtitle = [
+        f"{view.get('name')}｜{view.get('scope')}｜{view.get('region')}",
+        f"{view.get('sample_label')} · {int(view.get('sample_count') or 0)} 笔成交",
+    ]
+    overview: list[str] = []
+    if stats:
+        overview.extend(
+            [
+                f"中位价：{_appraisal_money(stats.get('median'))}",
+                f"最低成交：{_appraisal_money(stats.get('min'))}",
+                f"最高成交：{_appraisal_money(stats.get('max'))}",
+                f"P25：{_appraisal_money(stats.get('p25'))}｜"
+                f"P75：{_appraisal_money(stats.get('p75'))}",
+            ]
+        )
+    else:
+        overview.append("暂无成交样本")
+    if active.get("lowest_buyout") is not None:
+        delta = view.get("delta_pct")
+        delta_text = f"（{delta:+.1f}%）" if delta is not None else ""
+        overview.append(
+            f"当前最低买断：{_appraisal_money(active.get('lowest_buyout'))}{delta_text}"
+        )
+        overview.append(f"在售：{int(active.get('count') or 0)} 条")
+    elif active.get("lowest_current") is not None:
+        overview.append(
+            f"当前最低竞拍：{_appraisal_money(active.get('lowest_current'))}"
+            f"（买断暂无）"
+        )
+    else:
+        overview.append("当前无在售买断")
+    verdict = view.get("verdict") or {}
+    overview.append(f"判断：{verdict.get('label') or '—'}")
+    if stats:
+        overview.append(
+            f"合理买价：≤ {_appraisal_money(view.get('buy_line'))}｜"
+            f"捡漏线：≤ {_appraisal_money(view.get('steal_line'))}"
+        )
+
+    sections: list[tuple[str, list[str]]] = [("价格概览", overview)]
+    level_lines: list[str] = []
+    for row in view.get("levels") or []:
+        row_stats = row.get("stats") or {}
+        row_active = row.get("active") or {}
+        level_lines.append(
+            f"{row.get('label')}  {int(row_stats.get('count') or 0)} 笔  "
+            f"{_appraisal_money(row_stats.get('min'))} / "
+            f"{_appraisal_money(row_stats.get('median'))} / "
+            f"{_appraisal_money(row_stats.get('max'))}  "
+            f"在售 {_appraisal_money(row_active.get('lowest_buyout'))}"
+        )
+    if level_lines:
+        sections.append(("等级明细（最低 / 中位 / 最高）", level_lines))
+    quality_lines: list[str] = []
+    for row in view.get("qualities") or []:
+        row_stats = row.get("stats") or {}
+        row_active = row.get("active") or {}
+        quality_lines.append(
+            f"{row.get('label')}  {int(row_stats.get('count') or 0)} 笔  "
+            f"{_appraisal_money(row_stats.get('median'))}  "
+            f"在售 {_appraisal_money(row_active.get('lowest_buyout'))}"
+        )
+    if quality_lines:
+        sections.append(("品质明细", quality_lines))
+    notes = [str(note) for note in (view.get("notes") or []) if note]
+    if notes:
+        sections.append(("提示", notes))
+    return _card(
+        "STALZONE · 神器估价",
+        subtitle,
+        sections,
+        "数据来自官方 API｜价格为卢布｜估价仅供参考，不构成交易建议",
+        limit=5000,
+    )
+
+
 def format_auction(
     item_id: str,
     lots_payload: dict[str, Any] | None,
@@ -3475,6 +3973,7 @@ def format_help(region: str, *, demo: bool = False) -> str:
     commands = [
         "/sz auction / 拍卖行 <物品> [品质] [词条] [日期] [数量] — 查看在售、成交与成交历史",
         "/sz 拍卖历史 <物品> [页码] [品质] — 不带页码查官方最近 200 条；带页码查第三方存档",
+        "/sz 估价 <神器> [品质] [+等级] — 神器成交/在售估价，最低/最高/中位价与等级明细",
         "/sz 军械库 / arsenal / 阿森纳 — 军械库收购清单、每日限量与 10K 声望成本",
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",

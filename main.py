@@ -77,8 +77,10 @@ try:  # Package import (normal AstrBot plugin loading).
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
+        build_appraisal_view,
         build_profile_view,
         build_season_pass_view,
+        format_appraisal_text,
         format_arsenal_text,
         format_auction_text,
         format_balance_history,
@@ -100,6 +102,7 @@ try:  # Package import (normal AstrBot plugin loading).
         auction_quality_of,
         MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
+        parse_appraisal_query,
         parse_auction_history_query,
         parse_auction_query,
         parse_auction_time,
@@ -107,6 +110,7 @@ try:  # Package import (normal AstrBot plugin loading).
     from .image_renderer import (
         card_background_stamp,
         find_cjk_font,
+        render_appraisal_card,
         render_arsenal_card,
         render_auction_card,
         render_diag_card,
@@ -160,8 +164,10 @@ except ImportError:  # Direct execution / flat import fallback.
         build_emission_view,
         build_empty_auction_view,
         build_item_candidate_view,
+        build_appraisal_view,
         build_profile_view,
         build_season_pass_view,
+        format_appraisal_text,
         format_arsenal_text,
         format_auction_text,
         format_balance_history,
@@ -183,6 +189,7 @@ except ImportError:  # Direct execution / flat import fallback.
         auction_quality_of,
         MODULE_CORE_ITEM_ID,
         MODULE_ITEM_ID,
+        parse_appraisal_query,
         parse_auction_history_query,
         parse_auction_query,
         parse_auction_time,
@@ -191,6 +198,7 @@ except ImportError:  # Direct execution / flat import fallback.
         card_background_stamp,
         faction_icon_path,
         find_cjk_font,
+        render_appraisal_card,
         render_arsenal_card,
         render_auction_card,
         render_candidate_card,
@@ -238,7 +246,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.12.2"
+PLUGIN_VERSION = "1.13.0"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -344,6 +352,7 @@ IMAGE_COMMANDS = {
     "notice",
     "diag",
     "arsenal",
+    "appraisal",
 }
 
 
@@ -360,6 +369,7 @@ class PluginReply:
     diag_view: dict[str, Any] | None = None
     arsenal_view: dict[str, Any] | None = None
     pass_view: dict[str, Any] | None = None
+    appraisal_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -373,6 +383,11 @@ def _version_key(value: str) -> tuple[int, ...]:
     if not match:
         return ()
     return tuple(int(part) for part in match.group(0).split("."))
+
+
+async def _noop() -> None:
+    """Placeholder for a cached appraisal request that should not run again."""
+    return None
 
 
 def _github_url_candidates(url: str) -> list[str]:
@@ -404,6 +419,7 @@ class PendingChoice:
     count: int | None = None
     region: str | None = None
     affix: str | None = None
+    level: int | None = None
 
 USAGE = {
     "auction": (
@@ -441,6 +457,19 @@ USAGE = {
         "示例：\n"
         "  /sz 风暴\n"
         "  /sz 风暴 ru"
+    ),
+    "appraisal": (
+        "用法：/sz 估价 <神器名/ID> [品质] [+等级]\n"
+        "说明：按近期成交和当前买断估算神器价格；目前只支持神器\n"
+        "参数：\n"
+        "  神器   必填，中文名 / 英文名 / 神器ID\n"
+        "  品质   可选，白/绿/蓝/粉/红/金 或 常见/罕见/特殊/稀有/独特/传奇\n"
+        "  等级   可选，+0～+15；不填则显示各等级概览\n"
+        "示例：\n"
+        "  /sz 估价 原子\n"
+        "  /sz 估价 原子 +15\n"
+        "  /sz 估价 原子 金 +15\n"
+        "  /sz 估价 寒冰 红"
     ),
     "item": (
         "用法：/sz 物品 <中文名/英文名/物品ID> [品质] [类型]\n"
@@ -549,6 +578,7 @@ USAGE_META = {
     "auction": ("拍卖查询", "AUCTION", "#FFB454"),
     "auction_history": ("拍卖历史", "HISTORY", "#FFB454"),
     "emission": ("辐射风暴", "EMISSION", "#54D6A1"),
+    "appraisal": ("神器估价", "APPRAISAL", "#FFD166"),
     "item": ("物品图鉴", "ITEM", "#FFD166"),
     "player": ("玩家资料", "PLAYER", "#4EA8FF"),
     "clan": ("战队查询", "CLAN", "#FF6FB5"),
@@ -2607,6 +2637,7 @@ class StalzonePlugin(Star):
         diag_view: dict[str, Any] | None = None,
         pass_view: dict[str, Any] | None = None,
         arsenal_view: dict[str, Any] | None = None,
+        appraisal_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -2620,6 +2651,13 @@ class StalzonePlugin(Star):
                     render_arsenal_card,
                     arsenal_view,
                     font_path=font_path,
+                )
+            elif sub == "appraisal" and appraisal_view:
+                path = await asyncio.to_thread(
+                    render_appraisal_card,
+                    appraisal_view,
+                    font_path=font_path,
+                    icon_path=icon_path,
                 )
             elif sub == "auction" and auction_view:
                 path = await asyncio.to_thread(
@@ -2796,6 +2834,7 @@ class StalzonePlugin(Star):
         count: int | None = None,
         region: str | None = None,
         affix: str | None = None,
+        level: int | None = None,
     ) -> None:
         if event is None or len(candidates) <= 1:
             return
@@ -2822,6 +2861,7 @@ class StalzonePlugin(Star):
             count=count,
             region=region,
             affix=affix,
+            level=level,
         )
 
     @staticmethod
@@ -2864,6 +2904,14 @@ class StalzonePlugin(Star):
         if pending.kind == "balance":
             result = await self._handle_balance(selected, event=event)
             return self._with_render_sub(result, "balance")
+        if pending.kind == "appraisal":
+            result = await self._handle_appraisal(
+                selected,
+                event=event,
+                quality_filter=pending.quality,
+                level_filter=pending.level,
+            )
+            return self._with_render_sub(result, "appraisal")
         if pending.kind == "auction_history":
             result = await self._handle_auction_history(
                 selected,
@@ -3693,6 +3741,7 @@ class StalzonePlugin(Star):
             "auction",
             "auction_history",
             "emission",
+            "appraisal",
             "player",
             "item",
             "clan",
@@ -3759,6 +3808,11 @@ class StalzonePlugin(Star):
             coro = self._handle_candidate(arg, event)
         elif sub == "emission":
             coro = self._handle_emission(arg)
+        elif sub == "appraisal":
+            if not arg:
+                yield await self._usage_reply(event, "appraisal")
+                return
+            coro = self._handle_appraisal(arg, event=event)
         elif sub == "player":
             if not arg:
                 yield await self._usage_reply(event, "player")
@@ -3806,6 +3860,7 @@ class StalzonePlugin(Star):
         diag_view = None
         pass_view = None
         arsenal_view = None
+        appraisal_view = None
         faction = None
         render_sub = sub
         try:
@@ -3823,6 +3878,7 @@ class StalzonePlugin(Star):
                 diag_view = result.diag_view
                 pass_view = result.pass_view
                 arsenal_view = result.arsenal_view
+                appraisal_view = result.appraisal_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -3869,6 +3925,7 @@ class StalzonePlugin(Star):
             diag_view,
             pass_view,
             arsenal_view,
+            appraisal_view,
         )
         if image is not None:
             try:
@@ -4784,6 +4841,132 @@ class StalzonePlugin(Star):
                 emission_view=view,
                 sub="emission",
             )
+
+    async def _handle_appraisal(
+        self,
+        argument: str,
+        *,
+        event: Any = None,
+        quality_filter: int | None = None,
+        level_filter: int | None = None,
+    ) -> str | PluginReply:
+        query = str(argument or "").strip()
+        if quality_filter is None and level_filter is None:
+            query, quality_filter, level_filter = parse_appraisal_query(query)
+        if not query:
+            return USAGE["appraisal"]
+        item, matches = await asyncio.to_thread(self._resolve_item, query)
+        if item is None:
+            if matches:
+                candidates = [
+                    self._decorate(candidate) for candidate in matches
+                ]
+                self._remember_choice(
+                    event,
+                    "appraisal",
+                    query,
+                    candidates,
+                    quality=quality_filter,
+                    level=level_filter,
+                )
+                return format_item_candidates(query, candidates)
+            return self._not_found(
+                "item",
+                query,
+                note="未找到该神器；估价目前只支持神器，可先发送 /sz 物品 <名称> 查看候选。",
+            )
+        if not str(item.get("cat") or "").startswith("artefact"):
+            return (
+                f"{display_name(item)} 不是神器。\n"
+                "估价目前只支持神器，其他物品暂不提供。"
+            )
+
+        item_id = str(item["id"])
+        region = self._region()
+        history_key = f"appraisal-history:{region}:{item_id}"
+        lots_key = f"appraisal-lots:{region}:{item_id}"
+        history_payload = self._cache_get(history_key)
+        lots_payload = self._cache_get(lots_key)
+        history_error: Exception | None = None
+        lots_error: Exception | None = None
+
+        async with self._make_client() as client:
+            async def fetch_history() -> dict[str, Any]:
+                return await client.get_auction_history(item_id, limit=200)
+
+            async def fetch_lots() -> dict[str, Any]:
+                return await client.get_auction_lots(item_id, limit=200)
+
+            results = await asyncio.gather(
+                fetch_history() if history_payload is None else _noop(),
+                fetch_lots() if lots_payload is None else _noop(),
+                return_exceptions=True,
+            )
+        if history_payload is None:
+            if isinstance(results[0], Exception):
+                history_error = results[0]
+            elif isinstance(results[0], dict):
+                history_payload = results[0]
+                self._cache_set(history_key, history_payload, 30.0)
+        if lots_payload is None:
+            if isinstance(results[1], Exception):
+                lots_error = results[1]
+            elif isinstance(results[1], dict):
+                lots_payload = results[1]
+                self._cache_set(lots_key, lots_payload, 20.0)
+
+        if history_error is not None:
+            logger.warning(
+                "STALZONE appraisal history failed for %s: %s",
+                item_id,
+                history_error,
+            )
+        if lots_error is not None:
+            logger.warning(
+                "STALZONE appraisal lots failed for %s: %s",
+                item_id,
+                lots_error,
+            )
+        if history_error is not None and lots_error is not None:
+            return PluginReply(
+                "估价服务暂时不可用，请稍后重试。",
+                notice_view={
+                    "error": True,
+                    "kind_label": "神器估价",
+                    "query": query,
+                    "region": region.upper(),
+                    "now": datetime.now(CST).strftime("%Y-%m-%d %H:%M"),
+                    "note": "官方拍卖成交和在售接口都没有返回数据。",
+                    "headline": "这次估价没有完成",
+                    "hint": "请稍后重新发送 /sz 估价；连续失败请等待约 30 秒。",
+                    "accent": "#FFB454",
+                    "footer": "STALZONE · 服务提示",
+                },
+                sub="notice",
+            )
+
+        view = await asyncio.to_thread(
+            build_appraisal_view,
+            item,
+            history_payload,
+            lots_payload,
+            region,
+            quality_filter=quality_filter,
+            level_filter=level_filter,
+        )
+        notes = list(view.get("notes") or [])
+        if history_error is not None:
+            notes.insert(0, "成交历史暂时不可用，本次只参考当前在售。")
+        if lots_error is not None:
+            notes.insert(0, "在售数据暂时不可用，本次只参考历史成交。")
+        view["notes"] = notes
+        return PluginReply(
+            format_appraisal_text(view),
+            icon_url=item.get("icon"),
+            appraisal_view=view,
+            sub="appraisal",
+            item_meta=self._decorate(item),
+        )
 
     async def _handle_profile(self, name_or_uuid: str) -> str:
         value, region = _split_region_suffix(name_or_uuid)

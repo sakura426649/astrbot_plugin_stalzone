@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.13.0 - 2026-11-11
+
+### Added
+
+- New `/sz 估价 <神器> [品质] [+等级]` command (aliases: `估值`, `查价`, `appraise`, `appraisal`, `price`). It estimates artifact prices from official sale history and active buyouts.
+- Appraisal shows min/max/median, P25/P75, current lowest buyout, active count and a price-range bar. Without a level it renders a `+0`–`+15` level table; with a level it also breaks the level down by quality.
+- Sample window: last 7 days, falling back to 30 days when fewer than 5 sales exist; the card marks small samples and separates "fair buy" (`≤ median`) from "bargain" (`≤ P25`).
+- Only artifacts are supported for now; non-artifact queries return a clear "not an artifact" message. Missing arguments show the standard usage card, and ambiguous/nonexistent names reuse the candidate flow.
+- Added a dedicated appraisal card renderer, a visual-regression signature, README/help entries and tests for parsing, statistics, filtering, handler behavior and rendering.
+
+### Tests
+
+- 281 tests and 15 visual signatures pass.
+
 ## 1.12.2 - 2026-11-11
 
 ### Fixed

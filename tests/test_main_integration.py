@@ -302,6 +302,94 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(first)
         self.assertEqual(second, [])
 
+    async def test_appraisal_command_and_usage(self):
+        class AppraisalClient(FakeClient):
+            region = "eu"
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {
+                    "total": 3,
+                    "prices": [
+                        {"amount": 1, "price": 7000, "time": "2026-11-10T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                        {"amount": 1, "price": 8200, "time": "2026-11-09T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                        {"amount": 1, "price": 4000, "time": "2026-11-08T00:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+                    ],
+                }
+
+            async def get_auction_lots(self, item_id, limit=50):
+                return {
+                    "total": 2,
+                    "lots": [
+                        {"amount": 1, "currentPrice": 7800, "buyoutPrice": 7800, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                        {"amount": 1, "currentPrice": 6500, "buyoutPrice": 6500, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 10}},
+                    ],
+                }
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: AppraisalClient()  # type: ignore[assignment]
+        text = await collect(plugin, "/sz 估价 原子")
+        self.assertIn("神器估价", text)
+        self.assertIn("中位价", text)
+        self.assertIn("最低成交", text)
+        self.assertIn("等级明细", text)
+        self.assertIn("+15", text)
+
+        filtered = await collect(plugin, "/sz 估价 原子 金 +15")
+        self.assertIn("神器估价", filtered)
+        self.assertIn("+15", filtered)
+
+        usage = await collect(plugin, "/sz 估价")
+        self.assertIn("用法：/sz 估价", usage)
+
+        non_artifact = await collect(plugin, "/sz 估价 AK-308")
+        self.assertIn("不是神器", non_artifact)
+
+    async def test_appraisal_image_card(self):
+        from image_renderer import find_cjk_font
+
+        if not find_cjk_font():
+            self.skipTest("CJK font unavailable")
+
+        class ImageEvent(FakeEvent):
+            @staticmethod
+            def image_result(path):
+                return ("image", path)
+
+        class AppraisalClient(FakeClient):
+            region = "eu"
+
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {
+                    "prices": [
+                        {"amount": 1, "price": 7000, "time": "2026-11-10T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                        {"amount": 1, "price": 8200, "time": "2026-11-09T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                    ]
+                }
+
+            async def get_auction_lots(self, item_id, limit=50):
+                return {
+                    "lots": [
+                        {"amount": 1, "currentPrice": 7800, "buyoutPrice": 7800, "endTime": "2026-11-12T00:00:00Z", "additional": {"qlt": 4, "ptn": 15}},
+                    ]
+                }
+
+        plugin = self.make_plugin()
+        plugin.config["render_mode"] = "image"
+        plugin._make_client = lambda: AppraisalClient()  # type: ignore[assignment]
+        results = [
+            item async for item in plugin.sz(ImageEvent("/sz 估价 原子 +15"))
+        ]
+        self.assertEqual(results[0][0], "image")
+        path = Path(results[0][1])
+        self.assertTrue(path.exists())
+        try:
+            from PIL import Image
+
+            with Image.open(path) as image:
+                self.assertEqual(image.width, 1280)
+        finally:
+            path.unlink(missing_ok=True)
+
     def test_bare_sz_requires_trailing_space(self):
         self.assertIsNone(re.match(SZ_BARE_RE, "sz"))
         self.assertIsNone(re.match(SZ_BARE_RE, "szabc"))
