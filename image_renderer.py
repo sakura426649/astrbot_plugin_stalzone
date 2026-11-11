@@ -1028,15 +1028,28 @@ def render_notice_card(
             anchor="ra",
         )
     else:
-        draw.text(
-            (width - 404, 84),
-            "404",
-            font=ImageFont.truetype(str(display_path), 190),
-            fill="#16222E",
-        )
+        watermark = str(view.get("watermark") or "404")
+        if watermark == "404":
+            draw.text(
+                (width - 404, 84),
+                watermark,
+                font=ImageFont.truetype(str(display_path), 190),
+                fill="#16222E",
+            )
+        else:
+            draw.text(
+                (width - PAD, 84),
+                watermark,
+                font=ImageFont.truetype(str(display_path), 120),
+                fill="#16222E",
+                anchor="ra",
+            )
     draw.text(
         (PAD, 32),
-        "STALZONE / SERVICE NOTICE" if is_error else "STALZONE / QUERY RESULT",
+        str(
+            view.get("eyebrow")
+            or ("STALZONE / SERVICE NOTICE" if is_error else "STALZONE / QUERY RESULT")
+        ),
         font=eyebrow_font,
         fill=accent,
     )
@@ -3117,9 +3130,9 @@ def render_help_card(
         (
             "其他",
             "MORE",
-            "/sz 军械库 · /sz 估价 · /sz 拍卖历史",
+            "/sz 军械库 · /sz 估价 · /sz 关注",
             [
-                "神器估价、军械库清单、拍卖历史翻页",
+                "神器估价/关注、军械库、拍卖历史",
                 "帮助 /sz help｜行动/区服｜候选 /sz 1｜诊断 /sz diag",
             ],
             "#8FA2B8",

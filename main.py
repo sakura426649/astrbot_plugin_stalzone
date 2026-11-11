@@ -135,6 +135,19 @@ try:  # Package import (normal AstrBot plugin loading).
         display_translation,
     )
     from .lunar_client import LunarProfileClient
+    from .price_watch import (
+        WATCH_DEFAULT_TTL_DAYS,
+        WATCH_MAX_TTL_DAYS,
+        WatchQueryError,
+        build_watch_alert_view,
+        format_watch_alert_text,
+        format_watch_list,
+        history_medians,
+        parse_time,
+        parse_watch_query,
+        watch_lot_rows,
+        watch_query_summary,
+    )
     from .sc_core_client import ScCoreClient, ScCoreError
 except ImportError:  # Direct execution / flat import fallback.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -222,6 +235,19 @@ except ImportError:  # Direct execution / flat import fallback.
         display_translation,
     )
     from lunar_client import LunarProfileClient  # type: ignore[no-redef]
+    from price_watch import (  # type: ignore[no-redef]
+        WATCH_DEFAULT_TTL_DAYS,
+        WATCH_MAX_TTL_DAYS,
+        WatchQueryError,
+        build_watch_alert_view,
+        format_watch_alert_text,
+        format_watch_list,
+        history_medians,
+        parse_time,
+        parse_watch_query,
+        watch_lot_rows,
+        watch_query_summary,
+    )
     from sc_core_client import ScCoreClient, ScCoreError  # type: ignore[no-redef]
 
 
@@ -246,7 +272,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.13.3"
+PLUGIN_VERSION = "1.14.0"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -353,6 +379,9 @@ IMAGE_COMMANDS = {
     "diag",
     "arsenal",
     "appraisal",
+    "watch",
+    "watch_list",
+    "watch_cancel",
 }
 
 
@@ -471,6 +500,36 @@ USAGE = {
         "  /sz 估价 原子 金 +15\n"
         "  /sz 估价 寒冰 红"
     ),
+    "watch": (
+        "用法：/sz 关注 <神器> [品质] +等级 <目标价|-N%> [上限]\n"
+        "说明：关注神器价格；买断命中提醒后自动取消，竞拍命中只提醒\n"
+        "参数：\n"
+        "  神器   必填，中文名 / 英文名 / 神器ID\n"
+        "  品质   可选，白/绿/蓝/粉/红/金\n"
+        "  等级   必填，+0～+15\n"
+        "  目标价 必填，如 8000；或 -20% 表示低于近3天中位数20%\n"
+        "  上限   可选，相对价模式下限制最高绝对价\n"
+        "示例：\n"
+        "  /sz 关注 原子 +15 8000\n"
+        "  /sz 关注 原子 金 +15 -20%\n"
+        "  /sz 关注 原子 +15 -20% 12000\n"
+        "  /sz 关注列表\n"
+        "  /sz 取消关注 2"
+    ),
+    "watch_list": (
+        "用法：/sz 关注列表\n"
+        "说明：查看当前会话所有人的神器价格关注；自己的关注置顶\n"
+        "示例：\n"
+        "  /sz 关注列表"
+    ),
+    "watch_cancel": (
+        "用法：/sz 取消关注 <序号>\n"
+        "说明：取消自己的关注；管理员/群主/群管可取消本群其他人的关注\n"
+        "参数：\n"
+        "  序号   必填，先用 /sz 关注列表 查看\n"
+        "示例：\n"
+        "  /sz 取消关注 2"
+    ),
     "item": (
         "用法：/sz 物品 <中文名/英文名/物品ID> [品质] [类型]\n"
         "说明：查看物品属性、描述、类别和图标；品质/类型筛选可同时使用\n"
@@ -579,6 +638,9 @@ USAGE_META = {
     "auction_history": ("拍卖历史", "HISTORY", "#FFB454"),
     "emission": ("辐射风暴", "EMISSION", "#54D6A1"),
     "appraisal": ("神器估价", "APPRAISAL", "#FFD166"),
+    "watch": ("神器价格关注", "PRICE WATCH", "#54D6A1"),
+    "watch_list": ("关注列表", "WATCH LIST", "#54D6A1"),
+    "watch_cancel": ("取消关注", "WATCH CANCEL", "#FF7A5C"),
     "item": ("物品图鉴", "ITEM", "#FFD166"),
     "player": ("玩家资料", "PLAYER", "#4EA8FF"),
     "clan": ("战队查询", "CLAN", "#FF6FB5"),
@@ -636,6 +698,10 @@ class StalzonePlugin(Star):
         self._update_lock = asyncio.Lock()
         self._reload_task: asyncio.Task | None = None
         self._update_auto_task: asyncio.Task | None = None
+        self._watch_path = data_dir / "price_watch.json"
+        self._watch_state = self._load_watch_state()
+        self._watch_task: asyncio.Task | None = None
+        self._watch_median_cache: dict[tuple[str, str, int], tuple[float, dict[int | None, int]]] = {}
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
 
@@ -730,6 +796,117 @@ class StalzonePlugin(Star):
             temp.replace(self._auto_state_path)
         except OSError:
             logger.warning("STALZONE automatic emission state could not be saved")
+
+    # ------------------------------------------------------- price watch state
+    @staticmethod
+    def _watch_key(
+        session: str,
+        user_id: str,
+        item_id: str,
+        quality: int | None,
+        level: int,
+    ) -> str:
+        return (
+            f"{session}|{user_id}|{item_id}|"
+            f"{'any' if quality is None else quality}|{int(level)}"
+        )
+
+    def _load_watch_state(self) -> dict[str, Any]:
+        try:
+            payload = json.loads(self._watch_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        subscriptions: dict[str, dict[str, Any]] = {}
+        raw = payload.get("subscriptions") if isinstance(payload, dict) else None
+        now = datetime.now(timezone.utc)
+        for key, value in (raw.items() if isinstance(raw, dict) else []):
+            if not isinstance(value, dict):
+                continue
+            session = str(value.get("session") or "").strip()
+            user_id = str(value.get("user_id") or "").strip()
+            item_id = str(value.get("item_id") or "").strip()
+            if not session or not user_id or not item_id:
+                continue
+            try:
+                level = int(value.get("level"))
+            except (TypeError, ValueError):
+                continue
+            if not 0 <= level <= 15:
+                continue
+            quality_raw = value.get("quality")
+            try:
+                quality = (
+                    None if quality_raw in (None, "", "any") else int(quality_raw)
+                )
+            except (TypeError, ValueError):
+                quality = None
+            mode = str(value.get("mode") or "absolute").lower()
+            if mode not in {"absolute", "relative"}:
+                mode = "absolute"
+            expires = parse_time(value.get("expires_at"))
+            if expires is not None and expires <= now:
+                continue
+            seen_raw = value.get("seen")
+            seen: dict[str, str] = {}
+            if isinstance(seen_raw, dict):
+                for signature, stamp in list(seen_raw.items())[-100:]:
+                    seen[str(signature)] = str(stamp)
+            subscriptions[str(key)] = {
+                "session": session,
+                "user_id": user_id,
+                "user_name": str(value.get("user_name") or user_id),
+                "private": bool(value.get("private")),
+                "platform": str(value.get("platform") or ""),
+                "region": str(value.get("region") or self._region()).lower(),
+                "item_id": item_id,
+                "quality": quality,
+                "level": level,
+                "mode": mode,
+                "threshold": value.get("threshold"),
+                "relative_pct": value.get("relative_pct"),
+                "cap": value.get("cap"),
+                "created_at": str(value.get("created_at") or now.isoformat()),
+                "expires_at": (
+                    str(value.get("expires_at"))
+                    if value.get("expires_at")
+                    else (now + timedelta(days=WATCH_DEFAULT_TTL_DAYS)).isoformat()
+                ),
+                "last_checked": str(value.get("last_checked") or ""),
+                "last_notified": str(value.get("last_notified") or ""),
+                "last_median": value.get("last_median"),
+                "seen": seen,
+            }
+        try:
+            cursor = max(0, int(payload.get("cursor") or 0))
+        except (TypeError, ValueError, AttributeError):
+            cursor = 0
+        return {"version": 1, "cursor": cursor, "subscriptions": subscriptions}
+
+    def _save_watch_state(self) -> None:
+        try:
+            self._watch_path.parent.mkdir(parents=True, exist_ok=True)
+            temp = self._watch_path.with_suffix(".tmp")
+            temp.write_text(
+                json.dumps(self._watch_state, ensure_ascii=False, indent=1),
+                encoding="utf-8",
+            )
+            temp.replace(self._watch_path)
+        except OSError:
+            logger.warning("STALZONE price-watch state could not be saved")
+
+    def _watch_subs(self) -> dict[str, dict[str, Any]]:
+        raw = self._watch_state.get("subscriptions")
+        return raw if isinstance(raw, dict) else {}
+
+    def _watch_enabled(self) -> bool:
+        value = self._cfg("price_watch_enabled", True)
+        if value is None:
+            return True
+        if isinstance(value, str):
+            text = value.strip().lower()
+            return not text or text not in {"0", "false", "no", "off"}
+        return bool(value)
+
 
     def _auto_notify_enabled(self) -> bool:
         value = self._cfg("emission_auto_notify", True)
@@ -1413,6 +1590,7 @@ class StalzonePlugin(Star):
         self._start_emission_auto()
         self._start_auto_update()
         self._start_arsenal_refresh()
+        self._start_price_watch()
 
     def _start_emission_auto(self) -> None:
         if not self._auto_notify_enabled():
@@ -2870,6 +3048,730 @@ class StalzonePlugin(Star):
             result.sub = sub
         return result
 
+    # --------------------------------------------------------- price watching
+    def _watch_target(self, event: Any) -> tuple[dict[str, Any] | None, str]:
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        if not session:
+            return None, "无法识别当前会话，关注失败。"
+        platform = self._platform_from_target(session)
+        if not self._is_auto_supported_platform(platform):
+            return (
+                None,
+                "当前平台不支持主动推送价格提醒；请使用 OneBot 群聊或私聊。",
+            )
+        user_id = self._event_sender_id(event)
+        if not user_id:
+            return None, "无法识别当前用户，关注失败。"
+        return {
+            "session": session,
+            "platform": platform,
+            "user_id": user_id,
+            "user_name": self._event_sender_name(event) or user_id,
+            "private": self._event_is_private(event),
+        }, ""
+
+    def _watch_name(self, item_id: str) -> str:
+        item = self.item_index.get(item_id)
+        if not item:
+            return item_id
+        return str(item.get("zh") or item.get("en") or item_id)
+
+    def _watch_target_label(self, sub: dict[str, Any]) -> str:
+        quality = sub.get("quality")
+        level = int(sub.get("level") or 0)
+        parts = [self._watch_name(str(sub.get("item_id") or ""))]
+        if quality is not None:
+            parts.append(quality_label(int(quality)))
+        parts.append(f"+{level}")
+        if sub.get("mode") == "relative":
+            target = f"低于中位 {int(sub.get('relative_pct') or 0)}%"
+            median = sub.get("last_median")
+            if median:
+                resolved = int(median) * (100 - int(sub.get("relative_pct") or 0)) / 100
+                if sub.get("cap"):
+                    resolved = min(resolved, int(sub["cap"]))
+                target += f"（≈{int(resolved):,}）"
+            if sub.get("cap"):
+                target += f"｜上限 {int(sub['cap']):,}"
+        else:
+            target = f"≤ {int(sub.get('threshold') or 0):,}"
+        parts.append(target)
+        return "｜".join(parts)
+
+    def _watch_remaining_label(self, sub: dict[str, Any]) -> str:
+        expires = parse_time(sub.get("expires_at"))
+        if expires is None:
+            return "到期时间未知"
+        seconds = (expires - datetime.now(timezone.utc)).total_seconds()
+        if seconds <= 0:
+            return "已到期"
+        if seconds >= 86400:
+            return f"剩 {max(1, int(seconds // 86400))} 天"
+        if seconds >= 3600:
+            return f"剩 {max(1, int(seconds // 3600))} 小时"
+        return f"剩 {max(1, int(seconds // 60))} 分钟"
+
+    def _watch_rows(self, event: Any) -> list[dict[str, Any]]:
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        user_id = self._event_sender_id(event)
+        subs = [
+            (key, dict(value))
+            for key, value in self._watch_subs().items()
+            if isinstance(value, dict)
+            and str(value.get("session") or "") == session
+        ]
+        subs.sort(key=lambda pair: str(pair[1].get("created_at") or ""))
+        subs.sort(key=lambda pair: 0 if pair[1].get("user_id") == user_id else 1)
+        rows: list[dict[str, Any]] = []
+        for index, (key, sub) in enumerate(subs, 1):
+            own = str(sub.get("user_id") or "") == user_id
+            line = f"{index}. " + self._watch_target_label(sub)
+            if not own:
+                line = f"{index}. {sub.get('user_name') or sub.get('user_id')}｜" + self._watch_target_label(sub)
+            line += f"｜{self._watch_remaining_label(sub)}"
+            rows.append(
+                {
+                    "index": index,
+                    "key": key,
+                    "own": own,
+                    "line": line,
+                    "sub": sub,
+                }
+            )
+        return rows
+
+    def _watch_list_view(self, event: Any) -> dict[str, Any]:
+        rows = self._watch_rows(event)
+        own = [row for row in rows if row["own"]]
+        others = [row for row in rows if not row["own"]]
+        subs = list(self._watch_subs().values())
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        session_items = len(
+            {
+                (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
+                for sub in subs
+                if str(sub.get("session") or "") == session
+            }
+        )
+        global_items = len(
+            {
+                (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
+                for sub in subs
+            }
+        )
+        interval = max(60, int(self._cfg("price_watch_interval", 120) or 120))
+        session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
+        batch = max(1, int(self._cfg("price_watch_batch", 5) or 5))
+        refresh_minutes = max(1, -(-global_items // batch)) * max(1, interval // 60)
+        return {
+            "region": self._region().upper(),
+            "own": own,
+            "others": others,
+            "session_items": session_items,
+            "session_limit": session_limit,
+            "global_items": global_items,
+            "refresh_minutes": refresh_minutes,
+        }
+
+    async def _handle_watch_list(self, event: Any) -> str:
+        return format_watch_list(self._watch_list_view(event))
+
+    async def _handle_watch_clear(self, event: Any, argument: str = "") -> str:
+        session = str(getattr(event, "unified_msg_origin", "") or "").strip()
+        user_id = self._event_sender_id(event)
+        clear_all = (
+            str(argument or "").strip().lower() in {"全部", "all"}
+            and self._event_is_admin(event)
+        )
+        removed = 0
+        for key, sub in list(self._watch_subs().items()):
+            if str(sub.get("session") or "") != session:
+                continue
+            if clear_all or str(sub.get("user_id") or "") == user_id:
+                self._watch_subs().pop(key, None)
+                removed += 1
+        if removed:
+            self._save_watch_state()
+        return (
+            f"已清空 {removed} 条价格关注。"
+            if removed
+            else "本会话没有可清空的关注。"
+        )
+
+    async def _handle_watch_cancel(self, event: Any, argument: str) -> str:
+        value = str(argument or "").strip()
+        if not value:
+            return USAGE["watch_cancel"]
+        rows = self._watch_rows(event)
+        if not rows:
+            return "本会话还没有价格关注。"
+        target = None
+        if value.isdigit():
+            index = int(value)
+            target = next((row for row in rows if row["index"] == index), None)
+        else:
+            needle = value.lower()
+            for row in rows:
+                sub = row["sub"]
+                if row["own"] and (
+                    str(sub.get("item_id") or "").lower() == needle
+                    or self._watch_name(str(sub.get("item_id") or "")).lower() == needle
+                ):
+                    target = row
+                    break
+        if target is None:
+            return "没有找到对应的关注序号或神器；发送 /sz 关注列表 查看。"
+        if not target["own"] and not self._event_is_admin(event):
+            return "只能取消自己的关注；管理员/群主/群管可以取消本群其他关注。"
+        self._watch_subs().pop(str(target["key"]), None)
+        self._save_watch_state()
+        return f"已取消关注 #{target['index']}：{self._watch_target_label(target['sub'])}"
+
+    async def _handle_watch_renew(self, event: Any, argument: str) -> str:
+        value = str(argument or "").strip()
+        rows = self._watch_rows(event)
+        target = None
+        if value.isdigit():
+            target = next((row for row in rows if row["index"] == int(value)), None)
+        if target is None:
+            return "用法：/sz 关注 续期 <序号>（先用 /sz 关注列表 查看序号）"
+        if not target["own"] and not self._event_is_admin(event):
+            return "只能续期自己的关注；管理员/群主/群管可以续期本群其他关注。"
+        key = str(target["key"])
+        sub = self._watch_subs().get(key)
+        if not isinstance(sub, dict):
+            return "该关注已不存在，请刷新关注列表。"
+        ttl = max(1, min(30, int(self._cfg("price_watch_ttl_days", WATCH_DEFAULT_TTL_DAYS) or WATCH_DEFAULT_TTL_DAYS)))
+        base = datetime.now(timezone.utc)
+        current = parse_time(sub.get("expires_at"))
+        if current is not None and current > base:
+            base = current
+        sub["expires_at"] = min(
+            base + timedelta(days=ttl),
+            datetime.now(timezone.utc) + timedelta(days=WATCH_MAX_TTL_DAYS),
+        ).isoformat()
+        self._save_watch_state()
+        return f"已续期 #{target['index']}：{self._watch_target_label(sub)}｜{self._watch_remaining_label(sub)}"
+
+    async def _handle_watch(self, event: Any, argument: str) -> str:
+        text = str(argument or "").strip()
+        if not text:
+            return USAGE["watch"]
+        lowered = text.lower()
+        if lowered in {"列表", "list"}:
+            return await self._handle_watch_list(event)
+        if lowered.startswith("清空"):
+            return await self._handle_watch_clear(event, text[2:].strip())
+        if lowered.startswith(("续期", "renew")):
+            value = text[2:].strip() if lowered.startswith("续期") else text[5:].strip()
+            return await self._handle_watch_renew(event, value)
+        if not self._watch_enabled():
+            return "价格关注已在配置中关闭。"
+        if not (
+            str(self._cfg("client_id", "") or "").strip()
+            and str(self._cfg("client_secret", "") or "").strip()
+        ):
+            return "未配置 STALZONE API 凭证，无法创建价格关注。"
+        target, error = self._watch_target(event)
+        if target is None:
+            return error
+        if (
+            not target["private"]
+            and bool(self._cfg("price_watch_group_restrict", False))
+            and not self._event_is_admin(event)
+        ):
+            return "本群价格关注仅管理员/群主/群管可设置。"
+        try:
+            query = parse_watch_query(text)
+        except WatchQueryError as exc:
+            return str(exc)
+
+        item, matches = await asyncio.to_thread(self._resolve_item, query["item"])
+        if item is None:
+            if matches:
+                candidates = [self._decorate(candidate) for candidate in matches]
+                return format_item_candidates(query["item"], candidates)
+            return self._not_found(
+                "item",
+                query["item"],
+                note="未找到该神器；价格关注目前只支持神器。",
+            )
+        if not str(item.get("cat") or "").startswith("artefact"):
+            return f"{display_name(item)} 不是神器；价格关注目前只支持神器。"
+        item_id = str(item["id"])
+        level = int(query["level"])
+        quality = query.get("quality")
+        region = self._region()
+        async with self._make_client() as client:
+            try:
+                await client.get_auction_lots(item_id, limit=1)
+            except (BadRequestError, NotFoundError):
+                return "该神器暂不支持拍卖查询，无法创建价格关注。"
+            except StalzoneAPIError as exc:
+                logger.warning(
+                    "STALZONE price-watch validation failed for %s: %s",
+                    item_id,
+                    exc,
+                )
+                return "暂时无法验证该神器的拍卖支持，请稍后再试。"
+            if query["mode"] == "relative":
+                try:
+                    history = await client.get_auction_history(item_id, limit=200)
+                except StalzoneAPIError:
+                    history = {}
+                cutoff = datetime.now(timezone.utc) - timedelta(days=3)
+                medians = history_medians(
+                    history, level, cutoff=cutoff, now=datetime.now(timezone.utc)
+                )
+                median = (
+                    medians.get(quality)
+                    if quality is not None
+                    else medians.get(None)
+                )
+                if not median:
+                    return "该神器/等级暂无近 3 天成交中位数，请改用绝对价。"
+        now = datetime.now(timezone.utc)
+        key = self._watch_key(
+            target["session"],
+            target["user_id"],
+            item_id,
+            int(quality) if quality is not None else None,
+            level,
+        )
+        subs = self._watch_subs()
+        existing = subs.get(key)
+        user_items = {
+            str(sub.get("item_id") or "")
+            for sub in subs.values()
+            if str(sub.get("user_id") or "") == target["user_id"]
+        }
+        try:
+            per_user = max(1, int(self._cfg("price_watch_per_user", 2) or 2))
+        except (TypeError, ValueError):
+            per_user = 2
+        if existing is None and item_id not in user_items and len(user_items) >= per_user:
+            return f"每位用户最多关注 {per_user} 种神器；请先取消一个再添加。"
+        session_items = {
+            (str(sub.get("region") or ""), str(sub.get("item_id") or ""))
+            for sub in subs.values()
+            if str(sub.get("session") or "") == target["session"]
+        }
+        try:
+            session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
+        except (TypeError, ValueError):
+            session_limit = 5
+        if existing is None and (region, item_id) not in session_items and len(session_items) >= session_limit:
+            return f"本会话最多同时关注 {session_limit} 种不同神器；请先取消一个再添加。"
+        ttl = max(
+            1,
+            min(
+                30,
+                int(
+                    self._cfg("price_watch_ttl_days", WATCH_DEFAULT_TTL_DAYS)
+                    or WATCH_DEFAULT_TTL_DAYS
+                ),
+            ),
+        )
+        entry = {
+            "session": target["session"],
+            "user_id": target["user_id"],
+            "user_name": target["user_name"],
+            "private": target["private"],
+            "platform": target["platform"],
+            "region": region,
+            "item_id": item_id,
+            "quality": int(quality) if quality is not None else None,
+            "level": level,
+            "mode": query["mode"],
+            "threshold": query.get("threshold"),
+            "relative_pct": query.get("relative_pct"),
+            "cap": query.get("cap"),
+            "created_at": (
+                str(existing.get("created_at"))
+                if isinstance(existing, dict) and existing.get("created_at")
+                else now.isoformat()
+            ),
+            "expires_at": (now + timedelta(days=ttl)).isoformat(),
+            "last_checked": "",
+            "last_notified": "",
+            "last_median": None,
+            "seen": {},
+        }
+        subs[key] = entry
+        self._save_watch_state()
+        label = self._watch_target_label(entry)
+        action = "已更新关注" if existing is not None else "已创建关注"
+        return (
+            f"{action}：{label}\n"
+            f"有效期至 {parse_time(entry['expires_at']).astimezone(CST).strftime('%m-%d %H:%M')} UTC+8。\n"
+            "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
+        )
+
+    def _watch_interval(self) -> int:
+        try:
+            value = int(self._cfg("price_watch_interval", 120) or 120)
+        except (TypeError, ValueError):
+            value = 120
+        return max(60, min(600, value))
+
+    def _watch_remaining_text(self, end: Any, now: datetime) -> str:
+        stamp = parse_time(end)
+        if stamp is None:
+            return "剩余时间未知"
+        seconds = (stamp - now).total_seconds()
+        if seconds <= 0:
+            return "已结束"
+        if seconds >= 86400:
+            return f"剩 {int(seconds // 86400)} 天"
+        if seconds >= 3600:
+            return f"剩 {int(seconds // 3600)} 小时"
+        return f"剩 {max(1, int(seconds // 60))} 分钟"
+
+    def _watch_matches(
+        self,
+        sub: dict[str, Any],
+        rows: list[dict[str, Any]],
+        medians: dict[int | None, int],
+        now: datetime,
+        interval: int,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        quality_filter = sub.get("quality")
+        level_filter = int(sub.get("level") or 0)
+        mode = str(sub.get("mode") or "absolute")
+        threshold = int(sub.get("threshold") or 0)
+        relative_pct = int(sub.get("relative_pct") or 0)
+        cap = sub.get("cap")
+        min_end = now + timedelta(seconds=interval * 2)
+        buyouts: list[dict[str, Any]] = []
+        auctions: list[dict[str, Any]] = []
+        for row in rows:
+            if int(row.get("level") or 0) != level_filter:
+                continue
+            row_quality = int(row.get("quality") or 0)
+            if quality_filter is not None and row_quality != int(quality_filter):
+                continue
+            end = parse_time(row.get("end"))
+            if end is None or end <= min_end:
+                continue
+            target = threshold
+            if mode == "relative":
+                median = medians.get(row_quality)
+                if median is None:
+                    median = medians.get(None)
+                if not median:
+                    continue
+                target = int(median * (100 - relative_pct) / 100)
+            if cap:
+                target = min(target, int(cap))
+            if target <= 0:
+                continue
+            buyout = row.get("buyout")
+            current = row.get("current")
+            kind = ""
+            price = None
+            if buyout and int(buyout) <= target:
+                kind = "buyout"
+                price = int(buyout)
+            elif current and int(current) <= target:
+                kind = "auction"
+                price = int(current)
+            if not kind or price is None:
+                continue
+            signature = str(row.get("signature") or "")
+            if not signature or signature in (sub.get("seen") or {}):
+                continue
+            match = dict(row)
+            match.update(
+                {
+                    "kind": kind,
+                    "price": price,
+                    "target": target,
+                    "remaining": self._watch_remaining_text(end, now),
+                }
+            )
+            if kind == "buyout":
+                buyouts.append(match)
+            else:
+                auctions.append(match)
+        buyouts.sort(key=lambda row: int(row.get("price") or 0))
+        auctions.sort(key=lambda row: int(row.get("price") or 0))
+        return buyouts, auctions
+
+    async def _watch_send_message(
+        self,
+        sub: dict[str, Any],
+        text: str,
+        image_path: Path | None = None,
+    ) -> bool:
+        if MessageChain is None or not callable(
+            getattr(self.context, "send_message", None)
+        ):
+            return False
+        target = str(sub.get("session") or "")
+        if not target:
+            return False
+        try:
+            chain = MessageChain()
+            if not bool(sub.get("private")) and AstrAt is not None:
+                name = str(sub.get("user_name") or sub.get("user_id") or "")
+                user_id = str(sub.get("user_id") or "")
+                try:
+                    chain.at(name or user_id, user_id)
+                    chain.message("：")
+                except Exception:
+                    chain.message(f"@{name or user_id}：")
+            chain.message(text)
+            if image_path is not None:
+                try:
+                    chain.file_image(str(image_path))
+                except Exception:
+                    pass
+            result = await self.context.send_message(target, chain)
+            return result is not False
+        except Exception:
+            logger.warning(
+                "STALZONE price-watch notification failed for %s",
+                target,
+                exc_info=True,
+            )
+            return False
+
+    async def _watch_send_alert(
+        self,
+        sub: dict[str, Any],
+        item: dict[str, Any],
+        match: dict[str, Any],
+        *,
+        extra: int,
+        now: datetime,
+    ) -> bool:
+        alert = build_watch_alert_view(
+            item,
+            {"quality": sub.get("quality"), "level": sub.get("level")},
+            match,
+            region=str(sub.get("region") or self._region()),
+            target=int(match.get("target") or 0),
+            now=now.astimezone(CST),
+            extra=extra,
+        )
+        text = format_watch_alert_text(alert)
+        notice = {
+            "error": False,
+            "kind_label": alert.get("kind_label"),
+            "query": alert.get("query"),
+            "region": alert.get("region"),
+            "now": alert.get("checked_at"),
+            "headline": f"{int(alert.get('price') or 0):,} 卢布",
+            "note": alert.get("note"),
+            "hint": alert.get("hint"),
+            "accent": alert.get("accent"),
+            "footer": alert.get("footer"),
+            "watermark": alert.get("watermark"),
+            "eyebrow": "STALZONE / PRICE WATCH",
+        }
+        image_path: Path | None = None
+        try:
+            try:
+                image_path = await asyncio.to_thread(
+                    render_notice_card,
+                    notice,
+                    font_path=str(self._cfg("font_path", "") or "") or None,
+                )
+            except Exception:
+                logger.exception("STALZONE price-watch card render failed")
+            return await self._watch_send_message(sub, text, image_path)
+        finally:
+            if image_path is not None:
+                try:
+                    image_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    async def _watch_medians(
+        self,
+        client: Any,
+        region: str,
+        item_id: str,
+        levels: set[int],
+        now: datetime,
+    ) -> dict[int, dict[int | None, int]]:
+        fresh: dict[int, dict[int | None, int]] = {}
+        stale: list[int] = []
+        for level in levels:
+            cached = self._watch_median_cache.get((region, item_id, level))
+            if cached is not None and time.monotonic() - cached[0] < 21600:
+                fresh[level] = cached[1]
+            else:
+                stale.append(level)
+        if not stale:
+            return fresh
+        try:
+            history = await client.get_auction_history(item_id, limit=200)
+        except Exception as exc:
+            logger.warning(
+                "STALZONE price-watch median fetch failed for %s: %s",
+                item_id,
+                exc,
+            )
+            return fresh
+        cutoff = now - timedelta(days=3)
+        for level in stale:
+            medians = history_medians(history, level, cutoff=cutoff, now=now)
+            self._watch_median_cache[(region, item_id, level)] = (
+                time.monotonic(),
+                medians,
+            )
+            fresh[level] = medians
+        return fresh
+
+    async def _watch_expire(self, subs: dict[str, dict[str, Any]], now: datetime) -> bool:
+        changed = False
+        for key, sub in list(subs.items()):
+            expires = parse_time(sub.get("expires_at"))
+            if expires is None or expires > now:
+                continue
+            await self._watch_send_message(
+                sub,
+                "神器价格关注已到期，未达到目标价，任务已自动取消。"
+                "如仍需要，请重新发送 /sz 关注。",
+            )
+            subs.pop(key, None)
+            changed = True
+        return changed
+
+    async def _watch_tick(self, *, force: bool = False) -> bool:
+        subs = self._watch_subs()
+        if not subs or (not force and not self._watch_enabled()):
+            return False
+        now = datetime.now(timezone.utc)
+        changed = await self._watch_expire(subs, now)
+        if changed:
+            self._save_watch_state()
+        groups: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]] = {}
+        for key, sub in subs.items():
+            region = str(sub.get("region") or self._region())
+            item_id = str(sub.get("item_id") or "")
+            if not item_id:
+                continue
+            groups.setdefault((region, item_id), []).append((key, sub))
+        if not groups:
+            return changed
+        keys = sorted(groups)
+        try:
+            batch_size = max(1, min(10, int(self._cfg("price_watch_batch", 5) or 5)))
+        except (TypeError, ValueError):
+            batch_size = 5
+        cursor = int(self._watch_state.get("cursor") or 0) % len(keys)
+        selected = [
+            keys[(cursor + offset) % len(keys)]
+            for offset in range(min(batch_size, len(keys)))
+        ]
+        self._watch_state["cursor"] = (cursor + len(selected)) % len(keys)
+        interval = self._watch_interval()
+        for region, item_id in selected:
+            group_subs = groups[(region, item_id)]
+            try:
+                async with self._api_gate():
+                    async with self._make_client(region=region) as client:
+                        try:
+                            lots_payload = await client.get_auction_lots(
+                                item_id, limit=200
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "STALZONE price-watch lots failed for %s: %s",
+                                item_id,
+                                exc,
+                            )
+                            continue
+                        relative_levels = {
+                            int(sub.get("level") or 0)
+                            for _key, sub in group_subs
+                            if sub.get("mode") == "relative"
+                        }
+                        medians_by_level: dict[int, dict[int | None, int]] = {}
+                        if relative_levels:
+                            medians_by_level = await self._watch_medians(
+                                client, region, item_id, relative_levels, now
+                            )
+            except Exception:
+                logger.exception(
+                    "STALZONE price-watch query failed for %s", item_id
+                )
+                continue
+            rows = watch_lot_rows(lots_payload, item_id)
+            item = self.item_index.get(item_id) or {"id": item_id}
+            for key, sub in group_subs:
+                medians = medians_by_level.get(
+                    int(sub.get("level") or 0), {}
+                )
+                buyouts, auctions = self._watch_matches(
+                    sub, rows, medians, now, interval
+                )
+                if not bool(self._cfg("price_watch_auction_alerts", True)):
+                    auctions = []
+                median = medians.get(
+                    int(sub["quality"])
+                    if sub.get("quality") is not None
+                    else None
+                ) or medians.get(None)
+                if median:
+                    sub["last_median"] = int(median)
+                sub["last_checked"] = now.isoformat()
+                if buyouts:
+                    matches = buyouts
+                    kind = "buyout"
+                elif auctions:
+                    matches = auctions
+                    kind = "auction"
+                else:
+                    changed = True
+                    continue
+                best = matches[0]
+                sent = await self._watch_send_alert(
+                    sub,
+                    item,
+                    best,
+                    extra=max(0, len(matches) - 1),
+                    now=now,
+                )
+                if not sent:
+                    continue
+                stamp = now.isoformat()
+                for match in matches:
+                    sub.setdefault("seen", {})[str(match.get("signature") or "")] = stamp
+                sub["last_notified"] = stamp
+                if kind == "buyout":
+                    subs.pop(key, None)
+                else:
+                    seen = sub.get("seen") or {}
+                    if len(seen) > 100:
+                        sub["seen"] = dict(list(seen.items())[-100:])
+                changed = True
+        if changed:
+            self._save_watch_state()
+        return changed
+
+    def _start_price_watch(self) -> None:
+        if self._watch_task is not None and not self._watch_task.done():
+            return
+        if not str(self._cfg("client_id", "") or "").strip():
+            return
+        if not str(self._cfg("client_secret", "") or "").strip():
+            return
+        self._watch_task = asyncio.create_task(self._watch_loop())
+
+    async def _watch_loop(self) -> None:
+        await asyncio.sleep(20)
+        while True:
+            try:
+                await self._watch_tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("STALZONE price-watch tick failed")
+            await asyncio.sleep(self._watch_interval())
+
     async def _handle_candidate(self, argument: str, event: Any) -> str | PluginReply:
         match = re.fullmatch(r"\s*#?(\d{1,2})\s*", str(argument or ""))
         if not match:
@@ -3751,6 +4653,7 @@ class StalzonePlugin(Star):
             "balance",
             "pass",
             "arsenal",
+            "watch",
         }:
             try:
                 cooldown = max(0.0, float(self._cfg("command_cooldown", 1.0) or 0))
@@ -3813,6 +4716,18 @@ class StalzonePlugin(Star):
                 yield await self._usage_reply(event, "appraisal")
                 return
             coro = self._handle_appraisal(arg, event=event)
+        elif sub == "watch":
+            if not arg:
+                yield await self._usage_reply(event, "watch")
+                return
+            coro = self._handle_watch(event, arg)
+        elif sub == "watch_list":
+            coro = self._handle_watch_list(event)
+        elif sub == "watch_cancel":
+            if not arg:
+                yield await self._usage_reply(event, "watch_cancel")
+                return
+            coro = self._handle_watch_cancel(event, arg)
         elif sub == "player":
             if not arg:
                 yield await self._usage_reply(event, "player")
@@ -5496,6 +6411,17 @@ class StalzonePlugin(Star):
                 pass
             except Exception:
                 logger.exception("STALZONE automatic update task shutdown failed")
+        watch_task = self._watch_task
+        self._watch_task = None
+        if watch_task is not None and not watch_task.done():
+            watch_task.cancel()
+            try:
+                await watch_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("STALZONE price-watch task shutdown failed")
+        self._save_watch_state()
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None

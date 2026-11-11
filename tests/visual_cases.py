@@ -34,6 +34,7 @@ from image_renderer import (
 )
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+from price_watch import build_watch_alert_view
 from season_pass import calculate
 
 NOW = datetime(2026, 10, 24, 6, 0, tzinfo=timezone.utc)
@@ -452,6 +453,38 @@ def _appraisal() -> Path | None:
     )
 
 
+def _watch_alert() -> Path | None:
+    item = {"id": "wg53", "zh": "原子", "en": "Atom"}
+    match = {
+        "kind": "buyout",
+        "buyout": 7800,
+        "current": 7500,
+        "quality": 4,
+        "level": 15,
+        "amount": 1,
+        "remaining": "剩 2 小时 13 分",
+    }
+    alert = build_watch_alert_view(
+        item, {}, match, region="eu", target=8000, now=NOW
+    )
+    return render_notice_card(
+        {
+            "error": False,
+            "kind_label": alert["kind_label"],
+            "query": alert["query"],
+            "region": alert["region"],
+            "now": alert["checked_at"],
+            "headline": f"{alert['price']:,} 卢布",
+            "note": alert["note"],
+            "hint": alert["hint"],
+            "accent": alert["accent"],
+            "footer": alert["footer"],
+            "watermark": alert["watermark"],
+            "eyebrow": "STALZONE / PRICE WATCH",
+        }
+    )
+
+
 def _help() -> Path | None:
     return render_help_card(region="EU", version="visual-test")
 
@@ -492,6 +525,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "emission": _emission,
     "emission_alert": _alert,
     "appraisal": _appraisal,
+    "watch_alert": _watch_alert,
     "item": _item,
     "help": _help,
     "usage": _usage,

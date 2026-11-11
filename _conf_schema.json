@@ -186,5 +186,53 @@
     "type": "bool",
     "default": false,
     "hint": "开启后所有生成图片不再显示右下角 Created By @Sakura_Akira；默认关闭（显示水印）。"
+  },
+  "price_watch_enabled": {
+    "description": "神器价格关注",
+    "type": "bool",
+    "default": true,
+    "hint": "允许用户用 /sz 关注 设置神器低价提醒；没有关注任务时不会发起任何轮询。"
+  },
+  "price_watch_interval": {
+    "description": "价格关注轮询间隔（秒）",
+    "type": "int",
+    "default": 120,
+    "hint": "默认 120 秒，范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。"
+  },
+  "price_watch_per_user": {
+    "description": "每位用户最多关注神器数",
+    "type": "int",
+    "default": 2,
+    "hint": "同一用户最多同时关注多少种不同神器；同一神器重复发送是更新规则，不新增。"
+  },
+  "price_watch_session_items": {
+    "description": "每个会话最多关注神器数",
+    "type": "int",
+    "default": 5,
+    "hint": "同一群聊/私聊最多同时关注多少种不同神器；不同群各自计算，不会互相占用名额。"
+  },
+  "price_watch_batch": {
+    "description": "每轮最多查询神器数",
+    "type": "int",
+    "default": 5,
+    "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。"
+  },
+  "price_watch_group_restrict": {
+    "description": "群聊关注仅管理员",
+    "type": "bool",
+    "default": false,
+    "hint": "关闭（默认）时群内所有成员都可创建价格关注；开启后仅 AstrBot 管理员、QQ 群主或群管理员可创建。"
+  },
+  "price_watch_auction_alerts": {
+    "description": "竞拍价达到预期也提醒",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，买断价高于目标但当前竞拍价/起拍价达到目标时也会提醒；竞拍提醒不会取消关注任务。"
+  },
+  "price_watch_ttl_days": {
+    "description": "价格关注有效期（天）",
+    "type": "int",
+    "default": 7,
+    "hint": "默认 7 天，最长 30 天；到期会提醒一次并自动取消，避免长期无效关注越积越多。"
   }
 }

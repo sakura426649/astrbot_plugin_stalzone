@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.13.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -35,6 +35,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
 | Item | 2,636 entries (2,367 from the official EXBO database plus 269 legacy supplements), 1,359 detail records, 828 bundled official common icons plus an optional 2,621-icon extension pack |
 | Artifact appraisal | `/sz 估价` estimates artifact prices from recent sales and active buyouts: min/max/median, P25/P75, current lowest active buyout, `+0`–`+15` level breakdown, quality split and a fair-buy line; artifacts only |
+| Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction, no game API request |
@@ -181,6 +182,21 @@ The official history endpoint returns at most **200 records per request**. The p
 - The level table lists sale count, min/median/max and the lowest active buyout per level; a selected level also gets a quality breakdown.
 - Data comes from official `/history` and `/lots`; buyouts can be sniped, so the estimate is advisory only.
 
+## Artifact price watch
+
+`/sz 关注 <artifact> [quality] +level <price|-N%> [cap]` watches artifact prices.
+
+- `8000`: alert when the buyout unit price is at most 8,000;
+- `-20%`: alert when it is 20% below the 3-day median for the same level/quality;
+- `-20% 12000`: relative threshold with an absolute cap;
+- level is required; quality is optional;
+- each user has at most 2 artifact types and each session at most 5; re-sending the same item updates the rule;
+- users watching the same artifact share one API fetch per cycle, while thresholds, quality/level and dedupe state stay per user;
+- every 2 minutes the scheduler polls at most 5 distinct artifacts and rotates fairly if there are more;
+- a buyout hit sends an alert and then cancels that subscription; if it was sniped, re-follow manually;
+- an auction hit only sends an alert and keeps the subscription; the same lot is never alerted twice, but a different low auction lot will alert again;
+- `/sz 关注列表` shows everyone in the current session with your own entries pinned; normal users can only cancel their own, admins can cancel anyone in the session.
+
 ## Development
 
 ```bash
@@ -189,7 +205,7 @@ coverage run --source=. --omit="tests/*" -m unittest discover -s tests
 coverage report
 ```
 
-Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 15 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
+Tests use AstrBot stubs and mock HTTP, so no real credentials are needed. Windows also runs 16 visual-signature checks for the main cards; Linux skips them. CI runs on Windows/Linux and Python 3.10/3.12.
 
 The default branch is `master`; pull requests target `master`.
 

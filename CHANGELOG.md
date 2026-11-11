@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.0 - 2026-11-11
+
+### Added
+
+- New artifact price watch: `/sz 关注 <神器> [品质] +等级 <目标价|-N%> [上限]`, plus `/sz 关注列表`, `/sz 取消关注 <序号>`, `/sz 关注 清空`, `/sz 关注 续期 <序号>`.
+- Level is required. Each user watches at most 2 artifact types, each session at most 5; multiple users watching the same `(region, item)` share one API fetch per 2-minute tick. The scheduler polls at most 5 distinct artifacts per tick and rotates fairly when there are more.
+- Buyout hits send an alert and then cancel that subscription on successful delivery; if delivery fails the subscription is kept for retry. Auction-only hits (buyout above target but current/starting bid at or below target) only alert and keep the subscription.
+- Lot dedupe uses `(item, quality, level, amount, start price, buyout price, start time, end time)`; current bid changes do not re-alert the same lot, while a different low auction lot alerts again. Alerts are per subscription, so another watcher's history does not suppress yours.
+- Watch list shows everyone in the current session with the caller's own entries pinned; normal users can only cancel their own, while admins/group owners/group admins can cancel anyone in the session. Group notifications mention the exact matched subscriber, never `@all`.
+- Absolute thresholds, relative-to-3-day-median thresholds and an optional absolute cap. New relative watches validate that a median exists; unsupported/non-artifact items are rejected.
+- New config options: `price_watch_enabled`, `price_watch_interval` (120s), `price_watch_per_user` (2), `price_watch_session_items` (5), `price_watch_batch` (5), `price_watch_group_restrict`, `price_watch_auction_alerts`, `price_watch_ttl_days` (7).
+- Price alerts use the dark notice card with `PRICE WATCH` eyebrow, `DEAL`/`BID` watermark and a dedicated visual signature. Watch state persists in `price_watch.json`.
+
+### Tests
+
+- Added parser/statistics/view, cap, shared-query, buyout-cancel, auction-retain, dedupe, relative-threshold, expiry, permission and group-mention tests; 299 tests and 16 visual signatures pass.
+
 ## 1.13.3 - 2026-11-11
 
 ### Changed
