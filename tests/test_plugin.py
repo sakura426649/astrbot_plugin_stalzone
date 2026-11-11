@@ -3140,6 +3140,7 @@ class ImageRendererTests(unittest.TestCase):
             history,
             lots,
             "eu",
+            quality_filter=4,
             now=AppraisalFormatterTests.NOW,
         )
         icon = PLUGIN_ROOT / "item_icons" / "wg53.png"

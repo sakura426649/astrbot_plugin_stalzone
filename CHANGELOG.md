@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.13.1 - 2026-11-11
+
+### Fixed
+
+- Fixed `NameError: _quality_color is not defined` when `/sz 估价` specified a quality (`/sz 估价 原子 金 +15`). `image_renderer` now has its own quality-color table, so appraisal cards render instead of falling back to text.
+- Added a regression test that renders an appraisal view with a specific quality, covering the branch that previously raised.
+
 ## 1.13.0 - 2026-11-11
 
 ### Added

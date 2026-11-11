@@ -68,6 +68,20 @@ ITEM_COLOR_MAP = {
     "QUEST_ITEM": "#FFB454",
     "EXCLUSIVE": "#FF5C5C",
 }
+QUALITY_COLORS = {
+    0: "#E7EDF5",
+    1: "#53C353",
+    2: "#4EA8FF",
+    3: "#FF6FB5",
+    4: "#FF5C5C",
+    5: "#FFD166",
+}
+
+
+def _quality_color(quality: int | None) -> str:
+    if quality is None:
+        return MUTED
+    return QUALITY_COLORS.get(int(quality), MUTED)
 SIGNATURE_BAND = 26
 _LAST_TEMP_CLEANUP = 0.0
 HELP_WIDTH = 1600
