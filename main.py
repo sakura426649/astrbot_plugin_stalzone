@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.20"
+PLUGIN_VERSION = "1.14.21"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -322,6 +322,8 @@ ICONLESS_COMMON_IDS = frozenset({"1rk6g", "5lrg1", "96jyz", "3gp95"})
 UPDATE_BACKUP_KEEP = 3
 ITEM_DB_BACKUP_KEEP = 3
 ITEM_DB_FULL_RATIO = 0.90
+ITEM_DB_ICON_COMPLETE_RATIO = 0.99
+ITEM_DB_ICON_COMPLETE_GAPS = 24
 GITHUB_PROXY_PREFIXES = (
     "https://gh-proxy.com/",
     "https://v4.gh-proxy.org/",
@@ -4890,6 +4892,26 @@ class StalzonePlugin(Star):
             self._cache_dir() / "item_icons",
         ]
 
+    def _item_db_icon_status(self, coverage: dict[str, Any]) -> str:
+        matched = int(coverage.get("matched") or 0)
+        total = int(coverage.get("total") or 0)
+        missing = len(coverage.get("missing") or [])
+        ratio = float(coverage.get("ratio") or 0.0)
+        complete = (
+            total == 0
+            or ratio >= ITEM_DB_ICON_COMPLETE_RATIO
+            or missing <= ITEM_DB_ICON_COMPLETE_GAPS
+        )
+        if complete:
+            return (
+                f"当前物品库图标：完整（{matched}/{total}；"
+                f"{missing} 个官方/历史条目无图标）"
+            )
+        return (
+            f"当前物品库图标：不完整（{matched}/{total}；"
+            f"仍缺 {missing} 个，可重新运行本指令）"
+        )
+
     async def _install_item_db_full_icons(
         self, event: Any
     ) -> tuple[bool, str]:
@@ -5065,7 +5087,8 @@ class StalzonePlugin(Star):
                 [
                     "STALZONE · 物品库检查完成",
                     f"官方库 commit 未变化（{official_commit[:12]}），无需重新下载。",
-                    f"完整图标：{coverage['matched']}/{coverage['total']}（{coverage['ratio']:.1%}）；{full_note}",
+                    self._item_db_icon_status(coverage),
+                    f"完整图标来源：{full_note}",
                     f"汉化文件：{len(overrides)} 条，已有中文已导出，空白 {blank_count} 条"
                     f"；{overrides_path}",
                     "编辑中文名后重载插件即可生效；英文本身即名称的物品可留空。",
@@ -5168,11 +5191,10 @@ class StalzonePlugin(Star):
                 and str(item.get("source") or "") == "official"
             )
         new_official = max(0, stats["official_count"] - existing_official)
-        missing = coverage["missing"]
         details = [
             "STALZONE · 物品库检查/补全完成",
-            f"完整图标：{coverage['matched']}/{coverage['total']}"
-            f"（{coverage['ratio']:.1%}）；{full_note}",
+            self._item_db_icon_status(coverage),
+            f"完整图标来源：{full_note}",
             f"官方物品：{stats['official_count']} 项"
             f"｜历史补充：{stats['supplemental_count']} 项",
             f"新合并官方条目：约 {new_official} 项"
@@ -5183,15 +5205,6 @@ class StalzonePlugin(Star):
             f"备份：{backup}",
             reload_note,
         ]
-        if missing:
-            shown = "、".join(missing[:8])
-            details.append(
-                f"仍缺图标：{len(missing)} 个（{shown}"
-                + ("…" if len(missing) > 8 else "")
-                + "），可能是官方无图标条目或补充皮肤。"
-            )
-        else:
-            details.append("图标：官方基础物品与本地补充条目均已覆盖。")
         return "\n".join(details)
 
     async def _handle_version_check(self) -> str:

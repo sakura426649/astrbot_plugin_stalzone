@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.21 - 2026-11-11
+
+### Fixed
+
+- Item DB check now reports `当前物品库图标：完整` after a full package is installed even though the project full package intentionally omits a small number of official/history items (currently 15). It reports incomplete only when the icon set is materially short. The runtime command still updates only the local installation and never pushes to GitHub.
+
 ## 1.14.20 - 2026-11-11
 
 ### Changed

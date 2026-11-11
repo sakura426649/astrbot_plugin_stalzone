@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.20-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.21-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -219,6 +219,8 @@ The official history endpoint returns at most **200 records per request**. The p
 - Any existing Chinese name can be edited directly, even if it was already translated.
 - Fill `{item_id: "Chinese name"}` in that file and reload the plugin; `//` comments are ignored by the loader.
 - Backups are written to `data/plugin_data/astrbot_plugin_stalzone/item_db_backups/`; only the latest three are kept.
+- The project full package intentionally omits a small number of official/history icons (currently 15); the check reports `当前物品库图标：完整` and names those gaps instead of treating them as missing.
+- The command only updates the local installation/data directory. It never asks for or uses GitHub write access, and never pushes a repository; repository synchronization is a maintainer git/CI step.
 - The official database has no Chinese; this command also does not update `item_details.json` stats/descriptions.
 
 See [`docs/official-item-database.md`](docs/official-item-database.md) for the manual workflow and verification commands.

@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.20-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.21-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -242,6 +242,8 @@
 - 使用者可以直接修改任意已有中文，不必等它变成未翻译状态；
 - 用户只需在 `item_name_overrides.json` 里按 `{物品ID: 中文名}` 填写，重载插件后生效；插件读取时会自动忽略 `//` 注释；
 - 更新前会备份到 `data/plugin_data/astrbot_plugin_stalzone/item_db_backups/`，只保留最近 3 份；
+- 完整包本身会缺少少量官方/历史条目图标（当前约 15 个），检查结果显示「当前物品库图标：完整」并注明这些无图标条目，不再误报为缺图标；
+- 指令只更新当前安装目录/数据目录，**不会也不需要 GitHub 写权限，不会自动 push 仓库**；要同步 GitHub 请由维护者用 git/CI 提交本地生成的文件；
 - 官方库没有中文，中文仍由社区/使用者维护；此指令不会更新 `item_details.json` 的属性与描述。
 
 详细维护流程和手工核对方式见 [`docs/official-item-database.md`](docs/official-item-database.md)。

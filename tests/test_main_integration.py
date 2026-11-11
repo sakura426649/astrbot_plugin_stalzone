@@ -841,6 +841,23 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(scheduled[0]["event"], event)
         self.assertIn("热重载完成", scheduled[0]["notify_text"])
 
+    def test_item_db_icon_status_accepts_official_full_gaps(self):
+        plugin = self.make_plugin()
+        full = {
+            "matched": 2621,
+            "total": 2636,
+            "ratio": 2621 / 2636,
+            "missing": [f"x{i}" for i in range(15)],
+        }
+        self.assertIn("完整", plugin._item_db_icon_status(full))
+        light = {
+            "matched": 828,
+            "total": 2636,
+            "ratio": 828 / 2636,
+            "missing": [f"x{i}" for i in range(1808)],
+        }
+        self.assertIn("不完整", plugin._item_db_icon_status(light))
+
     async def test_item_db_runtime_update_preserves_chinese_and_writes_slots(self):
         plugin = self.make_plugin()
         with tempfile.TemporaryDirectory() as raw:

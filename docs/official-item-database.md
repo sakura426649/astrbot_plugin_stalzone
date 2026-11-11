@@ -30,9 +30,9 @@
 1. 按当前 `item_index.json` 检查 `item_icons/` 覆盖率；低于 90% 或缺失超过 24 个时下载项目最新 Release 的 `astrbot_plugin_stalzone_full.zip`，只提取 `item_icons/*.png` 到插件数据目录；
 2. 先查官方 commit；有变化才下载 EXBO `stalzone-database` 快照，保留现有中文和 `supplemental` 条目，补全官方 ID/英文/俄文/品质色/类别/图标；commit 未变化时跳过官方压缩包，只刷新未翻译占位；
 3. 所有条目写入插件数据目录的 `item_name_overrides.json`，已有中文预填、官方新增未翻译条目为空；文件为 JSONC，每条后面带 `// en: 官方英文名 | key: 官方键值`，可以直接改任意已有中文，本身是英文的物品可留空；
-4. 索引更新前备份到 `item_db_backups/`（保留最近 3 份），成功后立即重载内存索引。
+4. 索引更新前备份到 `item_db_backups/`（保留最近 3 份），成功后立即重载内存索引。完整包按项目定义会缺少少量官方/历史无图标条目（当前 15 个），检查结果仍显示「当前物品库图标：完整」并注明缺口。
 
-这个指令不会更新 `item_details.json` 的属性/描述，也不会把官方英文当成中文；中文仍由社区/使用者维护。
+这个指令只修改当前安装目录/数据目录，不持有 GitHub 写 token，也不会自动 push 仓库；需要同步 GitHub 时由维护者把生成的索引/图标提交到仓库或由 Actions 处理。它不会更新 `item_details.json` 的属性/描述，也不会把官方英文当成中文；中文仍由社区/使用者维护。
 
 ## 更新流程
 
