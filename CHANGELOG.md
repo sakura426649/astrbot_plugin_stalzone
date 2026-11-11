@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.16 - 2026-11-11
+
+### Changed
+
+- Watch list canvas widened from 960 to 1000px so 9-digit targets (e.g. `≤ 123,456,789`) no longer crowd into the remaining-time column. Alert/created/action cards stay 960px; only the table gets the extra 40px.
+
 ## 1.14.15 - 2026-11-11
 
 ### Fixed

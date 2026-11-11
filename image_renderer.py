@@ -2670,7 +2670,7 @@ def render_watch_list_card(
     view: dict[str, Any] | None,
     *,
     font_path: str | None = None,
-    width: int = 960,
+    width: int = 1000,
 ) -> Path | None:
     """Render per-user price-watch blocks with the caller's block pinned."""
     if (
