@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.13.2 - 2026-11-11
+
+### Fixed
+
+- Appraisal card layout: the range bar's min/max labels no longer sit under the verdict pill; the verdict row moved down and the median label is clamped away from the "成交区间" heading when min == median.
+- The verdict no longer says "明显高于中位价" for a mixed all-level comparison, which did not say which level it referred to. Without a level the card now shows "全等级概览" plus "指定 +等级 查看该等级的价格判断"; with a level it says "当前 +15 买断高于/低于中位价" and only then shows the percentage. The text fallback mirrors this.
+- The "合理买价 / 捡漏线" line is only shown as a single recommendation when a level is selected; the all-level view labels its median as "全等级参考中位".
+
+### Tests
+
+- Updated appraisal view expectations, added a no-level verdict regression, and regenerated the Windows visual signature.
+
 ## 1.13.1 - 2026-11-11
 
 ### Fixed

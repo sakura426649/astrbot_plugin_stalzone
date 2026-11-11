@@ -1949,11 +1949,26 @@ class AppraisalFormatterTests(unittest.TestCase):
         self.assertEqual(stats["p25"], 7000)
         self.assertEqual(view["active"]["lowest_buyout"], 6500)
         self.assertEqual(view["active"]["count"], 3)
-        self.assertEqual(view["verdict"]["label"], "低于中位价")
+        self.assertEqual(view["verdict"]["label"], "全等级概览")
+        self.assertIsNone(view["delta_pct"])
+        self.assertIn("指定 +等级", view["verdict"]["hint"])
+        self.assertNotIn("高于中位价", view["verdict"]["label"])
         levels = {row["level"]: row for row in view["levels"]}
         self.assertEqual(levels[15]["stats"]["median"], 8000)
         self.assertEqual(levels[10]["stats"]["median"], 4000)
-        self.assertIn("合理买价", format_appraisal_text(view))
+        self.assertIn("全等级参考中位", format_appraisal_text(view))
+        level_view = build_appraisal_view(
+            self.ITEM,
+            history,
+            lots,
+            "eu",
+            level_filter=15,
+            now=self.NOW,
+        )
+        self.assertEqual(
+            level_view["verdict"]["label"], "当前 +15 买断接近中位价"
+        )
+        self.assertIsNotNone(level_view["delta_pct"])
 
     def test_appraisal_quality_and_level_filter(self):
         history, lots = self._payloads()

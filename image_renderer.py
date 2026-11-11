@@ -2252,8 +2252,8 @@ def render_appraisal_card(
     # Height: header + hero + range + verdict + tables + notes + footer.
     header_h = 300
     hero_h = 152
-    range_h = 84
-    verdict_h = 52
+    range_h = 110
+    verdict_h = 58
     level_section_h = 58 + max(1, len(levels)) * 42 if levels else 0
     quality_section_h = 58 + max(1, len(qualities)) * 42 if qualities else 0
     note_lines = min(3, max(1, len(view.get("notes") or [])))
@@ -2428,8 +2428,14 @@ def render_appraisal_card(
             font=chip_font,
             fill=muted,
         )
+        # Keep the median label clear of the "成交区间" heading when the
+        # median sits at the far-left edge (e.g. min == median).
+        median_label_x = max(
+            margin + 100,
+            min(_x(median) - 30, range_right - 110),
+        )
         draw.text(
-            (_x(median) - 30, bar_y - 32),
+            (median_label_x, bar_y - 32),
             f"中位 {money(median)}",
             font=chip_font,
             fill=accent,
@@ -2452,12 +2458,13 @@ def render_appraisal_card(
             )
 
     # Verdict / suggestion --------------------------------------------------
-    verdict_y = range_y + 78
+    verdict_y = range_y + 104
     verdict_color = str(verdict.get("color") or "#4EA8FF")
     label = str(verdict.get("label") or "—")
     delta = view.get("delta_pct")
     delta_text = f"　{float(delta):+.1f}%" if delta is not None else ""
-    pill_w = int(chip_font.getlength(label + delta_text)) + 34
+    pill_text = _fit_text(draw, label + delta_text, chip_font, 460)
+    pill_w = int(chip_font.getlength(pill_text)) + 34
     draw.rounded_rectangle(
         (margin, verdict_y, margin + pill_w, verdict_y + 38),
         radius=19,
@@ -2467,15 +2474,25 @@ def render_appraisal_card(
     )
     draw.text(
         (margin + 16, verdict_y + 9),
-        label + delta_text,
+        pill_text,
         font=chip_font,
         fill=verdict_color,
     )
-    suggestion = (
-        f"合理买价 ≤ {money(view.get('buy_line'))}    "
-        f"捡漏线 ≤ {money(view.get('steal_line'))}"
-        if stats
-        else "暂无成交样本，无法给出建议买价"
+    hint = str(verdict.get("hint") or "")
+    if hint:
+        suggestion = hint
+    elif stats:
+        suggestion = (
+            f"合理买价 ≤ {money(view.get('buy_line'))}    "
+            f"捡漏线 ≤ {money(view.get('steal_line'))}"
+        )
+    else:
+        suggestion = "暂无成交样本，无法给出建议买价"
+    suggestion = _fit_text(
+        draw,
+        suggestion,
+        chip_font,
+        max(120, width - (margin + pill_w + 22) - margin),
     )
     draw.text(
         (margin + pill_w + 22, verdict_y + 9),

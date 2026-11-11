@@ -2385,28 +2385,37 @@ def build_appraisal_view(
     delta_pct: float | None = None
     verdict_label = "样本不足"
     verdict_color = "#8FA2B8"
+    verdict_hint = ""
     if stats is None and active["count"] == 0:
         verdict_label = "暂无数据"
+        verdict_hint = "该神器/等级暂时没有成交和在售记录"
     elif stats is None:
         verdict_label = "暂无成交样本"
+        verdict_hint = "只有当前在售，暂无历史成交可对比"
     elif lowest_buyout is None:
         verdict_label = "暂无买断在售"
+        verdict_hint = "当前只有竞拍或没有在售，无法对比买断价"
+    elif median and level_filter is None:
+        # Mixing +0 and +15 into one median makes a "high/low" verdict
+        # meaningless; show the overview and ask for a level instead.
+        verdict_label = "全等级概览"
+        verdict_hint = "指定 +等级 查看该等级的价格判断"
     elif median:
         delta_pct = (lowest_buyout - median) / median * 100
         if delta_pct <= -20:
-            verdict_label = "明显低于中位价"
+            verdict_label = f"当前 +{level_filter} 买断明显低于中位价"
             verdict_color = "#54D6A1"
         elif delta_pct <= -8:
-            verdict_label = "低于中位价"
+            verdict_label = f"当前 +{level_filter} 买断低于中位价"
             verdict_color = "#54D6A1"
         elif delta_pct <= 8:
-            verdict_label = "接近中位价"
+            verdict_label = f"当前 +{level_filter} 买断接近中位价"
             verdict_color = "#4EA8FF"
         elif delta_pct <= 20:
-            verdict_label = "高于中位价"
+            verdict_label = f"当前 +{level_filter} 买断高于中位价"
             verdict_color = "#FFB454"
         else:
-            verdict_label = "明显高于中位价"
+            verdict_label = f"当前 +{level_filter} 买断明显高于中位价"
             verdict_color = "#FF7A5C"
     if stats is not None and stats.get("count", 0) < APPRAISAL_MIN_SAMPLE:
         verdict_label += "（样本较少）"
@@ -2428,10 +2437,14 @@ def build_appraisal_view(
         notes.append("未指定品质：成交价混合了所有品质，指定品质后更准确。")
     if stats is not None and stats.get("count", 0) < APPRAISAL_MIN_SAMPLE:
         notes.append(f"样本仅 {stats['count']} 笔，估价波动较大，仅供参考。")
-    if lowest_buyout is not None and median:
+    if lowest_buyout is not None and median and delta_pct is not None:
         notes.append(
-            f"当前最低买断比中位价 {delta_pct:+.1f}%；"
+            f"当前 +{level_filter} 最低买断比该等级中位价 {delta_pct:+.1f}%；"
             "买断价可能已被抢购，请以游戏内为准。"
+        )
+    elif lowest_buyout is not None and median:
+        notes.append(
+            "当前最低买断来自全部等级混合；指定 +等级 后可对比该等级中位价。"
         )
     if not notes:
         notes.append("估价基于近期成交与当前在售，价格随时变化。")
@@ -2466,6 +2479,7 @@ def build_appraisal_view(
         "verdict": {
             "label": verdict_label,
             "color": verdict_color,
+            "hint": verdict_hint,
         },
         "buy_line": median,
         "steal_line": stats.get("p25") if stats else None,
@@ -2531,12 +2545,21 @@ def format_appraisal_text(view: dict[str, Any] | None) -> str:
     else:
         overview.append("当前无在售买断")
     verdict = view.get("verdict") or {}
-    overview.append(f"判断：{verdict.get('label') or '—'}")
+    verdict_line = str(verdict.get("label") or "—")
+    if verdict.get("hint"):
+        verdict_line += f"（{verdict.get('hint')}）"
+    overview.append(f"判断：{verdict_line}")
     if stats:
-        overview.append(
-            f"合理买价：≤ {_appraisal_money(view.get('buy_line'))}｜"
-            f"捡漏线：≤ {_appraisal_money(view.get('steal_line'))}"
-        )
+        if view.get("level") is not None:
+            overview.append(
+                f"合理买价：≤ {_appraisal_money(view.get('buy_line'))}｜"
+                f"捡漏线：≤ {_appraisal_money(view.get('steal_line'))}"
+            )
+        else:
+            overview.append(
+                f"全等级参考中位：{_appraisal_money(view.get('buy_line'))}｜"
+                "指定 +等级 查看该等级合理买价"
+            )
 
     sections: list[tuple[str, list[str]]] = [("价格概览", overview)]
     level_lines: list[str] = []
