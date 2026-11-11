@@ -1998,8 +1998,27 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         await collect(plugin, "/sz 风暴")
         self.assertEqual(EmissionRegionClient.last_region, "eu")
 
+        # Some clients repeat the subcommand as the argument or append an
+        # invisible character; `/sz 风暴` must still query the default region.
+        repeated = await collect(plugin, "/sz 风暴 风暴")
+        self.assertIn("距离上次风暴", repeated)
+        invisible = await collect(plugin, "/sz 风暴 \u200b")
+        self.assertIn("距离上次风暴", invisible)
+
         usage = await collect(plugin, "/sz 风暴 xx")
         self.assertIn("用法：/sz emission", usage)
+
+    async def test_llm_emission_ignores_non_region_value(self):
+        plugin = self.make_plugin()
+        plugin._make_client = lambda region=None: FakeClient()  # type: ignore[assignment]
+        results = [
+            item
+            async for item in plugin.llm_emission(
+                FakeEvent("/sz"), region="风暴"
+            )
+        ]
+        self.assertTrue(results)
+        self.assertIn("距离上次风暴", results[0][1])
 
     async def test_emission_cache_hits(self):
         class CountingClient(FakeClient):

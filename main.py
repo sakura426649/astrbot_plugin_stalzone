@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.12.0"
+PLUGIN_VERSION = "1.12.1"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -256,6 +256,20 @@ UPDATE_COMMANDS = frozenset(
     {"update", "插件更新", "更新插件", "更新", "插件升级", "升级"}
 )
 SZ_BARE_RE = r"(?i)^\s*(?:sz|stalzone)(?:@\S+)?\s+"
+# Some clients append zero-width joiners or repeat the subcommand after the
+# command name (`/sz 风暴 风暴`).  Neither is a region, so normalize them away
+# instead of sending the "usage" card for an otherwise valid `/sz 风暴`.
+_INVISIBLE_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
+_EMISSION_WORDS = frozenset({"风暴", "爆发", "辐射", "emission", "em", "fb"})
+
+
+def _clean_region_argument(value: object) -> str:
+    text = _INVISIBLE_CHARS_RE.sub("", str(value or "")).strip().lower()
+    if text in _EMISSION_WORDS:
+        return ""
+    return text
+
+
 GROUP_TARGET_RE = re.compile(r"(?i)(?:^|:)GroupMessage:([^:]+)(?::|$)")
 GROUP_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 OFFICIAL_PLATFORM_PREFIXES = ("qq_official",)
@@ -2367,7 +2381,13 @@ class StalzonePlugin(Star):
         Args:
             region(string): 可选，区服 ru/eu/na/sea/nea，默认使用配置区服
         """
-        token = str(region or "").strip().lower()
+        token = _clean_region_argument(region)
+        if token and token not in VALID_REGIONS:
+            # A model may hallucinate a non-region value (for example pass the
+            # Chinese word for "storm"); prefer the configured default region
+            # over replying with the command usage card.
+            logger.info("STALZONE LLM emission ignored region %r", token)
+            token = ""
         async for output in self._llm_execute(
             event,
             "emission",
@@ -4729,9 +4749,10 @@ class StalzonePlugin(Star):
         }, []
 
     async def _handle_emission(self, argument: str = "") -> str | PluginReply:
-        token = str(argument or "").strip().lower()
+        token = _clean_region_argument(argument)
         if token:
             if token not in VALID_REGIONS:
+                logger.info("STALZONE emission ignored region token %r", token)
                 return USAGE["emission"]
             region = token
         else:

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.12.1 - 2026-11-11
+
+### Fixed
+
+- `/sz 风暴` no longer falls back to the usage card when the incoming argument repeats the subcommand (`/sz 风暴 风暴`), contains zero-width/invisible characters, or when the LLM tool passes a non-region value such as `风暴`. These now query the configured default region; genuine ASCII region typos still show the usage card.
+
+### Tests
+
+- Added emission normalization coverage for repeated subcommands, invisible characters and non-region LLM arguments; 274 tests and 14 visual signatures pass.
+
 ## 1.12.0 - 2026-11-11
 
 ### Changed
