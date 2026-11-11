@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.13.3 - 2026-11-11
+
+### Changed
+
+- Renamed the appraisal metric "当前最低买断" to "当前在售最低买断" in the card, text fallback, verdict and README, so it is clearly distinguished from historical sale prices. The per-level verdict now reads "当前在售 +15 最低买断..." as well.
+- Regenerated the Windows visual signature for the updated labels.
+
 ## 1.13.2 - 2026-11-11
 
 ### Fixed

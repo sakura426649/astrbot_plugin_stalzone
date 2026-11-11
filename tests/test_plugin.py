@@ -1966,7 +1966,7 @@ class AppraisalFormatterTests(unittest.TestCase):
             now=self.NOW,
         )
         self.assertEqual(
-            level_view["verdict"]["label"], "当前 +15 买断接近中位价"
+            level_view["verdict"]["label"], "当前在售 +15 最低买断接近中位价"
         )
         self.assertIsNotNone(level_view["delta_pct"])
 

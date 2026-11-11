@@ -2403,19 +2403,19 @@ def build_appraisal_view(
     elif median:
         delta_pct = (lowest_buyout - median) / median * 100
         if delta_pct <= -20:
-            verdict_label = f"当前 +{level_filter} 买断明显低于中位价"
+            verdict_label = f"当前在售 +{level_filter} 最低买断明显低于中位价"
             verdict_color = "#54D6A1"
         elif delta_pct <= -8:
-            verdict_label = f"当前 +{level_filter} 买断低于中位价"
+            verdict_label = f"当前在售 +{level_filter} 最低买断低于中位价"
             verdict_color = "#54D6A1"
         elif delta_pct <= 8:
-            verdict_label = f"当前 +{level_filter} 买断接近中位价"
+            verdict_label = f"当前在售 +{level_filter} 最低买断接近中位价"
             verdict_color = "#4EA8FF"
         elif delta_pct <= 20:
-            verdict_label = f"当前 +{level_filter} 买断高于中位价"
+            verdict_label = f"当前在售 +{level_filter} 最低买断高于中位价"
             verdict_color = "#FFB454"
         else:
-            verdict_label = f"当前 +{level_filter} 买断明显高于中位价"
+            verdict_label = f"当前在售 +{level_filter} 最低买断明显高于中位价"
             verdict_color = "#FF7A5C"
     if stats is not None and stats.get("count", 0) < APPRAISAL_MIN_SAMPLE:
         verdict_label += "（样本较少）"
@@ -2439,12 +2439,12 @@ def build_appraisal_view(
         notes.append(f"样本仅 {stats['count']} 笔，估价波动较大，仅供参考。")
     if lowest_buyout is not None and median and delta_pct is not None:
         notes.append(
-            f"当前 +{level_filter} 最低买断比该等级中位价 {delta_pct:+.1f}%；"
+            f"当前在售 +{level_filter} 最低买断比该等级中位价 {delta_pct:+.1f}%；"
             "买断价可能已被抢购，请以游戏内为准。"
         )
     elif lowest_buyout is not None and median:
         notes.append(
-            "当前最低买断来自全部等级混合；指定 +等级 后可对比该等级中位价。"
+            "当前在售最低买断来自全部等级混合；指定 +等级 后可对比该等级中位价。"
         )
     if not notes:
         notes.append("估价基于近期成交与当前在售，价格随时变化。")
@@ -2534,7 +2534,7 @@ def format_appraisal_text(view: dict[str, Any] | None) -> str:
         delta = view.get("delta_pct")
         delta_text = f"（{delta:+.1f}%）" if delta is not None else ""
         overview.append(
-            f"当前最低买断：{_appraisal_money(active.get('lowest_buyout'))}{delta_text}"
+            f"当前在售最低买断：{_appraisal_money(active.get('lowest_buyout'))}{delta_text}"
         )
         overview.append(f"在售：{int(active.get('count') or 0)} 条")
     elif active.get("lowest_current") is not None:

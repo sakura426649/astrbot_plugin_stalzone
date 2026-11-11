@@ -2360,7 +2360,7 @@ def render_appraisal_card(
         ("最低成交", money(stats.get("min")) if stats else "—", "#54D6A1"),
         ("最高成交", money(stats.get("max")) if stats else "—", "#FF7A5C"),
         (
-            "当前最低买断",
+            "当前在售最低买断",
             money(active.get("lowest_buyout")),
             "#4EA8FF",
         ),
