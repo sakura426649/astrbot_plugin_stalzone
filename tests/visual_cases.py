@@ -32,6 +32,7 @@ from image_renderer import (
     render_text_card,
     render_usage_card,
     render_watch_alert_card,
+    render_watch_created_card,
     render_watch_list_card,
 )
 
@@ -496,6 +497,22 @@ def _appraisal_high() -> Path | None:
     return _appraisal_range(15000)
 
 
+def _watch_created() -> Path | None:
+    view = {
+        "updated": False,
+        "item_label": "原子 +15",
+        "quality_short": "红",
+        "quality_color": "#FF5C5C",
+        "region": "EU",
+        "target": "≤ 8,000",
+        "expiry": "11-18 18:37",
+        "auction_note": "",
+    }
+    return render_watch_created_card(
+        view, icon_path=PLUGIN_ROOT / "item_icons" / "wg53.png"
+    )
+
+
 def _watch_alert() -> Path | None:
     item = {"id": "wg53", "zh": "原子", "en": "Atom"}
     match = {
@@ -606,6 +623,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "appraisal": _appraisal,
     "appraisal_low": _appraisal_low,
     "appraisal_high": _appraisal_high,
+    "watch_created": _watch_created,
     "watch_alert": _watch_alert,
     "watch_list": _watch_list,
     "item": _item,

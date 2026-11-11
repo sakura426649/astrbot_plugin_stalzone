@@ -11,6 +11,10 @@ import main as main_module
 from main import StalzonePlugin
 
 
+def _text(result):
+    return result.text if hasattr(result, "text") else result
+
+
 class WatchEvent(integration.FakeEvent):
     def __init__(
         self,
@@ -107,7 +111,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         result = await plugin._handle_watch(
             WatchEvent("/sz"), "wg53 红 +15 8000"
         )
-        self.assertIn("无需创建关注", result)
+        self.assertIn("无需创建关注", _text(result))
         self.assertEqual(plugin._watch_subs(), {})
 
     async def test_target_above_current_auction_creates_with_notice(self):
@@ -126,20 +130,20 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         result = await plugin._handle_watch(
             WatchEvent("/sz"), "wg53 红 +15 8000"
         )
-        self.assertIn("已创建关注", result)
-        self.assertIn("当前竞拍价", result)
+        self.assertIn("已创建关注", _text(result))
+        self.assertIn("当前竞拍价", _text(result))
         self.assertEqual(len(plugin._watch_subs()), 1)
 
     async def test_create_update_and_per_user_cap(self):
         plugin = self.make_plugin()
         created = await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
-        self.assertIn("已创建关注", created)
+        self.assertIn("已创建关注", _text(created))
         second = await plugin._handle_watch(WatchEvent("/sz"), "ljn2 红 +15 8000")
-        self.assertIn("已创建关注", second)
+        self.assertIn("已创建关注", _text(second))
         third = await plugin._handle_watch(WatchEvent("/sz"), "9nd0 红 +15 8000")
-        self.assertIn("最多关注 2 种", third)
+        self.assertIn("最多关注 2 种", _text(third))
         updated = await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 7000")
-        self.assertIn("已更新关注", updated)
+        self.assertIn("已更新关注", _text(updated))
         self.assertEqual(len(plugin._watch_subs()), 2)
 
     async def test_session_cap_and_shared_item_slot(self):
@@ -150,16 +154,16 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
             result = await plugin._handle_watch(
                 WatchEvent("/sz", user_id=user), f"{item_id} 红 +15 8000"
             )
-            self.assertIn("已创建关注", result)
+            self.assertIn("已创建关注", _text(result))
         sixth = await plugin._handle_watch(
             WatchEvent("/sz", user_id="u9"), "zy7y 红 +15 8000"
         )
-        self.assertIn("本会话最多", sixth)
+        self.assertIn("本会话最多", _text(sixth))
         # Another user can still watch one of the five existing items.
         shared = await plugin._handle_watch(
             WatchEvent("/sz", user_id="u9"), "wg53 红 +15 7000"
         )
-        self.assertIn("已创建关注", shared)
+        self.assertIn("已创建关注", _text(shared))
 
     async def test_list_pins_own_and_cancel_permissions(self):
         plugin = self.make_plugin()
@@ -179,11 +183,11 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         denied = await plugin._handle_watch_cancel(
             WatchEvent("/sz", user_id="u2", name="Bob"), "2"
         )
-        self.assertIn("只能取消自己的关注", denied)
+        self.assertIn("只能取消自己的关注", _text(denied))
         allowed = await plugin._handle_watch_cancel(
             WatchEvent("/sz", user_id="admin", admin=True), "2"
         )
-        self.assertIn("已取消关注", allowed)
+        self.assertIn("已取消关注", _text(allowed))
         self.assertEqual(len(plugin._watch_subs()), 1)
 
     async def test_buyout_alert_removes_subscription(self):
@@ -341,7 +345,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         created = await plugin._handle_watch(
             WatchEvent("/sz"), "wg53 红 +15 -20%"
         )
-        self.assertIn("已创建关注", created)
+        self.assertIn("已创建关注", _text(created))
         WatchClient.lots = [
             {
                 "amount": 1,

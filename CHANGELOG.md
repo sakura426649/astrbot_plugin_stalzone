@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.9 - 2026-11-11
+
+### Changed
+
+- `/sz 关注` success replies now use a dedicated "关注已创建 / 关注已更新" card with icon, item name, target-price panel, expiry, buyout/auction rules and the current-auction notice, instead of a cramped text block.
+- Watch list target-price text now uses white 28px (same size as the artifact name), with a wider column so `≤ 30,000,000` and relative thresholds fit.
+
+### Tests
+
+- Added the watch-created visual signature; 302 tests and 20 visual signatures pass.
+
 ## 1.14.8 - 2026-11-11
 
 ### Fixed

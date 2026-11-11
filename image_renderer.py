@@ -2692,6 +2692,7 @@ def render_watch_list_card(
         user_font = ImageFont.truetype(str(font_file), 28)
         badge_font = ImageFont.truetype(str(font_file), 17)
         row_font = ImageFont.truetype(str(font_file), 28)
+        target_font = ImageFont.truetype(str(font_file), 28)
         small_font = ImageFont.truetype(str(font_file), 20)
         footer_font = ImageFont.truetype(str(font_file), 15)
     except Exception:
@@ -2824,10 +2825,10 @@ def render_watch_list_card(
                     )
                     draw.text((margin + 470, row_y + 24), quality_short, font=small_font, fill=quality_color)
                 draw.text(
-                    (margin + 620, row_y + 24),
-                    _fit_text(draw, str(item.get("target") or ""), small_font, 330),
-                    font=small_font,
-                    fill=blue,
+                    (margin + 610, row_y + 21),
+                    _fit_text(draw, str(item.get("target") or ""), target_font, 420),
+                    font=target_font,
+                    fill=body,
                 )
                 draw.text(
                     (width - margin - 26, row_y + 24),
@@ -2860,6 +2861,207 @@ def render_watch_list_card(
     out_dir.mkdir(parents=True, exist_ok=True)
     _remove_old_files(out_dir)
     target = out_dir / f"sz_watch_list_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
+    try:
+        canvas.convert("RGB").save(target, "PNG", compress_level=1)
+    except OSError:
+        return None
+    return target
+
+
+def render_watch_created_card(
+    view: dict[str, Any] | None,
+    *,
+    font_path: str | None = None,
+    icon_path: str | Path | None = None,
+    width: int = 1200,
+) -> Path | None:
+    """Render the confirmation for a newly created/updated price watch."""
+    if (
+        Image is None
+        or ImageDraw is None
+        or ImageFont is None
+        or not isinstance(view, dict)
+    ):
+        return None
+    font_file = find_cjk_font(font_path)
+    if font_file is None:
+        return None
+    display_file = _find_display_font(font_path) or font_file
+    try:
+        eyebrow_font = ImageFont.truetype(str(font_file), 14)
+        title_font = ImageFont.truetype(str(display_file), 42)
+        subtitle_font = ImageFont.truetype(str(font_file), 17)
+        item_font = ImageFont.truetype(str(font_file), 40)
+        chip_font = ImageFont.truetype(str(font_file), 15)
+        target_label_font = ImageFont.truetype(str(font_file), 15)
+        target_font = ImageFont.truetype(str(font_file), 44)
+        body_font = ImageFont.truetype(str(font_file), 18)
+        small_font = ImageFont.truetype(str(font_file), 14)
+        footer_font = ImageFont.truetype(str(font_file), 14)
+    except Exception:
+        return None
+
+    margin = 52
+    accent = "#54D6A1"
+    body = "#E7EDF5"
+    muted = "#8FA2B8"
+    blue = "#4EA8FF"
+    quality_color = str(view.get("quality_color") or accent)
+    height = 720
+    canvas = _card_canvas(width, height, alpha=242)
+    if canvas is None:
+        return None
+    draw = ImageDraw.Draw(canvas)
+
+    draw.text((margin, 28), "STALZONE / PRICE WATCH", font=eyebrow_font, fill=accent)
+    badge_text = "已生效"
+    badge_w = 82
+    draw.rounded_rectangle(
+        (width - margin - badge_w, 38, width - margin, 72),
+        radius=17,
+        fill=accent,
+    )
+    draw.text(
+        (width - margin - badge_w + 17, 45),
+        badge_text,
+        font=chip_font,
+        fill="#07120D",
+    )
+    draw.rounded_rectangle((margin, 64, margin + 6, 118), radius=3, fill=accent)
+    title = "关注已更新" if view.get("updated") else "关注已创建"
+    draw.text((margin + 22, 54), title, font=title_font, fill=body)
+    draw.text(
+        (margin + 24, 110),
+        f"神器价格关注 · {str(view.get('region') or 'EU').upper()} · 已开始监控",
+        font=subtitle_font,
+        fill="#A9BACD",
+    )
+
+    identity_y = 164
+    icon_size = 108
+    if icon_path is not None:
+        try:
+            _draw_candidate_icon_frame(canvas, draw, margin, identity_y, icon_size)
+            canvas.alpha_composite(
+                _load_normalized_icon(str(icon_path), icon_size),
+                (margin, identity_y),
+            )
+        except Exception:
+            icon_size = 0
+    text_x = margin + (icon_size + 24 if icon_size else 0)
+    draw.text(
+        (text_x, identity_y + 4),
+        _fit_text(
+            draw,
+            str(view.get("item_label") or ""),
+            item_font,
+            width - text_x - margin - 120,
+        ),
+        font=item_font,
+        fill=quality_color,
+    )
+    quality_short = str(view.get("quality_short") or "")
+    if quality_short and quality_short != "全部品质":
+        chip_w = int(chip_font.getlength(quality_short)) + 22
+        draw.rounded_rectangle(
+            (text_x, identity_y + 54, text_x + chip_w, identity_y + 84),
+            radius=8,
+            fill="#0C1621",
+            outline=quality_color,
+            width=1,
+        )
+        draw.text(
+            (text_x + 11, identity_y + 59),
+            quality_short,
+            font=chip_font,
+            fill=quality_color,
+        )
+
+    panel_y = 306
+    draw.rounded_rectangle(
+        (margin, panel_y, width - margin, panel_y + 126),
+        radius=16,
+        fill="#0A131D",
+        outline="#26384A",
+        width=1,
+    )
+    draw.text((margin + 24, panel_y + 18), "目标价", font=target_label_font, fill=muted)
+    draw.text(
+        (margin + 24, panel_y + 44),
+        _fit_text(draw, str(view.get("target") or ""), target_font, 560),
+        font=target_font,
+        fill=body,
+    )
+    draw.text(
+        (width - margin - 24, panel_y + 24),
+        "有效期至",
+        font=target_label_font,
+        fill=muted,
+        anchor="ra",
+    )
+    draw.text(
+        (width - margin - 24, panel_y + 50),
+        str(view.get("expiry") or "—"),
+        font=body_font,
+        fill="#C6D3E2",
+        anchor="ra",
+    )
+
+    rule_y = panel_y + 154
+    box_gap = 18
+    box_w = (width - margin * 2 - box_gap) // 2
+    rules = [
+        ("买断命中", "发送提醒后自动取消该条关注；没买到需重新关注", accent),
+        ("竞拍命中", "只发送提醒，不取消关注；同挂单不重复提醒", "#FFB454"),
+    ]
+    for index, (heading, text, color) in enumerate(rules):
+        x = margin + index * (box_w + box_gap)
+        draw.rounded_rectangle(
+            (x, rule_y, x + box_w, rule_y + 82),
+            radius=14,
+            fill="#0A131D",
+            outline="#26384A",
+            width=1,
+        )
+        draw.rounded_rectangle((x + 18, rule_y + 18, x + 24, rule_y + 64), radius=3, fill=color)
+        draw.text((x + 38, rule_y + 14), heading, font=body_font, fill=color)
+        draw.text(
+            (x + 38, rule_y + 44),
+            _fit_text(draw, text, small_font, box_w - 56),
+            font=small_font,
+            fill=muted,
+        )
+
+    note = str(view.get("auction_note") or "").strip()
+    if note:
+        draw.text(
+            (margin, rule_y + 108),
+            _fit_text(draw, note, small_font, width - margin * 2),
+            font=small_font,
+            fill="#FFB454",
+        )
+
+    draw.line((margin, height - 92, width - margin, height - 92), fill="#26384A", width=1)
+    draw.text(
+        (margin, height - 72),
+        "数据来自官方拍卖 API｜买断价可能已被抢购｜关注到期会自动清理",
+        font=footer_font,
+        fill=muted,
+    )
+    _draw_signature(
+        draw,
+        width,
+        height - 48,
+        font_path,
+        footer_font,
+        max_bottom=height,
+        more_tip=True,
+        tip_x=margin,
+    )
+    out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_old_files(out_dir)
+    target = out_dir / f"sz_watch_created_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.png"
     try:
         canvas.convert("RGB").save(target, "PNG", compress_level=1)
     except OSError:

@@ -126,6 +126,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_text_card,
         render_usage_card,
         render_watch_alert_card,
+        render_watch_created_card,
         render_watch_list_card,
         set_card_background,
         set_creator_watermark_hidden,
@@ -231,6 +232,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_text_card,
         render_usage_card,
         render_watch_alert_card,
+        render_watch_created_card,
         render_watch_list_card,
         set_card_background,
         set_creator_watermark_hidden,
@@ -282,7 +284,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.8"
+PLUGIN_VERSION = "1.14.9"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -410,6 +412,7 @@ class PluginReply:
     pass_view: dict[str, Any] | None = None
     appraisal_view: dict[str, Any] | None = None
     watch_list_view: dict[str, Any] | None = None
+    watch_created_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -2828,6 +2831,7 @@ class StalzonePlugin(Star):
         arsenal_view: dict[str, Any] | None = None,
         appraisal_view: dict[str, Any] | None = None,
         watch_list_view: dict[str, Any] | None = None,
+        watch_created_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -2854,6 +2858,13 @@ class StalzonePlugin(Star):
                     render_watch_list_card,
                     watch_list_view,
                     font_path=font_path,
+                )
+            elif sub == "watch" and watch_created_view:
+                path = await asyncio.to_thread(
+                    render_watch_created_card,
+                    watch_created_view,
+                    font_path=font_path,
+                    icon_path=icon_path,
                 )
             elif sub == "auction" and auction_view:
                 path = await asyncio.to_thread(
@@ -3496,11 +3507,38 @@ class StalzonePlugin(Star):
         self._save_watch_state()
         label = self._watch_target_label(entry)
         action = "已更新关注" if existing is not None else "已创建关注"
-        return (
-            f"{action}：{label}\n"
-            f"有效期至 {parse_time(entry['expires_at']).astimezone(CST).strftime('%m-%d %H:%M')} UTC+8。\n"
+        expiry = parse_time(entry["expires_at"])
+        expiry_text = (
+            expiry.astimezone(CST).strftime("%m-%d %H:%M")
+            if expiry is not None
+            else "—"
+        )
+        text = (
+            f"{action}：{label}{chr(10)}"
+            f"有效期至 {expiry_text} UTC+8。{chr(10)}"
             "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
             + auction_note
+        )
+        created_view = {
+            "updated": existing is not None,
+            "item_label": f"{self._watch_name(item_id)} +{level}",
+            "quality_short": watch_quality_short(
+                int(quality) if quality is not None else None
+            ),
+            "quality_color": watch_quality_color(
+                int(quality) if quality is not None else None
+            ),
+            "region": region.upper(),
+            "target": self._watch_target_text(entry),
+            "expiry": expiry_text,
+            "auction_note": auction_note.strip(),
+        }
+        return PluginReply(
+            text,
+            icon_url=item.get("icon"),
+            watch_created_view=created_view,
+            sub="watch",
+            item_meta=self._decorate(item),
         )
 
     def _watch_interval(self) -> int:
@@ -4861,6 +4899,7 @@ class StalzonePlugin(Star):
         arsenal_view = None
         appraisal_view = None
         watch_list_view = None
+        watch_created_view = None
         faction = None
         render_sub = sub
         try:
@@ -4880,6 +4919,7 @@ class StalzonePlugin(Star):
                 arsenal_view = result.arsenal_view
                 appraisal_view = result.appraisal_view
                 watch_list_view = result.watch_list_view
+                watch_created_view = result.watch_created_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -4928,6 +4968,7 @@ class StalzonePlugin(Star):
             arsenal_view,
             appraisal_view,
             watch_list_view,
+            watch_created_view,
         )
         if image is not None:
             try:
