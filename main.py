@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.11.10"
+PLUGIN_VERSION = "1.11.11"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -3952,6 +3952,41 @@ class StalzonePlugin(Star):
             )
             return None
 
+    async def _fetch_lunar_auction_history(
+        self, item_id: str, region: str, limit: int = 200
+    ) -> dict[str, Any] | None:
+        """Public Lunar fallback for items whose official history is empty."""
+        if not item_id:
+            return None
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=5.0),
+                follow_redirects=True,
+                headers={
+                    "User-Agent": f"astrbot-plugin-stalzone/{PLUGIN_VERSION}",
+                    "Accept": "application/json",
+                },
+            ) as client:
+                response = await client.get(
+                    "https://lunar-zone.com/web-api/auction/live/history",
+                    params={
+                        "item": item_id,
+                        "region": region,
+                        "limit": str(max(1, min(limit, 200))),
+                    },
+                )
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None
+        except Exception as exc:
+            logger.warning(
+                "STALZONE Lunar auction history fallback failed for %s: %s",
+                item_id,
+                exc,
+            )
+            return None
+
     async def _handle_auction_history(
         self,
         argument: str,
@@ -4349,6 +4384,29 @@ class StalzonePlugin(Star):
                         )
                     lots_payload = lots if isinstance(lots, dict) else {}
                     history_payload = history if isinstance(history, dict) else {}
+                    if not (
+                        isinstance(history_payload.get("prices"), list)
+                        and history_payload.get("prices")
+                    ):
+                        lunar_payload = await self._fetch_lunar_auction_history(
+                            item_id, client.region, limit=200
+                        )
+                        lunar_prices = (
+                            lunar_payload.get("prices")
+                            if isinstance(lunar_payload, dict)
+                            else None
+                        )
+                        if isinstance(lunar_prices, list) and lunar_prices:
+                            history_payload = {
+                                "total": lunar_payload.get("total")
+                                or len(lunar_prices),
+                                "prices": lunar_prices,
+                                "source": "lunar",
+                            }
+                            logger.info(
+                                "STALZONE auction history via Lunar fallback: %s",
+                                item_id,
+                            )
                     if not errors and not unavailable:
                         self._cache_set(
                             cache_key,

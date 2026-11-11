@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.11.11 - 2026-11-11
+
+### Fixed
+
+- Weapon Module and other items whose official auction history returns empty/400 now fall back to Lunar's public sale cache, labeled `Lunar 第三方成交缓存` in the card. The official item ID is sent directly (`1pyq`), so module history is visible again.
+- Official history is still preferred; only when it has no price rows does the fallback run. The 20-second auction cache stores the fallback result too.
+
+### Tests
+
+- Added a module-history fallback regression; 270 tests and 14 visual signatures pass.
+
 ## 1.11.10 - 2026-11-06
 
 ### Changed

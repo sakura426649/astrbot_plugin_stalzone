@@ -1737,6 +1737,8 @@ def build_auction_view(
         data_note = "历史数据：SC CORE 第三方存档｜价格随时变化｜时间为 UTC+8"
     elif source == "official+sc_core":
         data_note = "历史数据：官方 API + SC CORE 第三方存档｜价格为卢布｜时间为 UTC+8"
+    elif source == "lunar":
+        data_note = "历史数据：Lunar 第三方成交缓存｜价格为卢布｜时间为 UTC+8"
     else:
         data_note = "数据来自官方 API｜价格随时变化｜时间为 UTC+8（北京时间）"
 

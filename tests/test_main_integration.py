@@ -1570,6 +1570,41 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("品质 红", result.text)
         self.assertIn("SC CORE", result.text)
 
+    async def test_auction_history_falls_back_to_lunar(self):
+        class EmptyHistoryClient(FakeClient):
+            async def get_auction_history(self, item_id, limit=20, offset=0):
+                return {"total": 0, "prices": []}
+
+        plugin = self.make_plugin()
+        plugin._make_client = lambda: EmptyHistoryClient()  # type: ignore[assignment]
+
+        async def fake_lunar(item_id, region, limit=200):
+            self.assertEqual(item_id, "1pyq")
+            return {
+                "total": 6,
+                "prices": [
+                    {
+                        "amount": 1,
+                        "price": 100000 + index * 1000,
+                        "time": datetime.now(timezone.utc).isoformat(),
+                        "additional": {
+                            "qlt": index % 6,
+                            "attributes": [
+                                {"definitionId": "recoil_pre", "quality": index % 6},
+                                {"definitionId": "aiming_speed_modifier_pre", "quality": (index + 1) % 6},
+                                {"definitionId": "ergonomics_pre", "quality": (index + 2) % 6},
+                            ],
+                        },
+                    }
+                    for index in range(6)
+                ],
+            }
+
+        plugin._fetch_lunar_auction_history = fake_lunar  # type: ignore[assignment]
+        text = await collect(plugin, "/sz 拍卖 武器模块")
+        self.assertIn("Lunar 第三方成交缓存", text)
+        self.assertIn("垂直 聚焦 舒适", text)
+
     async def test_auction_premium_chinese_name(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: FakeClient()  # type: ignore[assignment]
@@ -1641,6 +1676,11 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     async def test_auction_no_data_includes_item_name(self):
         plugin = self.make_plugin()
         plugin._make_client = lambda: EmptyClient()  # type: ignore[assignment]
+
+        async def no_lunar(item_id, region, limit=200):
+            return None
+
+        plugin._fetch_lunar_auction_history = no_lunar  # type: ignore[assignment]
         text = await collect(plugin, "/sz 拍卖 原子")
         self.assertIn("未查到关于「原子」的成交记录", text)
         self.assertNotIn("稀有", text)
