@@ -528,6 +528,7 @@ def _watch_list_long() -> Path | None:
 def _watch_action() -> Path | None:
     view = {
         "title": "已取消关注",
+        "badge": "已取消",
         "accent": "#FF7A5C",
         "region": "EU",
         "item_label": "原子 +15",

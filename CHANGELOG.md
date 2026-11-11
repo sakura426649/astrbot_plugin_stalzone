@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.17 - 2026-11-11
+
+### Fixed
+
+- Watch action cards now use an action-specific top-right badge: cancel shows `已取消`, clear shows `已清空`, renew shows `已续期`, instead of the generic `已完成`.
+- Watch list quality chip shifted 8px left and 4px down (header moved with it) to visually align with the artifact name/target row.
+
 ## 1.14.16 - 2026-11-11
 
 ### Changed

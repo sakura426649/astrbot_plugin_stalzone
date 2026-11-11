@@ -2751,7 +2751,7 @@ def render_watch_list_card(
     columns = [
         ("#", margin + 20),
         ("物品", margin + 68),
-        ("品质", margin + 496),
+        ("品质", margin + 488),
         ("目标价", margin + 566),
     ]
     for label, x in columns:
@@ -2832,14 +2832,14 @@ def render_watch_list_card(
                 if quality_short and quality_short != "全部品质":
                     chip_w = int(quality_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (540, row_y + 19, 540 + chip_w, row_y + 49),
+                        (532, row_y + 23, 532 + chip_w, row_y + 53),
                         radius=8,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
                     draw.text(
-                        (549, row_y + 23),
+                        (541, row_y + 27),
                         quality_short,
                         font=quality_font,
                         fill=quality_color,
@@ -2934,8 +2934,8 @@ def render_watch_action_card(
         return None
     draw = ImageDraw.Draw(canvas)
     draw.text((margin, 28), "STALZONE / PRICE WATCH", font=eyebrow_font, fill=accent)
-    badge_text = "已完成"
-    badge_w = 82
+    badge_text = str(view.get("badge") or "已完成")
+    badge_w = max(82, int(badge_font.getlength(badge_text)) + 32)
     draw.rounded_rectangle(
         (width - margin - badge_w, 38, width - margin, 72),
         radius=17,

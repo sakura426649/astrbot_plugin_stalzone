@@ -286,7 +286,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.16"
+PLUGIN_VERSION = "1.14.17"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -3296,6 +3296,7 @@ class StalzonePlugin(Star):
         text = f"已清空 {removed} 条价格关注。"
         action_view = {
             "title": "已清空关注",
+            "badge": "已清空",
             "accent": "#FFB454",
             "region": self._region().upper(),
             "headline": f"{removed} 条关注已清空",
@@ -3344,6 +3345,7 @@ class StalzonePlugin(Star):
         item = self.item_index.get(item_id) or {}
         action_view = {
             "title": "已取消关注",
+            "badge": "已取消",
             "accent": "#FF7A5C",
             "region": str(sub.get("region") or self._region()).upper(),
             "item_label": f"{self._watch_name(item_id)} +{int(sub.get('level') or 0)}",
@@ -3391,6 +3393,7 @@ class StalzonePlugin(Star):
         item = self.item_index.get(item_id) or {}
         action_view = {
             "title": "已续期",
+            "badge": "已续期",
             "accent": "#54D6A1",
             "region": str(sub.get("region") or self._region()).upper(),
             "item_label": f"{self._watch_name(item_id)} +{int(sub.get('level') or 0)}",
