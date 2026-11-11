@@ -188,6 +188,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
             WatchEvent("/sz", user_id="admin", admin=True), "2"
         )
         self.assertIn("已取消关注", _text(allowed))
+        self.assertEqual(allowed.watch_action_view["title"], "已取消关注")
         self.assertEqual(len(plugin._watch_subs()), 1)
 
     async def test_buyout_alert_removes_subscription(self):

@@ -2693,7 +2693,8 @@ def render_watch_list_card(
         badge_font = ImageFont.truetype(str(font_file), 18)
         row_font = ImageFont.truetype(str(font_file), 30)
         target_font = ImageFont.truetype(str(font_file), 30)
-        small_font = ImageFont.truetype(str(font_file), 22)
+        quality_font = ImageFont.truetype(str(font_file), 19)
+        small_font = ImageFont.truetype(str(font_file), 20)
         footer_font = ImageFont.truetype(str(font_file), 15)
     except Exception:
         return None
@@ -2703,10 +2704,10 @@ def render_watch_list_card(
     body = "#E7EDF5"
     muted = "#8FA2B8"
     blue = "#4EA8FF"
-    block_header = 72
-    row_h = 100
-    block_gap = 18
-    header_h = 220
+    block_header = 56
+    row_h = 72
+    block_gap = 14
+    header_h = 270
     footer_h = 96
     total_blocks = 0
     for user in users:
@@ -2745,6 +2746,17 @@ def render_watch_list_card(
         )
         draw.text((chip_right - chip_w + 12, 52), text, font=chip_font, fill="#C6D3E2")
         chip_right -= chip_w + 8
+
+    columns = [
+        ("#", margin + 20),
+        ("物品", margin + 68),
+        ("品质", margin + 326),
+        ("目标价", margin + 426),
+    ]
+    for label, x in columns:
+        draw.text((x, 220), label, font=chip_font, fill=muted)
+    draw.text((width - margin, 220), "剩余", font=chip_font, fill=muted, anchor="ra")
+    draw.line((margin, 248, width - margin, 248), fill="#26384A", width=1)
 
     y = header_h
     if not users:
@@ -2806,36 +2818,46 @@ def render_watch_list_card(
             row_y = y + block_header
             for item in items:
                 quality_color = str(item.get("quality_color") or _quality_color(item.get("quality")))
-                draw.text((margin + 24, row_y + 18), f"#{item.get('index')}", font=small_font, fill=muted)
+                draw.text((margin + 20, row_y + 22), f"#{item.get('index')}", font=small_font, fill=muted)
                 draw.text(
-                    (margin + 80, row_y + 10),
-                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 300),
+                    (margin + 68, row_y + 16),
+                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 240),
                     font=row_font,
                     fill=quality_color,
                 )
                 quality_short = str(item.get("quality_short") or "")
                 if quality_short and quality_short != "全部品质":
-                    chip_w = int(small_font.getlength(quality_short)) + 18
+                    chip_w = int(quality_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (margin + 390, row_y + 13, margin + 390 + chip_w, row_y + 45),
-                        radius=7,
+                        (margin + 326, row_y + 19, margin + 326 + chip_w, row_y + 49),
+                        radius=8,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
-                    draw.text((margin + 399, row_y + 17), quality_short, font=small_font, fill=quality_color)
+                    draw.text(
+                        (margin + 335, row_y + 23),
+                        quality_short,
+                        font=quality_font,
+                        fill=quality_color,
+                    )
                 draw.text(
-                    (width - margin - 24, row_y + 18),
+                    (margin + 426, row_y + 18),
+                    _fit_text(
+                        draw,
+                        str(item.get("target_short") or item.get("target") or ""),
+                        target_font,
+                        300,
+                    ),
+                    font=target_font,
+                    fill=body,
+                )
+                draw.text(
+                    (width - margin, row_y + 22),
                     str(item.get("remaining") or ""),
                     font=small_font,
                     fill="#C6D3E2",
                     anchor="ra",
-                )
-                draw.text(
-                    (margin + 80, row_y + 56),
-                    _fit_text(draw, str(item.get("target") or ""), target_font, width - margin - 24 - (margin + 80)),
-                    font=target_font,
-                    fill=body,
                 )
                 row_y += row_h
             y += block_h + block_gap

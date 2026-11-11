@@ -286,7 +286,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.11"
+PLUGIN_VERSION = "1.14.12"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -3131,6 +3131,19 @@ class StalzonePlugin(Star):
             target = f"≤ {int(sub.get('threshold') or 0):,}"
         return target
 
+    def _watch_target_short(self, sub: dict[str, Any]) -> str:
+        if sub.get("mode") != "relative":
+            return f"≤ {int(sub.get('threshold') or 0):,}"
+        pct = int(sub.get("relative_pct") or 0)
+        target = f"-{pct}%"
+        median = sub.get("last_median")
+        if median:
+            resolved = int(median) * (100 - pct) / 100
+            if sub.get("cap"):
+                resolved = min(resolved, int(sub["cap"]))
+            target += f" ≈{int(resolved):,}"
+        return target
+
     def _watch_target_label(self, sub: dict[str, Any]) -> str:
         quality = sub.get("quality")
         level = int(sub.get("level") or 0)
@@ -3219,6 +3232,7 @@ class StalzonePlugin(Star):
                     ),
                     "level": level,
                     "target": self._watch_target_text(sub),
+                    "target_short": self._watch_target_short(sub),
                     "remaining": self._watch_remaining_label(sub),
                     "mode": str(sub.get("mode") or "absolute"),
                 }

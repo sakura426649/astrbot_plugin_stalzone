@@ -581,6 +581,7 @@ def _watch_list() -> Path | None:
                         "quality_short": "金",
                         "quality_color": "#FFD166",
                         "target": "低于中位 20%（≈6,000）",
+                        "target_short": "-20% ≈6,000",
                         "remaining": "剩 5 天",
                     },
                     {

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.12 - 2026-11-11
+
+### Changed
+
+- Watch list layout rewritten as a clean table under each user block: one header row (`# / 物品 / 品质 / 目标价 / 剩余`), one line per subscription, fixed columns, no more scattered two-line rows.
+- Target price uses white 30px, exactly the same size as the artifact name; relative thresholds use a compact `-20% ≈6,000` form so they fit without truncation.
+- Kept the 960px canvas so QQ does not shrink the card into unreadable text.
+
+### Tests
+
+- Added action-view assertion; 302 tests and 21 visual signatures pass.
+
 ## 1.14.11 - 2026-11-11
 
 ### Changed

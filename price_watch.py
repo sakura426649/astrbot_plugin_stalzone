@@ -480,7 +480,7 @@ def format_watch_list(view: dict[str, Any]) -> str:
                     continue
                 rows.append(
                     f"#{item.get('index')} {item.get('item_label')}"
-                    f"｜{item.get('target')}｜{item.get('remaining')}"
+                    f"｜{item.get('target_short') or item.get('target')}｜{item.get('remaining')}"
                 )
             if rows:
                 sections.append((name, rows))
