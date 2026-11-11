@@ -103,6 +103,10 @@ def parse_watch_query(argument: str) -> dict[str, Any]:
         quality = QUALITY_ALIASES.get(tokens[-1].lower())
         if quality is not None:
             tokens.pop()
+    if quality is None:
+        raise WatchQueryError(
+            "神器关注必须写品质，例如：/sz 关注 原子 红 +15 8000"
+        )
     item = " ".join(tokens).strip()
     if not item:
         raise WatchQueryError("请填写要关注的神器名或 ID。")

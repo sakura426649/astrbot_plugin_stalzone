@@ -2746,7 +2746,7 @@ def render_watch_list_card(
         draw.text((margin + 24, y + 30), "本会话还没有神器价格关注", font=user_font, fill=body)
         draw.text(
             (margin + 26, y + 74),
-            "发送 /sz 关注 <神器> +等级 <目标价> 创建第一条关注。",
+            "发送 /sz 关注 <神器> <品质> +等级 <目标价> 创建第一条关注。",
             font=small_font,
             fill=muted,
         )
@@ -3491,7 +3491,7 @@ def render_help_card(
         (
             "价格关注",
             "PRICE WATCH",
-            "/sz 关注 <神器> +等级 <目标价>",
+            "/sz 关注 <神器> <品质> +等级 <目标价>",
             ["买断命中提醒后取消；竞拍只提醒", "关注列表 /sz 关注列表"],
             "#54D6A1",
         ),

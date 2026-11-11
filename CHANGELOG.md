@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.5 - 2026-11-11
+
+### Changed
+
+- Price watch now requires a quality: `/sz 关注 <神器> <品质> +等级 <目标价|-N%> [上限]`. Quality is no longer optional because the same artifact at the same level has very different prices across qualities; allowing an all-quality threshold made alerts ambiguous. Existing subscriptions created with an omitted quality remain readable and continue to poll by each lot's own quality.
+
 ## 1.14.4 - 2026-11-11
 
 ### Changed

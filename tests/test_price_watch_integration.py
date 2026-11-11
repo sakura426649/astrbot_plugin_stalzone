@@ -93,13 +93,13 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_update_and_per_user_cap(self):
         plugin = self.make_plugin()
-        created = await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 8000")
+        created = await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
         self.assertIn("已创建关注", created)
-        second = await plugin._handle_watch(WatchEvent("/sz"), "ljn2 +15 8000")
+        second = await plugin._handle_watch(WatchEvent("/sz"), "ljn2 红 +15 8000")
         self.assertIn("已创建关注", second)
-        third = await plugin._handle_watch(WatchEvent("/sz"), "9nd0 +15 8000")
+        third = await plugin._handle_watch(WatchEvent("/sz"), "9nd0 红 +15 8000")
         self.assertIn("最多关注 2 种", third)
-        updated = await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 7000")
+        updated = await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 7000")
         self.assertIn("已更新关注", updated)
         self.assertEqual(len(plugin._watch_subs()), 2)
 
@@ -109,26 +109,26 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for index, item_id in enumerate(ids):
             user = f"u{index // 2 + 1}"
             result = await plugin._handle_watch(
-                WatchEvent("/sz", user_id=user), f"{item_id} +15 8000"
+                WatchEvent("/sz", user_id=user), f"{item_id} 红 +15 8000"
             )
             self.assertIn("已创建关注", result)
         sixth = await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u9"), "zy7y +15 8000"
+            WatchEvent("/sz", user_id="u9"), "zy7y 红 +15 8000"
         )
         self.assertIn("本会话最多", sixth)
         # Another user can still watch one of the five existing items.
         shared = await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u9"), "wg53 +15 7000"
+            WatchEvent("/sz", user_id="u9"), "wg53 红 +15 7000"
         )
         self.assertIn("已创建关注", shared)
 
     async def test_list_pins_own_and_cancel_permissions(self):
         plugin = self.make_plugin()
         await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u1", name="Alice"), "wg53 +15 8000"
+            WatchEvent("/sz", user_id="u1", name="Alice"), "wg53 红 +15 8000"
         )
         await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u2", name="Bob"), "ljn2 +15 8000"
+            WatchEvent("/sz", user_id="u2", name="Bob"), "ljn2 红 +15 8000"
         )
         reply = await plugin._handle_watch_list(
             WatchEvent("/sz", user_id="u2", name="Bob")
@@ -149,7 +149,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_buyout_alert_removes_subscription(self):
         plugin = self.make_plugin()
-        await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 8000")
+        await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
         now = datetime.now(timezone.utc)
         WatchClient.lots = [
             {
@@ -174,7 +174,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_buyout_alert_keeps_subscription(self):
         plugin = self.make_plugin()
-        await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 8000")
+        await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
         now = datetime.now(timezone.utc)
         WatchClient.lots = [
             {
@@ -196,7 +196,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_auction_alert_keeps_and_new_lot_alerts_again(self):
         plugin = self.make_plugin()
-        await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 8000")
+        await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
         now = datetime.now(timezone.utc)
         WatchClient.lots = [
             {
@@ -300,7 +300,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
             },
         ]
         created = await plugin._handle_watch(
-            WatchEvent("/sz"), "wg53 +15 -20%"
+            WatchEvent("/sz"), "wg53 红 +15 -20%"
         )
         self.assertIn("已创建关注", created)
         WatchClient.lots = [
@@ -325,7 +325,7 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_expired_subscription_is_removed_after_notice(self):
         plugin = self.make_plugin()
-        await plugin._handle_watch(WatchEvent("/sz"), "wg53 +15 8000")
+        await plugin._handle_watch(WatchEvent("/sz"), "wg53 红 +15 8000")
         key = next(iter(plugin._watch_subs()))
         plugin._watch_subs()[key]["expires_at"] = (
             datetime.now(timezone.utc) - timedelta(minutes=1)
@@ -344,10 +344,10 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_shared_query_per_subscription_thresholds(self):
         plugin = self.make_plugin()
         await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u1", name="Alice"), "wg53 +15 8000"
+            WatchEvent("/sz", user_id="u1", name="Alice"), "wg53 红 +15 8000"
         )
         await plugin._handle_watch(
-            WatchEvent("/sz", user_id="u2", name="Bob"), "wg53 +15 7000"
+            WatchEvent("/sz", user_id="u2", name="Bob"), "wg53 红 +15 7000"
         )
         now = datetime.now(timezone.utc)
         WatchClient.lots = [

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.4-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.5-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -184,12 +184,12 @@ The official history endpoint returns at most **200 records per request**. The p
 
 ## Artifact price watch
 
-`/sz 关注 <artifact> [quality] +level <price|-N%> [cap]` watches artifact prices.
+`/sz 关注 <artifact> <quality> +level <price|-N%> [cap]` watches artifact prices.
 
 - `8000`: alert when the buyout unit price is at most 8,000;
 - `-20%`: alert when it is 20% below the 3-day median for the same level/quality;
 - `-20% 12000`: relative threshold with an absolute cap;
-- level is required; quality is optional;
+- level and quality are required;
 - each user has at most 2 artifact types and each session at most 5; re-sending the same item updates the rule;
 - users watching the same artifact share one API fetch per cycle, while thresholds, quality/level and dedupe state stay per user;
 - every 2 minutes the scheduler polls at most 5 distinct artifacts and rotates fairly if there are more;

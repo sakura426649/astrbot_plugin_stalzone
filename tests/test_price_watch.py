@@ -31,10 +31,10 @@ class WatchParserTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            parse_watch_query("原子 +15 -20%"),
+            parse_watch_query("原子 红 +15 -20%"),
             {
                 "item": "原子",
-                "quality": None,
+                "quality": 4,
                 "level": 15,
                 "mode": "relative",
                 "threshold": None,
@@ -43,7 +43,7 @@ class WatchParserTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            parse_watch_query("原子 +15 -20% 12000")["cap"], 12000
+            parse_watch_query("原子 红 +15 -20% 12000")["cap"], 12000
         )
 
     def test_parse_requires_level(self):
@@ -53,6 +53,8 @@ class WatchParserTests(unittest.TestCase):
             parse_watch_query("原子 +16 8000")
         with self.assertRaises(WatchQueryError):
             parse_watch_query("原子 +15")
+        with self.assertRaises(WatchQueryError):
+            parse_watch_query("原子 +15 8000")
         with self.assertRaises(WatchQueryError):
             parse_watch_query("+15 8000")
 
