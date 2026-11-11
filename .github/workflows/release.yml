@@ -61,7 +61,9 @@ jobs:
 
             完整变更见仓库中的 CHANGELOG.md。
 
-            - `astrbot_plugin_stalzone.zip`：插件市场用，控制在 16 MiB 内，内置 826 个常用图标。
-            - `astrbot_plugin_stalzone_full.zip`：GitHub 用户用，内置全部 2,600 个图标，可直接安装，无需再补图标。
+            - `astrbot_plugin_stalzone.zip`：插件市场用，控制在 16 MiB 内，内置 828 个官方常用图标。
+            - `astrbot_plugin_stalzone_full.zip`：GitHub 用户用，内置全部 2,621 个官方图标，可直接安装，无需再补图标。
+
+            物品 ID、名称、品质、类别与图标来自 EXBO 官方物品库（`EXBO-Studio/stalzone-database`），中文名由社区 overlay 维护。
 
             如果使用市场小包，也可从 `icons-full` 分支单独下载完整图标：`https://github.com/sakura426649/astrbot_plugin_stalzone/archive/refs/heads/icons-full.zip`，把 `item_icons/` 解压到 `data/plugin_data/astrbot_plugin_stalzone/` 后重载插件。
