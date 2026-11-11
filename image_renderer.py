@@ -2750,8 +2750,8 @@ def render_watch_list_card(
     columns = [
         ("#", margin + 20),
         ("物品", margin + 68),
-        ("品质", margin + 326),
-        ("目标价", margin + 426),
+        ("品质", margin + 496),
+        ("目标价", margin + 566),
     ]
     for label, x in columns:
         draw.text((x, 220), label, font=chip_font, fill=muted)
@@ -2821,7 +2821,7 @@ def render_watch_list_card(
                 draw.text((margin + 20, row_y + 22), f"#{item.get('index')}", font=small_font, fill=muted)
                 draw.text(
                     (margin + 68, row_y + 16),
-                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 240),
+                    _fit_text(draw, str(item.get("item_label") or ""), row_font, 420),
                     font=row_font,
                     fill=quality_color,
                 )
@@ -2829,25 +2829,25 @@ def render_watch_list_card(
                 if quality_short and quality_short != "全部品质":
                     chip_w = int(quality_font.getlength(quality_short)) + 18
                     draw.rounded_rectangle(
-                        (margin + 326, row_y + 19, margin + 326 + chip_w, row_y + 49),
+                        (margin + 540, row_y + 19, margin + 540 + chip_w, row_y + 49),
                         radius=8,
                         fill="#0C1621",
                         outline=quality_color,
                         width=1,
                     )
                     draw.text(
-                        (margin + 335, row_y + 23),
+                        (margin + 549, row_y + 23),
                         quality_short,
                         font=quality_font,
                         fill=quality_color,
                     )
                 draw.text(
-                    (margin + 426, row_y + 18),
+                    (margin + 610, row_y + 18),
                     _fit_text(
                         draw,
                         str(item.get("target_short") or item.get("target") or ""),
                         target_font,
-                        300,
+                        260,
                     ),
                     font=target_font,
                     fill=body,

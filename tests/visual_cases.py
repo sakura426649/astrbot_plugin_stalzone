@@ -498,6 +498,33 @@ def _appraisal_high() -> Path | None:
     return _appraisal_range(15000)
 
 
+def _watch_list_long() -> Path | None:
+    view = {
+        "region": "EU",
+        "session_items": 1,
+        "session_limit": 5,
+        "global_items": 1,
+        "refresh_minutes": 2,
+        "users": [
+            {
+                "user_name": "Sakura",
+                "own": True,
+                "items": [
+                    {
+                        "index": 1,
+                        "item_label": "伊里奇 灯泡(Ilyich Lamp) +15",
+                        "quality_short": "独特",
+                        "quality_color": "#FF5C5C",
+                        "target_short": "≤ 8,000",
+                        "remaining": "剩 6 天",
+                    }
+                ],
+            }
+        ],
+    }
+    return render_watch_list_card(view)
+
+
 def _watch_action() -> Path | None:
     view = {
         "title": "已取消关注",
@@ -641,6 +668,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "appraisal": _appraisal,
     "appraisal_low": _appraisal_low,
     "appraisal_high": _appraisal_high,
+    "watch_list_long": _watch_list_long,
     "watch_action": _watch_action,
     "watch_created": _watch_created,
     "watch_alert": _watch_alert,
