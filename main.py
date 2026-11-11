@@ -238,7 +238,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.12.1"
+PLUGIN_VERSION = "1.12.2"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -3634,10 +3634,20 @@ class StalzonePlugin(Star):
             event._stalzone_sz_seen = True
         except Exception:
             pass
-        sub, arg = parse_command(event.message_str)
+        raw_text = str(getattr(event, "message_str", "") or "")
+        if not raw_text:
+            # Some adapters/filters leave message_str empty; the raw message
+            # object still carries the text.
+            message_obj = getattr(event, "message_obj", None)
+            raw_text = str(getattr(message_obj, "message_str", "") or "")
+        sub, arg = parse_command(raw_text)
         if sub.isdigit():
             # Shortcut: ``sz 1`` is equivalent to ``sz 候选 1``.
             sub, arg = "candidate", sub
+        if sub == "emission":
+            logger.info(
+                "STALZONE emission command raw=%r arg=%r", raw_text, arg
+            )
         if sub == "check_version":
             yield event.plain_result(await self._handle_version_check())
             return
@@ -4750,13 +4760,14 @@ class StalzonePlugin(Star):
 
     async def _handle_emission(self, argument: str = "") -> str | PluginReply:
         token = _clean_region_argument(argument)
-        if token:
-            if token not in VALID_REGIONS:
-                logger.info("STALZONE emission ignored region token %r", token)
-                return USAGE["emission"]
-            region = token
-        else:
-            region = None
+        if token and token not in VALID_REGIONS:
+            # The only optional argument is a region. Clients may echo the
+            # subcommand and models may hallucinate a value, so a non-region
+            # token must not block the query with the usage card; fall back
+            # to the configured default region instead.
+            logger.info("STALZONE emission ignored non-region argument %r", token)
+            token = ""
+        region = token or None
         client_factory = self._make_client
         client = client_factory(region=region) if region else client_factory()
         async with client as client:

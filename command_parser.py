@@ -6,6 +6,24 @@ import re
 
 COMMAND_PREFIX_RE = re.compile(r"^[/!！.#]+\s*")
 COMMAND_NAME_RE = re.compile(r"^(?:sz|stalzone)(?:@\S+)?(?:\s+|$)", re.IGNORECASE)
+# Some AstrBot adapters/plugins append a message-id marker to every incoming
+# message, e.g. `sz fb [msg_id:01H...]`.  It is transport metadata, not user
+# input, and must not become an item name or an emission region.
+MSG_ID_MARKER_RE = re.compile(
+    r"\s*\[\s*msg[_-]?id\s*[:=]\s*[^\[\]]*\]\s*$", re.IGNORECASE
+)
+MSG_ID_MARKER_ANY_RE = re.compile(
+    r"\s*\[\s*msg[_-]?id\s*[:=]\s*[^\[\]]*\]\s*", re.IGNORECASE
+)
+
+
+def strip_message_id_marker(text: str) -> str:
+    """Remove a trailing transport message-id marker from user text."""
+    value = MSG_ID_MARKER_RE.sub("", str(text or "")).strip()
+    if MSG_ID_MARKER_ANY_RE.search(value):
+        value = MSG_ID_MARKER_ANY_RE.sub(" ", value)
+        value = " ".join(value.split())
+    return value
 
 ALIASES = {
     "help": "help",
@@ -107,6 +125,7 @@ def parse_command(message: str | None) -> tuple[str, str]:
     command name (``/sz auction y1q9``) or only the arguments (``auction y1q9``).
     """
     text = (message or "").strip()
+    text = strip_message_id_marker(text)
     text = COMMAND_PREFIX_RE.sub("", text)
     text = COMMAND_NAME_RE.sub("", text).strip()
     if not text:

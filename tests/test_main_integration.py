@@ -2005,8 +2005,18 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         invisible = await collect(plugin, "/sz 风暴 \u200b")
         self.assertIn("距离上次风暴", invisible)
 
-        usage = await collect(plugin, "/sz 风暴 xx")
-        self.assertIn("用法：/sz emission", usage)
+        # Invalid region values fall back to the configured default instead of
+        # blocking the query with the usage card.
+        fallback = await collect(plugin, "/sz 风暴 xx")
+        self.assertIn("距离上次风暴", fallback)
+        self.assertEqual(EmissionRegionClient.last_region, "eu")
+
+        # Prefixless `sz fb` is the alias form the bug report used.
+        bare = [
+            item async for item in plugin.sz_bare(FakeEvent("sz fb"))
+        ]
+        self.assertTrue(bare)
+        self.assertIn("距离上次风暴", bare[0][1])
 
     async def test_llm_emission_ignores_non_region_value(self):
         plugin = self.make_plugin()

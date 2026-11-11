@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.12.2 - 2026-11-11
+
+### Fixed
+
+- Fixed the real cause of `/sz fb`/`/sz 风暴` showing the usage card: the AstrBot adapter appends a transport marker such as `[msg_id:01H...]` to every incoming message. That marker was parsed as the emission region (and polluted every other query argument). `parse_command` now strips trailing `[msg_id:...]` / `[MSG_ID=...]` markers before parsing, so item names, player names, clan names, auction arguments, pass numbers and region tokens stay clean.
+- `/sz fb` and `/sz 风暴` no longer show the usage card for a non-region argument. The region is optional, so an unrecognized token now falls back to the configured default region and is logged instead of blocking the query.
+- `_dispatch_sz` now falls back to `event.message_obj.message_str` when an adapter leaves `event.message_str` empty.
+- Removed the remaining emission usage-card path; the storm query always runs.
+
+### Tests
+
+- Added parser coverage for `[msg_id:...]` markers on auction/player/item/storm commands; 274 tests and 14 visual signatures pass.
+
 ## 1.12.1 - 2026-11-11
 
 ### Fixed

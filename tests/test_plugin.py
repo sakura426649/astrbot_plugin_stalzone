@@ -2169,6 +2169,10 @@ class ParserTests(unittest.TestCase):
             "/sz 军械库": ("arsenal", ""),
             "/sz arsenal": ("arsenal", ""),
             "/sz 阿森纳": ("arsenal", ""),
+            "/sz fb [msg_id:01HXYZABC]": ("emission", ""),
+            "sz 拍卖 原子 [msg_id:01HXYZABC]": ("auction", "原子"),
+            "sz 玩家 Sakura [msg_id=abc123]": ("player", "Sakura"),
+            "/sz 物品 寒冰 [MSG_ID:01HXYZABC]": ("item", "寒冰"),
         }
         for raw, expected in cases.items():
             self.assertEqual(parse_command(raw), expected, raw)
