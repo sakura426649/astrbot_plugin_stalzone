@@ -143,7 +143,7 @@ The automatic card shares the doomsday emission style but leads with "风暴已�
 ## Data notes
 
 - Item IDs, English/Russian names, quality colors, categories and icons come from the **official [EXBO item database](https://github.com/EXBO-Studio/stalzone-database)**, which updates with game releases. Item stats/descriptions are supplemented from the STALZONE Wiki.
-- Item Chinese names come from the **community-maintained `zh.lang`** file, not an official localization. The game has no official Chinese support; translations may lag behind new items. They are maintained in `translations/zh_items.json`; English fallback and manual overrides are supported.
+- Item Chinese names come from the **community-maintained `zh.lang`** file, not an official localization. The game has no official Chinese support; translations may lag behind new items. They are maintained in `translations/zh_items.json` for source releases; players can override any name locally in `item_name_overrides.json`.
 - Balance history comes from official Steam announcements.
 - Lunar and SC CORE are third-party sources and are labeled in output.
 - PvP score is an estimate based on the public StalzoneHQ formula, not an official score.
@@ -223,7 +223,18 @@ The official history endpoint returns at most **200 records per request**. The p
 - The command only updates the local installation/data directory. It never asks for or uses GitHub write access, and never pushes a repository; repository synchronization is a maintainer git/CI step.
 - The official database has no Chinese; this command also does not update `item_details.json` stats/descriptions.
 
-See [`docs/official-item-database.md`](docs/official-item-database.md) for the manual workflow and verification commands.
+### Manual localization for players
+
+No source checkout or `tools/` needed:
+
+1. An admin sends `/sz 物品库更新` (or `/sz 物品库检查`) and waits for completion.
+2. Open `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`.
+3. It is a complete JSONC table: existing Chinese names are pre-filled and new untranslated entries are blank. Every line ends with `// en: English name | key: official key`.
+4. Edit any `"item_id": "Chinese name"` value and save as UTF-8; English-only items such as AK-308 can stay blank.
+5. Reload the STALZONE plugin in the AstrBot WebUI (or restart the bot); changes apply immediately.
+6. Later update runs preserve your values and explicit blanks.
+
+`item_name_overrides.json` is JSONC: the `//` comments are for humans and are ignored by the loader. Strict JSON validators may complain about the comments; that is expected. See [`docs/official-item-database.md`](docs/official-item-database.md) for the maintainer workflow and verification commands.
 
 ## Development
 

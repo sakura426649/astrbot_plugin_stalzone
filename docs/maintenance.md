@@ -71,7 +71,7 @@ https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1818450&count=20
 
 ## 3. 官方新增神器/物品
 
-物品 ID、英文/俄文名、品质色、类别和图标以 **EXBO 官方物品库**为准（<https://github.com/EXBO-Studio/stalzone-database>）。中文名由本项目维护在 `translations/zh_items.json`。完整说明见 [`official-item-database.md`](official-item-database.md)。
+物品 ID、英文/俄文名、品质色、类别和图标以 **EXBO 官方物品库**为准（<https://github.com/EXBO-Studio/stalzone-database>）。源码默认中文名由本项目维护在 `translations/zh_items.json`。普通玩家不需要改源码：安装后运行 `/sz 物品库更新`，编辑数据目录的 `item_name_overrides.json`（完整 JSONC 汉化表，已有中文预填、每行附 en/key 注释）即可覆盖任意中文。完整说明见 [`official-item-database.md`](official-item-database.md)。
 
 维护流程：
 
@@ -88,7 +88,7 @@ python tools/sync_official_items.py --source ../stalzone-official-db \
     --sync-icons item_icons
 ```
 
-3. 查看输出里的未翻译数量；新物品若回退成英文，在 `translations/zh_items.json` 的 `names` 中补 `{物品ID: 中文名}` 后重新运行第 2 步。社区 `zh.lang` 仍是主要译名来源，但需要人工校对。
+3. 查看输出里的未翻译数量；新物品若回退成英文，在 `translations/zh_items.json` 的 `names` 中补 `{物品ID: 中文名}` 后重新运行第 2 步。社区 `zh.lang` 仍是主要译名来源，但需要人工校对。发布后玩家可自行在 `item_name_overrides.json` 覆盖，不必等维护者重新发版。
 4. 生成完整图标目录（官方图标优先 + 旧补充条目图标）：
 
 ```bash

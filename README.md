@@ -125,7 +125,7 @@
 | `/sz 关注列表 [页码]` / `/sz 取消关注 <序号>` | 查看当前会话所有关注（自己的置顶，每页最多 8 条关注）；取消自己的关注，管理员可取消本群其他人的 | `/sz 关注列表 2`；`/sz 取消关注 2` |
 | `/sz 军械库` / `/sz arsenal` / `/sz 阿森纳` | 军械库收购清单图片；后台空闲刷新价格快照 | `/sz 军械库` |
 | `/sz 版本` / `/sz 检查更新` / `/sz 检查版本` | 只检查 GitHub 最新版本，不执行更新，无管理员限制 | `/sz 版本` |
-| `/sz 检查` / `/sz 物品库检查` / `/sz 物品库更新` | 先补齐项目 full 图标，再用 EXBO 官方库补全索引/图标；保留现有汉化，未翻译条目写入占位文件（管理员） | `/sz 物品库检查` |
+| `/sz 检查` / `/sz 物品库检查` / `/sz 物品库更新` | 先补齐项目 full 图标，再用 EXBO 官方库补全索引/图标；全部条目导出为可编辑 JSONC 汉化表（已有中文预填） | `/sz 物品库检查` |
 | `/sz 风暴提醒 白名单/黑名单 <群号>` | 修改自动风暴提醒白名单，与 WebUI 配置共享 | `/sz 风暴提醒 白名单 123456789` |
 | `/sz 区服切换 <ru/eu/na/sea/nea>` | 修改默认查询区服 | `/sz 区服切换 eu` |
 | `/sz 拍卖显示模式 <0/1/聚合/全部>` | 切换拍卖聚合/全部显示 | `/sz 拍卖显示模式 1` |
@@ -246,7 +246,18 @@
 - 指令只更新当前安装目录/数据目录，**不会也不需要 GitHub 写权限，不会自动 push 仓库**；要同步 GitHub 请由维护者用 git/CI 提交本地生成的文件；
 - 官方库没有中文，中文仍由社区/使用者维护；此指令不会更新 `item_details.json` 的属性与描述。
 
-详细维护流程和手工核对方式见 [`docs/official-item-database.md`](docs/official-item-database.md)。
+### 玩家手动修改汉化
+
+不需要源码或 `tools/`：
+
+1. 管理员发送 `/sz 物品库更新`（`/sz 物品库检查` 也行），等它显示完成；
+2. 打开 `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`；
+3. 这是完整 JSONC 汉化表：已有中文已经预填，官方新增未翻译项为空白；每行后面有 `// en: 英文名 | key: 官方键值`；
+4. 直接改任意 `"物品ID": "中文名"`，保存 UTF-8；本身是英文的物品（如 AK-308）保持空白即可；
+5. 在 AstrBot WebUI 重载 STALZONE 插件，或重启 Bot，新的中文立即生效；
+6. 以后再运行更新指令会保留你填过的值和空白，不会覆盖你的修改。
+
+注意：`item_name_overrides.json` 是 JSONC，`//` 注释是给玩家看的，插件读取时会自动忽略；严格 JSON 校验器可能提示注释不合法，这是正常的。详细维护流程和手工核对方式见 [`docs/official-item-database.md`](docs/official-item-database.md)。
 
 ## 军械库收购清单
 
@@ -514,7 +525,7 @@ python tests/demo_smoke.py
 | [SC CORE](https://sccore.ru/) | 可选的第三方成交历史补全 |
 | [AstrBot](https://github.com/AstrBotDevs/AstrBot) | 插件运行框架 |
 
-物品 ID、英文/俄文名、品质色、类别和图标来自 [EXBO 官方物品库](https://github.com/EXBO-Studio/stalzone-database)，随游戏版本更新；物品属性/描述补充自 STALZONE WIKI。中文名来自玩家社区维护的 `zh.lang` 汉化文件与人工校对（**非官方**；游戏官方不支持中文，翻译可能滞后于新物品），由 `translations/zh_items.json` 维护。平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
+物品 ID、英文/俄文名、品质色、类别和图标来自 [EXBO 官方物品库](https://github.com/EXBO-Studio/stalzone-database)，随游戏版本更新；物品属性/描述补充自 STALZONE WIKI。中文名来自玩家社区维护的 `zh.lang` 汉化文件与人工校对（**非官方**；游戏官方不支持中文，翻译可能滞后于新物品）；源码默认表在 `translations/zh_items.json`，玩家可在数据目录 `item_name_overrides.json` 中直接覆盖。平衡历史来自官方 Steam 公告。Playfair Display Italic 字体按 SIL Open Font License 1.1 随包分发，许可证见 `assets/PlayfairDisplay-OFL.txt`。
 
 > 本项目是非官方工具，与 EXBO / STALZONE 没有隶属关系。游戏名称、图标和数据的版权归各自权利人所有；第三方数据仅作补充并在输出中标注。
 

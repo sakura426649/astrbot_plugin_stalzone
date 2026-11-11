@@ -7,7 +7,7 @@
 - 图标：`ru/icons/<类别>/<物品ID>.png`
 - 官方数据库会随游戏版本更新，物品 ID、英文/俄文名、品质色、类别和图标都由 EXBO 维护。
 
-官方数据库不包含中文。中文名继续由本项目维护在 `translations/zh_items.json`（来源：社区 `zh.lang` + 人工校对），同步时会自动套用；官方新增、尚未翻译的物品先回退英文名，之后在 overlay 里补译即可。
+官方数据库不包含中文。源码默认中文名继续由本项目维护在 `translations/zh_items.json`（来源：社区 `zh.lang` + 人工校对），同步时会自动套用；官方新增、尚未翻译的物品先回退英文名。玩家安装后可直接编辑数据目录的 `item_name_overrides.json`，无需改源码；具体流程见下文「玩家手动修改汉化」。
 
 当前内置快照：2026-11-11 抓取，官方 commit `5dd1cc97f2c1`，2,367 个基础物品、2,361 个官方图标（6 个界面占位物品无图标）；`item_index.json` 的 `official_commit` 记录同一版本。
 
@@ -56,9 +56,41 @@ python tools/build_package.py --output-dir .. \
 
 `fetch_official_database.py` 会把 commit、文件数和下载时间写入 `official_snapshot.json`，便于复现。网络受限时它会自动尝试 `gh-proxy.com` / `v4.gh-proxy.org`。
 
-## 插件停更后，用户自行更新与核对
+## 玩家手动修改汉化（推荐，无需源码）
 
-发布包通常不包含 `tools/`（源码仓库才有），所以不要直接在已安装插件目录里找脚本。请先取得**同版本的源码仓库**（`git clone` 或 GitHub 的源码归档，不是 Release 里的插件 zip），在源码目录运行工具，再把生成物复制回已安装插件。
+普通使用者不需要源码仓库或 `tools/`，直接使用运行时指令：
+
+1. 管理员发送 `/sz 物品库更新`（`/sz 物品库检查` 同义），等待检查完成；
+2. 打开插件数据目录：
+   `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`
+3. 文件是**完整汉化表**：所有物品都会列出，已有中文自动预填，未翻译/英文-only 条目为空；每行后面有 `// en: 官方英文名 | key: 官方本地化键`；
+4. 直接修改任意 `"物品ID": "中文名"`，保存为 UTF-8；
+5. 在 AstrBot WebUI 重载 STALZONE 插件，或重启 Bot；新中文立即生效；
+6. 再次运行更新指令会保留用户已填写的值和显式空白。
+
+示例：
+
+```jsonc
+{
+  // 物品 ID -> 中文名；留空表示使用内置/英文名
+  // en: 官方英文名；key: 官方本地化键
+  "dmjdn": "AK-308",  // en: AK-308 | key: item.wpn.ak308.name
+  "food1": "食物",     // en: Food | key: item.food.food1.name
+  "abc12": ""          // en: New Gun | key: item.wpn.abc12.name
+}
+```
+
+说明：
+
+- 文件是 **JSONC**，`//` 和 `/* */` 注释会被插件读取器自动忽略；用严格 JSON 工具校验可能提示注释不合法，这是正常的；
+- 本身是英文、无需翻译的物品（如 `AK-308`）保持空白即可；
+- 删除某个覆盖条目并重载，会回退到内置索引里的中文；留空同样使用内置中文/英文；
+- 该文件在数据目录，不会被插件更新覆盖；请勿修改源码包里的 `translations/zh_items.json` 作为玩家日常汉化；
+- 运行时指令只改本机，**不持有 GitHub 写 token，也不会自动 push**；需要同步仓库时由维护者提交。
+
+## 停更后的源码维护流程（维护者/无指令时）
+
+发布包通常不包含 `tools/`（源码仓库才有），所以不要直接在已安装插件目录里找脚本。只有维护者需要重新生成源码索引/完整包时才走这条流程；普通玩家优先用上面的运行时指令。
 
 ```bash
 # 1. 抓官方快照（建议固定 --ref；不写则取 main）
@@ -67,34 +99,43 @@ python tools/fetch_official_database.py --dest ../stalzone-official-db --ref mai
 # 或直接 git clone 一份官方库，后面把 --source 指向它
 # git clone --depth 1 https://github.com/EXBO-Studio/stalzone-database
 
-# 2. 复制一份自己的汉化 overlay，只改 names
+# 2. 复制一份源码汉化 overlay，只改 names
 cp translations/zh_items.json translations/zh_items.local.json
 
 # 3. 生成索引；输出会列出 official / supplemental / untranslated / missing icons
-python tools/sync_official_items.py     --source ../stalzone-official-db     --overlay translations/zh_items.local.json     --out item_index.json
+python tools/sync_official_items.py \
+    --source ../stalzone-official-db \
+    --existing item_index.json \
+    --overlay translations/zh_items.local.json \
+    --out item_index.json
 
 # 4. 生成完整图标目录（官方图标优先，旧补充图标从当前 item_icons 或完整图标包 seed）
-python tools/sync_official_items.py     --source ../stalzone-official-db     --full-icons-out ../updated_item_icons     --seed-icons item_icons
+python tools/sync_official_items.py \
+    --source ../stalzone-official-db \
+    --full-icons-out ../updated_item_icons \
+    --seed-icons item_icons
 ```
 
 部署时：
 
 - `item_index.json` 覆盖插件根目录的 `item_index.json`；
-- `updated_item_icons/*.png` 复制到 AstrBot 插件数据目录的 `item_icons/`（通常是 `data/plugin_data/astrbot_plugin_stalzone/item_icons/`）。数据目录图标优先于插件内置图标，适合不想改插件目录的用户；
+- `updated_item_icons/*.png` 复制到 AstrBot 插件数据目录的 `item_icons/`（通常是 `data/plugin_data/astrbot_plugin_stalzone/item_icons/`）。数据目录图标优先于插件内置图标；
 - 重新加载插件，或用 `/sz 物品 <新物品ID>` 验证。
 
 ### 怎么核对官方
 
-- **ID/英文/俄文/品质色/类别/图标路径**：以官方文件为准。官方基础物品路径是 `ru/items/<类别>/<物品ID>.json`，物品 ID 就是文件名（去掉 `.json`）；名称看 `name.lines.en` / `name.lines.ru`，图标看 `ru/icons/<类别>/<物品ID>.png`（同步工具按这个约定生成，不依赖旧 WIKI 的 CDN URL）。
+- **ID/英文/俄文/品质色/类别/图标路径**：以官方文件为准。官方基础物品路径是 `ru/items/<类别>/<物品ID>.json`，物品 ID 就是文件名（去掉 `.json`）；名称看 `name.lines.en` / `name.lines.ru`，图标看 `ru/icons/<类别>/<物品ID>.png`（同步工具按这个约定生成）。
 - **索引是否跟上官方**：看 `item_index.json` 顶部的 `official_commit` 是否等于 `../stalzone-official-db/official_snapshot.json` 里的 commit；`official_count` 应接近官方基础物品数。
 - **官方没有的旧物品**：会保留为 `source: "supplemental"`，不会因为官方库没有而被删除。`supplemental` 变多通常表示官方删了/改了旧条目，属于保留历史，不一定是错误。
-- **未翻译/图标缺失**：同步输出会打印 `untranslated` 和 `official icons missing`。未翻译项通常是新物品回退成了英文，在 `zh_items.local.json` 的 `names` 里补 `{物品ID: 中文名}` 后重跑第 3 步。
+- **未翻译/图标缺失**：运行时检查会导出全部条目并把未翻译项留空；源码同步输出会打印 `untranslated` 和 `official icons missing`。未翻译项在 `item_name_overrides.json`（玩家）或 `translations/zh_items.local.json`（维护者源码）中补 `{物品ID: 中文名}`。
 - **中文无法用官方核对**：EXBO 官方库不提供中文，`name.lines` 只有英文/俄文；中文名只能对照社区 `zh.lang`、游戏内文本或人工翻译。不要把官方英文名当成中文校验结果。
 - **图标完整性**：`--sync-icons item_icons` 只刷新原本已经存在的图标，不会自动把新物品加进市场小包；要完整图标请用 `--full-icons-out`。官方仓库的 `_variants` 皮肤目录默认跳过，旧皮肤继续依赖补充条目。
 
-### 自定义汉化索引格式
+### 两种汉化文件格式
 
-`translations/zh_items.local.json`：
+**玩家运行时**：`data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`，扁平 `{物品ID: 中文名}`，允许 JSONC 注释；全量条目，已有中文预填，空字符串表示使用内置/英文。
+
+**维护者源码 overlay**：`translations/zh_items.json` 或 `translations/zh_items.local.json`，供 `tools/sync_official_items.py --overlay` 使用：
 
 ```json
 {
@@ -105,7 +146,7 @@ python tools/sync_official_items.py     --source ../stalzone-official-db     --f
 }
 ```
 
-物品 ID 必须来自官方 JSON 文件名；没有翻译的物品会先回退英文，并在同步输出里计入 `untranslated`。同步时优先使用 overlay，其次保留旧索引里的中文，最后才回退英文/俄文/ID。
+物品 ID 必须来自官方 JSON 文件名；没有翻译的物品会先回退英文，并在同步输出里计入 `untranslated`。
 
 ## 字段约定
 
