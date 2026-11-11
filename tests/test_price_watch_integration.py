@@ -130,12 +130,13 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await plugin._handle_watch(
             WatchEvent("/sz", user_id="u2", name="Bob"), "ljn2 +15 8000"
         )
-        text = await plugin._handle_watch_list(
+        reply = await plugin._handle_watch_list(
             WatchEvent("/sz", user_id="u2", name="Bob")
         )
-        self.assertIn("我的关注", text)
-        self.assertIn("本群其他关注", text)
-        self.assertLess(text.index("我的关注"), text.index("本群其他关注"))
+        text = reply.text
+        self.assertIn("Bob  [你]", text)
+        self.assertIn("Alice", text)
+        self.assertLess(text.index("Bob"), text.index("Alice"))
         denied = await plugin._handle_watch_cancel(
             WatchEvent("/sz", user_id="u2", name="Bob"), "2"
         )

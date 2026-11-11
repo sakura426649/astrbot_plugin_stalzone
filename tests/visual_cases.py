@@ -31,6 +31,8 @@ from image_renderer import (
     render_profile_card,
     render_text_card,
     render_usage_card,
+    render_watch_alert_card,
+    render_watch_list_card,
 )
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -467,22 +469,58 @@ def _watch_alert() -> Path | None:
     alert = build_watch_alert_view(
         item, {}, match, region="eu", target=8000, now=NOW
     )
-    return render_notice_card(
-        {
-            "error": False,
-            "kind_label": alert["kind_label"],
-            "query": alert["query"],
-            "region": alert["region"],
-            "now": alert["checked_at"],
-            "headline": f"{alert['price']:,} 卢布",
-            "note": alert["note"],
-            "hint": alert["hint"],
-            "accent": alert["accent"],
-            "footer": alert["footer"],
-            "watermark": alert["watermark"],
-            "eyebrow": "STALZONE / PRICE WATCH",
-        }
-    )
+    return render_watch_alert_card(alert)
+
+
+def _watch_list() -> Path | None:
+    view = {
+        "region": "EU",
+        "session_items": 3,
+        "session_limit": 5,
+        "global_items": 4,
+        "refresh_minutes": 2,
+        "users": [
+            {
+                "user_id": "u1",
+                "user_name": "Sakura",
+                "own": True,
+                "items": [
+                    {
+                        "index": 1,
+                        "item_label": "原子 +15",
+                        "quality_short": "红",
+                        "quality_color": "#FF5C5C",
+                        "target": "≤ 8,000",
+                        "remaining": "剩 6 天",
+                    }
+                ],
+            },
+            {
+                "user_id": "u2",
+                "user_name": "Bob",
+                "own": False,
+                "items": [
+                    {
+                        "index": 2,
+                        "item_label": "寒冰 +10",
+                        "quality_short": "金",
+                        "quality_color": "#FFD166",
+                        "target": "低于中位 20%（≈6,000）",
+                        "remaining": "剩 5 天",
+                    },
+                    {
+                        "index": 3,
+                        "item_label": "电水晶 +0",
+                        "quality_short": "蓝",
+                        "quality_color": "#4EA8FF",
+                        "target": "≤ 3,500",
+                        "remaining": "剩 4 天",
+                    },
+                ],
+            },
+        ],
+    }
+    return render_watch_list_card(view)
 
 
 def _help() -> Path | None:
@@ -526,6 +564,7 @@ CASES: dict[str, Callable[[], Path | None]] = {
     "emission_alert": _alert,
     "appraisal": _appraisal,
     "watch_alert": _watch_alert,
+    "watch_list": _watch_list,
     "item": _item,
     "help": _help,
     "usage": _usage,

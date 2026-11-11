@@ -138,21 +138,45 @@ class WatchViewTests(unittest.TestCase):
         self.assertFalse(view["auto_cancel"])
         self.assertIn("手动", view["hint"])
 
-    def test_watch_list_own_and_others(self):
+    def test_watch_list_groups_by_user(self):
         view = {
             "region": "EU",
-            "own": [{"line": "1. 原子 +15｜≤ 8,000｜剩 6 天"}],
-            "others": [{"line": "2. 小明｜寒冰 +10｜-20%｜剩 5 天"}],
             "session_items": 2,
             "session_limit": 5,
             "global_items": 3,
             "refresh_minutes": 2,
+            "users": [
+                {
+                    "user_name": "Sakura",
+                    "own": True,
+                    "items": [
+                        {
+                            "index": 1,
+                            "item_label": "原子 +15",
+                            "target": "≤ 8,000",
+                            "remaining": "剩 6 天",
+                        }
+                    ],
+                },
+                {
+                    "user_name": "小明",
+                    "own": False,
+                    "items": [
+                        {
+                            "index": 2,
+                            "item_label": "寒冰 +10",
+                            "target": "-20%",
+                            "remaining": "剩 5 天",
+                        }
+                    ],
+                },
+            ],
         }
         text = format_watch_list(view)
-        self.assertIn("我的关注", text)
-        self.assertIn("本群其他关注", text)
+        self.assertIn("Sakura  [你]", text)
+        self.assertIn("小明", text)
         self.assertIn("本群 2/5", text)
-        self.assertLess(text.index("我的关注"), text.index("本群其他关注"))
+        self.assertLess(text.index("Sakura"), text.index("小明"))
 
 
 if __name__ == "__main__":

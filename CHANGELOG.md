@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.1 - 2026-11-11
+
+### Changed
+
+- Watch list has a dedicated card: each user gets a separate rounded block, the caller's block is pinned first with an accent border and a small `你` badge after their nickname (the old "我的关注" heading is gone). Item labels use their quality color, with separate colors for targets, remaining time and labels.
+- Price alerts have a dedicated alert card with a `买断提醒` / `竞拍提醒` badge and title, `STALZONE / PRICE ALERT` eyebrow, quality-colored `神器 +等级`, and distinct colors for price, target, remaining time and notes. The item icon is shown when available.
+- Enlarged the artifact name/level text on both watch cards; the buyout price and target price now use the same font size instead of a large/small pair, with the remaining-time line moved below the target.
+- Alert and watch-list text fallbacks now group by nickname and carry the `[你]` marker.
+- Help card: the `战队` module was moved into `其他`; the freed slot now shows `价格关注 / PRICE WATCH`.
+- Fixed `/sz 关注` usage-page parameter alignment for `目标价`.
+
+### Tests
+
+- Added the watch-list visual signature and updated the grouped-list text test; 299 tests and 17 visual signatures pass.
+
 ## 1.14.0 - 2026-11-11
 
 ### Added

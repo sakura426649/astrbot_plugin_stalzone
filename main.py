@@ -124,6 +124,8 @@ try:  # Package import (normal AstrBot plugin loading).
         render_profile_card,
         render_text_card,
         render_usage_card,
+        render_watch_alert_card,
+        render_watch_list_card,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -146,6 +148,8 @@ try:  # Package import (normal AstrBot plugin loading).
         parse_time,
         parse_watch_query,
         watch_lot_rows,
+        watch_quality_color,
+        watch_quality_short,
         watch_query_summary,
     )
     from .sc_core_client import ScCoreClient, ScCoreError
@@ -224,6 +228,8 @@ except ImportError:  # Direct execution / flat import fallback.
         render_profile_card,
         render_text_card,
         render_usage_card,
+        render_watch_alert_card,
+        render_watch_list_card,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -246,6 +252,8 @@ except ImportError:  # Direct execution / flat import fallback.
         parse_time,
         parse_watch_query,
         watch_lot_rows,
+        watch_quality_color,
+        watch_quality_short,
         watch_query_summary,
     )
     from sc_core_client import ScCoreClient, ScCoreError  # type: ignore[no-redef]
@@ -272,7 +280,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.0"
+PLUGIN_VERSION = "1.14.1"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -399,6 +407,7 @@ class PluginReply:
     arsenal_view: dict[str, Any] | None = None
     pass_view: dict[str, Any] | None = None
     appraisal_view: dict[str, Any] | None = None
+    watch_list_view: dict[str, Any] | None = None
     faction: str | None = None
     sub: str | None = None
 
@@ -507,7 +516,7 @@ USAGE = {
         "  神器   必填，中文名 / 英文名 / 神器ID\n"
         "  品质   可选，白/绿/蓝/粉/红/金\n"
         "  等级   必填，+0～+15\n"
-        "  目标价 必填，如 8000；或 -20% 表示低于近3天中位数20%\n"
+        "  目标价   必填，如 8000；或 -20% 表示低于近3天中位数20%\n"
         "  上限   可选，相对价模式下限制最高绝对价\n"
         "示例：\n"
         "  /sz 关注 原子 +15 8000\n"
@@ -2816,6 +2825,7 @@ class StalzonePlugin(Star):
         pass_view: dict[str, Any] | None = None,
         arsenal_view: dict[str, Any] | None = None,
         appraisal_view: dict[str, Any] | None = None,
+        watch_list_view: dict[str, Any] | None = None,
     ) -> Path | None:
         if self._render_mode() == "text" or sub not in IMAGE_COMMANDS:
             return None
@@ -2836,6 +2846,12 @@ class StalzonePlugin(Star):
                     appraisal_view,
                     font_path=font_path,
                     icon_path=icon_path,
+                )
+            elif sub == "watch_list" and watch_list_view:
+                path = await asyncio.to_thread(
+                    render_watch_list_card,
+                    watch_list_view,
+                    font_path=font_path,
                 )
             elif sub == "auction" and auction_view:
                 path = await asyncio.to_thread(
@@ -3076,13 +3092,7 @@ class StalzonePlugin(Star):
             return item_id
         return str(item.get("zh") or item.get("en") or item_id)
 
-    def _watch_target_label(self, sub: dict[str, Any]) -> str:
-        quality = sub.get("quality")
-        level = int(sub.get("level") or 0)
-        parts = [self._watch_name(str(sub.get("item_id") or ""))]
-        if quality is not None:
-            parts.append(quality_label(int(quality)))
-        parts.append(f"+{level}")
+    def _watch_target_text(self, sub: dict[str, Any]) -> str:
         if sub.get("mode") == "relative":
             target = f"低于中位 {int(sub.get('relative_pct') or 0)}%"
             median = sub.get("last_median")
@@ -3095,7 +3105,16 @@ class StalzonePlugin(Star):
                 target += f"｜上限 {int(sub['cap']):,}"
         else:
             target = f"≤ {int(sub.get('threshold') or 0):,}"
-        parts.append(target)
+        return target
+
+    def _watch_target_label(self, sub: dict[str, Any]) -> str:
+        quality = sub.get("quality")
+        level = int(sub.get("level") or 0)
+        parts = [self._watch_name(str(sub.get("item_id") or ""))]
+        if quality is not None:
+            parts.append(quality_label(int(quality)))
+        parts.append(f"+{level}")
+        parts.append(self._watch_target_text(sub))
         return "｜".join(parts)
 
     def _watch_remaining_label(self, sub: dict[str, Any]) -> str:
@@ -3144,6 +3163,43 @@ class StalzonePlugin(Star):
         rows = self._watch_rows(event)
         own = [row for row in rows if row["own"]]
         others = [row for row in rows if not row["own"]]
+        users_map: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            sub = row["sub"]
+            user_id = str(sub.get("user_id") or "")
+            entry = users_map.setdefault(
+                user_id,
+                {
+                    "user_id": user_id,
+                    "user_name": str(sub.get("user_name") or user_id),
+                    "own": bool(row["own"]),
+                    "items": [],
+                },
+            )
+            quality = sub.get("quality")
+            level = int(sub.get("level") or 0)
+            item_id = str(sub.get("item_id") or "")
+            item_name = self._watch_name(item_id)
+            entry["items"].append(
+                {
+                    "index": row["index"],
+                    "item_id": item_id,
+                    "item_name": item_name,
+                    "item_label": f"{item_name} +{level}",
+                    "quality": quality,
+                    "quality_short": watch_quality_short(
+                        int(quality) if quality is not None else None
+                    ),
+                    "quality_color": watch_quality_color(
+                        int(quality) if quality is not None else None
+                    ),
+                    "level": level,
+                    "target": self._watch_target_text(sub),
+                    "remaining": self._watch_remaining_label(sub),
+                    "mode": str(sub.get("mode") or "absolute"),
+                }
+            )
+        users = list(users_map.values())
         subs = list(self._watch_subs().values())
         session = str(getattr(event, "unified_msg_origin", "") or "").strip()
         session_items = len(
@@ -3167,14 +3223,20 @@ class StalzonePlugin(Star):
             "region": self._region().upper(),
             "own": own,
             "others": others,
+            "users": users,
             "session_items": session_items,
             "session_limit": session_limit,
             "global_items": global_items,
             "refresh_minutes": refresh_minutes,
         }
 
-    async def _handle_watch_list(self, event: Any) -> str:
-        return format_watch_list(self._watch_list_view(event))
+    async def _handle_watch_list(self, event: Any) -> PluginReply:
+        view = self._watch_list_view(event)
+        return PluginReply(
+            format_watch_list(view),
+            watch_list_view=view,
+            sub="watch_list",
+        )
 
     async def _handle_watch_clear(self, event: Any, argument: str = "") -> str:
         session = str(getattr(event, "unified_msg_origin", "") or "").strip()
@@ -3555,27 +3617,15 @@ class StalzonePlugin(Star):
             extra=extra,
         )
         text = format_watch_alert_text(alert)
-        notice = {
-            "error": False,
-            "kind_label": alert.get("kind_label"),
-            "query": alert.get("query"),
-            "region": alert.get("region"),
-            "now": alert.get("checked_at"),
-            "headline": f"{int(alert.get('price') or 0):,} 卢布",
-            "note": alert.get("note"),
-            "hint": alert.get("hint"),
-            "accent": alert.get("accent"),
-            "footer": alert.get("footer"),
-            "watermark": alert.get("watermark"),
-            "eyebrow": "STALZONE / PRICE WATCH",
-        }
         image_path: Path | None = None
         try:
             try:
+                icon_path = await self._fetch_icon(str(item.get("icon") or ""))
                 image_path = await asyncio.to_thread(
-                    render_notice_card,
-                    notice,
+                    render_watch_alert_card,
+                    alert,
                     font_path=str(self._cfg("font_path", "") or "") or None,
+                    icon_path=icon_path,
                 )
             except Exception:
                 logger.exception("STALZONE price-watch card render failed")
@@ -4776,6 +4826,7 @@ class StalzonePlugin(Star):
         pass_view = None
         arsenal_view = None
         appraisal_view = None
+        watch_list_view = None
         faction = None
         render_sub = sub
         try:
@@ -4794,6 +4845,7 @@ class StalzonePlugin(Star):
                 pass_view = result.pass_view
                 arsenal_view = result.arsenal_view
                 appraisal_view = result.appraisal_view
+                watch_list_view = result.watch_list_view
                 faction = result.faction
                 if result.sub:
                     render_sub = result.sub
@@ -4841,6 +4893,7 @@ class StalzonePlugin(Star):
             pass_view,
             arsenal_view,
             appraisal_view,
+            watch_list_view,
         )
         if image is not None:
             try:

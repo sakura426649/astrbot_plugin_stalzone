@@ -9,7 +9,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from formatters import QUALITY_ALIASES, QUALITY_NAMES, _card, quality_label
+from formatters import (
+    QUALITY_ALIASES,
+    QUALITY_COLORS,
+    QUALITY_NAMES,
+    _card,
+    quality_label,
+)
 
 LEVEL_TOKEN = re.compile(r"^[+＋](\d{1,2})$")
 RELATIVE_TOKEN = re.compile(r"^-(\d{1,2})%$")
@@ -125,6 +131,18 @@ def watch_query_summary(query: dict[str, Any]) -> str:
         target = f"≤ {int(query.get('threshold') or 0):,}"
     parts.append(target)
     return "｜".join(part for part in parts if part)
+
+
+def watch_quality_color(quality: int | None) -> str:
+    if quality is None:
+        return "#54D6A1"
+    return QUALITY_COLORS.get(int(quality), "#93A6BA")
+
+
+def watch_quality_short(quality: int | None) -> str:
+    if quality is None:
+        return "全部品质"
+    return QUALITY_NAMES.get(int(quality), ("", "品质"))[1]
 
 
 def _safe_int(value: Any) -> int | None:
@@ -287,12 +305,19 @@ def build_watch_alert_view(
     current = int(match["current"]) if match.get("current") else None
     if kind not in {"buyout", "auction"}:
         kind = "buyout" if buyout is not None and buyout <= int(target) else "auction"
-    name = str(item.get("zh") or item.get("en") or item.get("id") or "")
+    short_name = str(item.get("zh") or item.get("en") or item.get("id") or "")
+    name = short_name
     en = str(item.get("en") or "").strip()
     if en and en.lower() not in name.lower():
         name = f"{name}（{en}）"
     quality = match.get("quality")
     level = int(match.get("level") or 0)
+    quality_color = watch_quality_color(
+        int(quality) if quality is not None else None
+    )
+    quality_short = watch_quality_short(
+        int(quality) if quality is not None else None
+    )
     price = int((buyout if kind == "buyout" else current) or 0)
     remaining = str(match.get("remaining") or "未知")
     checked_at = now.astimezone().strftime("%Y-%m-%d %H:%M") if now else ""
@@ -304,7 +329,9 @@ def build_watch_alert_view(
         hint = "已命中买断价，关注任务会自动取消；没买到请重新 /sz 关注。"
         accent = "#54D6A1"
         watermark = "DEAL"
-        kind_label = "神器低价"
+        kind_label = "买断提醒"
+        title = "买断提醒"
+        price_label = "当前在售最低买断"
     else:
         note = (
             f"目标价 ≤ {target:,}；当前竞拍价 {price:,} 卢布"
@@ -313,20 +340,28 @@ def build_watch_alert_view(
                 if match.get("buyout")
                 else ""
             )
-            + f"；剩余 {remaining}。"
+            + f"；{remaining}。"
         )
         hint = "竞拍仅提醒，不保证拍到；若已拍到可手动 /sz 取消关注。"
         accent = "#FFB454"
         watermark = "BID"
         kind_label = "竞拍提醒"
+        title = "竞拍提醒"
+        price_label = "当前竞拍价"
     if extra:
         note += f" 同轮另有 {extra} 条符合条件的挂单。"
     return {
         "kind": kind,
         "kind_label": kind_label,
+        "title": title,
         "watermark": watermark,
         "accent": accent,
         "item_name": name,
+        "item_label": f"{short_name} +{level}",
+        "short_name": short_name,
+        "quality_color": quality_color,
+        "quality_short": quality_short,
+        "price_label": price_label,
         "item_id": str(item.get("id") or ""),
         "region": str(region or "EU").upper(),
         "quality": quality,
@@ -338,11 +373,7 @@ def build_watch_alert_view(
         "amount": int(match.get("amount") or 1),
         "remaining": remaining,
         "checked_at": checked_at,
-        "query": (
-            f"{str(item.get('zh') or item.get('en') or item.get('id') or '')}｜"
-            f"{QUALITY_NAMES.get(int(quality), ('', '品质'))[1] if quality is not None else '全部品质'}"
-            f"｜+{level}"
-        ),
+        "query": f"{short_name}｜{quality_short}｜+{level}",
         "note": note,
         "hint": hint,
         "footer": "STALZONE · 神器价格关注",
@@ -351,13 +382,10 @@ def build_watch_alert_view(
 
 
 def format_watch_alert_text(view: dict[str, Any]) -> str:
-    if view.get("kind") == "buyout":
-        headline = "神器低价提醒"
-    else:
-        headline = "竞拍达到预期"
+    headline = str(view.get("title") or "神器价格提醒")
     lines = [
         f"STALZONE · {headline}",
-        f"{view.get('item_name')}｜+{view.get('level')}｜{view.get('region')}",
+        f"{view.get('item_label')}｜{view.get('quality_short')}｜{view.get('region')}",
         f"当前价格：{int(view.get('price') or 0):,} 卢布",
         f"目标价：≤ {int(view.get('target') or 0):,} 卢布",
         f"{view.get('remaining')}",
@@ -367,21 +395,39 @@ def format_watch_alert_text(view: dict[str, Any]) -> str:
 
 
 def format_watch_list(view: dict[str, Any]) -> str:
-    own = [row for row in (view.get("own") or []) if isinstance(row, dict)]
-    others = [row for row in (view.get("others") or []) if isinstance(row, dict)]
     subtitle = [
         f"{view.get('region')} · 本群 {int(view.get('session_items') or 0)}/"
         f"{int(view.get('session_limit') or 5)} 种"
         f"｜全局 {int(view.get('global_items') or 0)} 种"
         f"｜预计每 {int(view.get('refresh_minutes') or 2)} 分钟刷新",
     ]
-    own_rows = [str(row.get("line") or "") for row in own if row.get("line")]
-    other_rows = [str(row.get("line") or "") for row in others if row.get("line")]
+    users = [user for user in (view.get("users") or []) if isinstance(user, dict)]
     sections: list[tuple[str, list[str]]] = []
-    if own_rows:
-        sections.append(("我的关注", own_rows))
-    if other_rows:
-        sections.append(("本群其他关注", other_rows))
+    if users:
+        for user in users:
+            name = str(user.get("user_name") or "未知用户")
+            if user.get("own"):
+                name += "  [你]"
+            rows: list[str] = []
+            for item in user.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                rows.append(
+                    f"#{item.get('index')} {item.get('item_label')}"
+                    f"｜{item.get('target')}｜{item.get('remaining')}"
+                )
+            if rows:
+                sections.append((name, rows))
+    else:
+        # Backward-compatible fallback for callers without grouped users.
+        own = [row for row in (view.get("own") or []) if isinstance(row, dict)]
+        others = [row for row in (view.get("others") or []) if isinstance(row, dict)]
+        own_rows = [str(row.get("line") or "") for row in own if row.get("line")]
+        other_rows = [str(row.get("line") or "") for row in others if row.get("line")]
+        if own_rows:
+            sections.append(("关注", own_rows))
+        if other_rows:
+            sections.append(("其他关注", other_rows))
     if not sections:
         sections.append(("暂无关注", ["发送 /sz 关注 <神器> +等级 <目标价> 创建第一条关注。"]))
     footer = (
