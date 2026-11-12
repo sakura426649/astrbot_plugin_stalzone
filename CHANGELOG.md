@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.25 - 2026-11-12
+
+### Fixed
+
+- `/sz 估价` now requires a quality. Omitting it returns the appraisal usage instead of silently mixing all qualities.
+- Appraisal ambiguity now returns the same icon-based candidate card used by normal item queries, instead of a plain text candidate list (multiple candidates).
+
 ## 1.14.24 - 2026-11-12
 
 ### Fixed

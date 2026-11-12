@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.24"
+PLUGIN_VERSION = "1.14.25"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -547,15 +547,14 @@ USAGE = {
         "  /sz 风暴 ru"
     ),
     "appraisal": (
-        "用法：/sz 估价 <神器名/ID> [品质] [+等级]\n"
-        "说明：按近期成交和当前买断估算神器价格；目前只支持神器\n"
+        "用法：/sz 估价 <神器名/ID> <品质> [+等级]\n"
+        "说明：按近期成交和当前买断估算神器价格；品质必填，目前只支持神器\n"
         "参数：\n"
         "  神器   必填，中文名 / 英文名 / 神器ID\n"
         "  品质   必填，白/绿/蓝/粉/红/金 或 常见/罕见/特殊/稀有/独特/传奇\n"
-        "  等级   可选，+0～+15；不填则显示各等级概览\n"
+        "  等级   可选，+0～+15；不填则显示指定品质的各等级概览\n"
         "示例：\n"
-        "  /sz 估价 原子\n"
-        "  /sz 估价 原子 +15\n"
+        "  /sz 估价 原子 金\n"
         "  /sz 估价 原子 金 +15\n"
         "  /sz 估价 原子 金+15\n"
         "  /sz 估价 原子+15 金\n"
@@ -6688,6 +6687,8 @@ class StalzonePlugin(Star):
             query, quality_filter, level_filter = parse_appraisal_query(query)
         if not query:
             return USAGE["appraisal"]
+        if quality_filter is None:
+            return USAGE["appraisal"]
         item, matches = await asyncio.to_thread(self._resolve_item, query)
         if item is None:
             if matches:
@@ -6702,7 +6703,14 @@ class StalzonePlugin(Star):
                     quality=quality_filter,
                     level=level_filter,
                 )
-                return format_item_candidates(query, candidates)
+                text = format_item_candidates(query, candidates)
+                if len(candidates) <= 1:
+                    return text
+                return PluginReply(
+                    text,
+                    candidate_view=build_item_candidate_view(query, candidates),
+                    sub="candidates",
+                )
             return self._not_found(
                 "item",
                 query,

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.24-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.25-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -183,7 +183,7 @@ The official history endpoint returns at most **200 records per request**. The p
 
 ## Artifact appraisal
 
-`/sz 估价 <artifact> [quality] [+level]` estimates artifact prices from official sale history and active lots. Only artifacts are supported for now; weapons, armor and materials are out of scope.
+`/sz 估价 <artifact> <quality> [+level]` estimates artifact prices from official sale history and active lots. Quality is required; omitting it is rejected. Only artifacts are supported for now; weapons, armor and materials are out of scope.
 
 - Without a level it shows a `+0` to `+15` overview; `+15` (or `15`) narrows to that level.
 - Quality accepts `白/绿/蓝/粉/红/金`; omitting it mixes all qualities and the card says so.

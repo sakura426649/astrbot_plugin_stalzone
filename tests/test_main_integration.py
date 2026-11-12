@@ -329,29 +329,48 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = self.make_plugin()
         plugin._make_client = lambda: AppraisalClient()  # type: ignore[assignment]
-        text = await collect(plugin, "/sz 估价 原子")
+        text = await collect(plugin, "/sz 估价 原子 红")
         self.assertIn("神器估价", text)
         self.assertIn("中位价", text)
         self.assertIn("最低成交", text)
         self.assertIn("等级明细", text)
         self.assertIn("+15", text)
 
-        filtered = await collect(plugin, "/sz 估价 原子 金 +15")
+        filtered = await collect(plugin, "/sz 估价 原子 红 +15")
         self.assertIn("神器估价", filtered)
         self.assertIn("+15", filtered)
 
         usage = await collect(plugin, "/sz 估价")
         self.assertIn("用法：/sz 估价", usage)
 
+        no_quality = await collect(plugin, "/sz 估价 原子")
+        self.assertIn("用法：/sz 估价", no_quality)
+
         attached = await collect(plugin, "/sz 估价 原子 金＋0")
         self.assertIn("神器估价", attached)
 
-        non_artifact = await collect(plugin, "/sz 估价 AK-308")
+        non_artifact = await collect(plugin, "/sz 估价 AK-308 金")
         self.assertIn("不是神器", non_artifact)
 
         missing = await collect(plugin, "/sz 估价 马莲 金＋0")
         self.assertIn("马莲", missing)
         self.assertNotIn("金＋0", missing)
+
+    async def test_appraisal_candidates_use_candidate_card(self):
+        plugin = self.make_plugin()
+        candidates = [
+            plugin.item_index.get("wg53"),
+            plugin.item_index.get("ljn2"),
+        ]
+        candidates = [item for item in candidates if item]
+        self.assertGreaterEqual(len(candidates), 2)
+        plugin._resolve_item = lambda _query: (None, candidates)  # type: ignore[assignment]
+        result = await plugin._handle_appraisal(
+            "马莲 金", event=FakeEvent("/sz 估价 马莲 金")
+        )
+        self.assertIsInstance(result, main_module.PluginReply)
+        self.assertEqual(result.sub, "candidates")
+        self.assertIsNotNone(result.candidate_view)
 
     async def test_appraisal_image_card(self):
         from image_renderer import find_cjk_font
@@ -386,7 +405,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin.config["render_mode"] = "image"
         plugin._make_client = lambda: AppraisalClient()  # type: ignore[assignment]
         results = [
-            item async for item in plugin.sz(ImageEvent("/sz 估价 原子 +15"))
+            item async for item in plugin.sz(ImageEvent("/sz 估价 原子 红 +15"))
         ]
         self.assertEqual(results[0][0], "image")
         path = Path(results[0][1])
