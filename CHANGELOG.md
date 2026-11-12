@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.27 - 2026-11-12
+
+### Changed
+
+- Existing installations that still use the old default watch values (interval 120, 2 types / 8 total / 5 session / 5 batch) are migrated once to the new defaults (60, 3 / 12 / 8 / 8). Customized values are left untouched.
+
 ## 1.14.26 - 2026-11-12
 
 ### Changed

@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.26-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.27-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -120,7 +120,7 @@ The WebUI groups settings under **API & region / Display & images / Query behavi
 | `price_watch_per_user` | `3` | Maximum distinct artifact types per user; re-sending the same item updates it |
 | `price_watch_user_total` | `12` | Maximum total subscriptions per user (quality/level variants each count), 1–100 |
 | `price_watch_session_items` | `8` | Maximum distinct artifacts per session |
-| `price_watch_batch` | `8` | Distinct artifacts polled per tick; extra items rotate fairly |
+| `price_watch_batch` | `8` | Distinct artifacts polled per tick; extra items rotate fairly. On upgrade, old defaults 120/2/8/5/5 migrate to 60/3/12/8/8; custom values are kept |
 | `price_watch_group_restrict` | `false` | When on, only admins/group owners/managers can create watches in groups |
 | `price_watch_auction_alerts` | `true` | Also alert on auction/start price hits; off means buyout-only monitoring |
 | `price_watch_ttl_days` | `7` | Watch lifetime in days; expiry notifies once and removes it |

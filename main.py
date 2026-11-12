@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.26"
+PLUGIN_VERSION = "1.14.27"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -324,7 +324,7 @@ ITEM_DB_BACKUP_KEEP = 3
 ITEM_DB_FULL_RATIO = 0.90
 ITEM_DB_ICON_COMPLETE_RATIO = 0.99
 ITEM_DB_ICON_COMPLETE_GAPS = 24
-# Config schema groups introduced in 1.14.26.  Flat aliases remain readable
+# Config schema groups introduced in 1.14.27.  Flat aliases remain readable
 # so existing installations keep their settings after the UI grouping change.
 CONFIG_PATHS = {
     "client_id": ("api", "client_id"),
@@ -389,6 +389,13 @@ CONFIG_DEFAULTS = {
     "auto_update": False,
 }
 _MISSING = object()
+CONFIG_OLD_DEFAULTS = {
+    "price_watch_interval": (120, 60),
+    "price_watch_per_user": (2, 3),
+    "price_watch_user_total": (8, 12),
+    "price_watch_session_items": (5, 8),
+    "price_watch_batch": (5, 8),
+}
 
 GITHUB_PROXY_PREFIXES = (
     "https://gh-proxy.com/",
@@ -796,6 +803,7 @@ class StalzonePlugin(Star):
         super().__init__(context)
         self.config = config
         self._migrate_config_groups()
+        self._upgrade_config_defaults()
         self._help_lock: asyncio.Lock | None = None
         self._help_cache_dir: Path | None = None
         self._usage_lock: asyncio.Lock | None = None
@@ -896,6 +904,19 @@ class StalzonePlugin(Star):
             except Exception:
                 logger.debug(
                     "STALZONE config migration failed for %s",
+                    key,
+                    exc_info=True,
+                )
+
+    def _upgrade_config_defaults(self) -> None:
+        """Adopt new watch defaults only when the old default was unchanged."""
+        for key, (old, new) in CONFIG_OLD_DEFAULTS.items():
+            try:
+                if self._cfg(key, old) == old:
+                    self._set_cfg(key, new)
+            except Exception:
+                logger.debug(
+                    "STALZONE config default upgrade failed for %s",
                     key,
                     exc_info=True,
                 )

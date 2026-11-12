@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.26-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.27-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -313,7 +313,7 @@
 | `price_watch_per_user` | `3` | 每位用户最多关注的神器种类数；同一神器重复发送是更新 |
 | `price_watch_user_total` | `12` | 每位用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），范围 1–100 |
 | `price_watch_session_items` | `8` | 每个会话最多同时关注的不同神器数 |
-| `price_watch_batch` | `8` | 每轮最多查询的不同神器数；超过按顺序公平轮换 |
+| `price_watch_batch` | `8` | 每轮最多查询的不同神器数；超过按顺序公平轮换。升级时旧的默认值 120/2/8/5/5 会自动迁移到 60/3/12/8/8，自定义值保留 |
 | `price_watch_group_restrict` | `false` | 开启后仅管理员/群主/群管可在群聊创建关注 |
 | `price_watch_auction_alerts` | `true` | 竞拍价/起拍价达到目标时也提醒；关闭后只监控买断价 |
 | `price_watch_ttl_days` | `7` | 关注有效期（天），到期提醒一次并自动取消 |
