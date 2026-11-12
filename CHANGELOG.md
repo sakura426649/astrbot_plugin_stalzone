@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.23 - 2026-11-12
+
+### Fixed
+
+- Corrected the Strong Behemoth’s Eye / 强化巨魔眼睛 reference price from 1,000 to 10,000.
+
 ## 1.14.22 - 2026-11-12
 
 ### Changed

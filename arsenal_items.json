@@ -143,7 +143,7 @@
       "rotation_days": 4,
       "accepted": true,
       "price_source": "reference",
-      "manual_price": 1000,
+      "manual_price": 10000,
       "icon": "assets/arsenal_icons/kTbVmTZN.png",
       "seed_price": 13500
     },

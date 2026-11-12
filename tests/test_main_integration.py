@@ -1369,7 +1369,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(by_name["大神器碎片"]["source"], "参考")
         self.assertEqual(by_name["滤芯"]["unit_price"], 2500)
         self.assertEqual(by_name["原神器"]["unit_price"], 4000)
-        self.assertEqual(by_name["强化巨魔眼睛"]["unit_price"], 1000)
+        self.assertEqual(by_name["强化巨魔眼睛"]["unit_price"], 10000)
         self.assertEqual(by_name["探测器组件"]["unit_price"], 2400)
         self.assertEqual(by_name["探测器组件"]["source"], "回收")
         self.assertEqual(by_name["消毒液"]["unit_price"], 750)

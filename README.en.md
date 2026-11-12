@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.22-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.23-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -157,7 +157,7 @@ See [docs/maintenance.md](docs/maintenance.md) for aliases, balance updates and 
 
 - Prices for auction-priced items are computed in the background from the latest 200 official sale records, limited to the last 3 days, with 10% outliers removed and a median taken.
 - The refresh yields to foreground commands and runs about every 3 hours. A completed refresh swaps the whole in-memory snapshot and `arsenal_prices.json` at once, so half-updated prices are never shown.
-- Fixed reference/recycle prices bypass the auction refresh; recycle entries are shown as a green `回收` label. Current fixed entries: Large Artifact Fragment 1,500; Filter 2,500; Protoartifact 4,000; Strong Behemoth’s Eye 1,000 (reference); Detector Components 2,400; Antiseptic 750; Lymph 1,200 (recycle).
+- Fixed reference/recycle prices bypass the auction refresh; recycle entries are shown as a green `回收` label. Current fixed entries: Large Artifact Fragment 1,500; Filter 2,500; Protoartifact 4,000; Strong Behemoth’s Eye 10,000 (reference); Detector Components 2,400; Antiseptic 750; Lymph 1,200 (recycle).
 - Price priority: manual price → official weighted 3-day median → bundled reference price. Missing/insufficient official data is labeled `参考`; special items such as the laptop use a manually maintained `manual_price` (currently 20,000).
 - Daily limits, the item list and manual prices are a static snapshot; update them when the Arsenal rotation/limits change. Reset is shown as 12:00 UTC+8.
 
