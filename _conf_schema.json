@@ -1,21 +1,314 @@
 {
+  "api": {
+    "description": "API 与区服",
+    "type": "object",
+    "default": {},
+    "items": {
+      "client_id": {
+        "description": "STALZONE API 应用 Client-Id",
+        "type": "string",
+        "default": "",
+        "hint": "在 EXBO 应用管理页创建应用并获批后获得；不是游戏账号。",
+        "obvious_hint": true
+      },
+      "client_secret": {
+        "description": "STALZONE API 应用 Client-Secret",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "只填在 AstrBot 配置中，不要发到群里或提交到仓库。",
+        "obvious_hint": true
+      },
+      "region": {
+        "description": "默认区服",
+        "type": "string",
+        "default": "ru",
+        "options": [
+          "ru",
+          "eu",
+          "na",
+          "sea",
+          "nea"
+        ],
+        "labels": [
+          "俄罗斯 RU",
+          "欧洲 EU",
+          "北美 NA",
+          "东南亚 SEA",
+          "东北亚 NEA"
+        ],
+        "hint": "群内以 EU 玩家为主时改成 eu；演示环境常用 EU。"
+      },
+      "api_base": {
+        "description": "API 环境",
+        "type": "string",
+        "default": "https://eapi.stalzone.com",
+        "options": [
+          "https://eapi.stalzone.com",
+          "https://dapi.stalzone.com"
+        ],
+        "labels": [
+          "生产环境（正式数据）",
+          "演示环境（假数据，先跑通）"
+        ],
+        "hint": "首次部署可先选演示环境；需要正式查询时切回生产环境。"
+      }
+    }
+  },
+  "display": {
+    "description": "显示与图片",
+    "type": "object",
+    "default": {},
+    "items": {
+      "render_mode": {
+        "description": "输出样式",
+        "type": "string",
+        "default": "auto",
+        "options": [
+          "auto",
+          "text",
+          "image"
+        ],
+        "labels": [
+          "自动（有字体就发图片）",
+          "纯文本卡片",
+          "强制图片"
+        ],
+        "hint": "auto 最稳：Pillow 和中文字体可用时发图片，否则发纯文本。"
+      },
+      "font_path": {
+        "description": "中文字体路径（可选）",
+        "type": "string",
+        "default": "",
+        "hint": "Linux 无中文字体时填写，例如 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc；留空自动查找。"
+      },
+      "card_background": {
+        "description": "全局卡片背景",
+        "type": "string",
+        "options": [
+          "default",
+          "01 仓库小队",
+          "02 军械库",
+          "03 瞭望塔",
+          "04 补给箱",
+          "05 车旁集结",
+          "06 废墟街道",
+          "07 雷暴草原",
+          "08 室内小队",
+          "09 雪地行军",
+          "10 木屋交火",
+          "11 狙击镜",
+          "12 红色警报",
+          "13 地下通道",
+          "14 绿色爆发",
+          "15 辐射标志",
+          "16 爆炸战场"
+        ],
+        "default": "default",
+        "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。"
+      },
+      "card_background_custom": {
+        "description": "自定义背景图片路径",
+        "type": "string",
+        "default": "",
+        "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。"
+      },
+      "card_panel_opacity": {
+        "description": "卡片面板不透明度",
+        "type": "float",
+        "default": 0.9,
+        "hint": "0–1；0=背景最透，1=面板完全不透明。所有普通卡片共享；风暴海报等特殊页面仍保留自己的暗色处理。"
+      },
+      "hide_creator_watermark": {
+        "description": "隐藏制作者水印",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后所有生成图片不再显示右下角 Created By @Sakura_Akira；默认关闭（显示水印）。"
+      }
+    }
+  },
+  "query": {
+    "description": "查询行为",
+    "type": "object",
+    "default": {},
+    "items": {
+      "auction_display_mode": {
+        "description": "拍卖在售显示模式",
+        "type": "string",
+        "default": "aggregate",
+        "options": [
+          "aggregate",
+          "full"
+        ],
+        "labels": [
+          "聚合显示（推荐）",
+          "全部显示"
+        ],
+        "hint": "聚合显示：同数量同品质只显示最低买断，并沿用 30 条限制；全部显示：跳过聚合与截断，渲染所有查到的在售条目，图片可能很长。切换后下一次拍卖查询生效。"
+      },
+      "lunar_enrich": {
+        "description": "追加 Lunar 第三方战队战报",
+        "type": "bool",
+        "default": true,
+        "hint": "在角色资料里追加 K/D、KDA、战斗分和最近场次；数据来自 lunar-zone.com，非官方 API。关闭后不请求第三方。"
+      },
+      "sc_core_fallback": {
+        "description": "官方历史翻页失效时使用 SC CORE 补全",
+        "type": "bool",
+        "default": true,
+        "hint": "官方成交历史接口若重复返回同一页，改用 sccore.ru 的公开历史接口按时间游标补全旧记录；输出会标注“SC CORE 第三方存档”。关闭后只使用官方 API。"
+      },
+      "command_cooldown": {
+        "description": "同一群查询冷却（秒）",
+        "type": "float",
+        "default": 1.0,
+        "hint": "同一群/会话两次查询的最小间隔，防止刷屏触发官方 API 限流；0 为关闭。"
+      }
+    }
+  },
+  "llm": {
+    "description": "AI 查询",
+    "type": "object",
+    "default": {},
+    "items": {
+      "llm_tools_enabled": {
+        "description": "允许 AI 调用查询工具",
+        "type": "bool",
+        "default": true,
+        "hint": "开启后大模型可通过函数调用自行查询拍卖、物品、玩家、风暴、调整和通行证，并直接发送图片。需在 AstrBot 的模型服务中启用函数调用；默认开启。"
+      }
+    }
+  },
+  "emission": {
+    "description": "风暴提醒",
+    "type": "object",
+    "default": {},
+    "items": {
+      "emission_auto_notify": {
+        "description": "自动辐射风暴提醒",
+        "type": "bool",
+        "default": true,
+        "hint": "自动风暴提醒总开关；2–4 小时窗口内每分钟查询，其他时间每 3 分钟探测。群发白名单为空时不发群图，但存在风暴订阅时仍会为订阅用户轮询并提醒。"
+      },
+      "emission_notify_target": {
+        "description": "自动提醒平台前缀种子（可选）",
+        "type": "string",
+        "default": "",
+        "hint": "可选，仅用于给纯群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；自定义 OneBot 适配器 ID（如 qq、napcat）也可。白名单为空时不会单独发送，也不会成为收件群。QQ 官方机器人无法用于自动提醒。"
+      },
+      "emission_group_whitelist": {
+        "description": "自动提醒 QQ 群白名单",
+        "type": "list",
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。QQ 官方机器人（qq_official / qq_official_webhook）不支持主动提醒，不会进入发送队列。"
+      },
+      "emission_group_blacklist": {
+        "description": "自动提醒 QQ 群黑名单",
+        "type": "list",
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
+      }
+    }
+  },
+  "price_watch": {
+    "description": "神器价格关注",
+    "type": "object",
+    "default": {},
+    "items": {
+      "price_watch_enabled": {
+        "description": "神器价格关注",
+        "type": "bool",
+        "default": true,
+        "hint": "允许用户用 /sz 关注 设置神器低价提醒；没有关注任务时不会发起任何轮询。"
+      },
+      "price_watch_interval": {
+        "description": "价格关注轮询间隔（秒）",
+        "type": "int",
+        "default": 60,
+        "hint": "默认 60 秒（每分钟），范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。"
+      },
+      "price_watch_per_user": {
+        "description": "每位用户最多关注神器数",
+        "type": "int",
+        "default": 3,
+        "hint": "同一用户最多同时关注多少种不同神器；同一神器重复发送是更新规则，不新增。"
+      },
+      "price_watch_user_total": {
+        "description": "每位用户最多关注条数",
+        "type": "int",
+        "default": 12,
+        "hint": "同一用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），默认 12，范围 1–100；防止单用户刷大量变体。"
+      },
+      "price_watch_session_items": {
+        "description": "每个会话最多关注神器数",
+        "type": "int",
+        "default": 8,
+        "hint": "同一群聊/私聊最多同时关注多少种不同神器；不同群各自计算，不会互相占用名额。"
+      },
+      "price_watch_batch": {
+        "description": "每轮最多查询神器数",
+        "type": "int",
+        "default": 8,
+        "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。"
+      },
+      "price_watch_group_restrict": {
+        "description": "群聊关注仅管理员",
+        "type": "bool",
+        "default": false,
+        "hint": "关闭（默认）时群内所有成员都可创建价格关注；开启后仅 AstrBot 管理员、QQ 群主或群管理员可创建。"
+      },
+      "price_watch_auction_alerts": {
+        "description": "竞拍价达到预期也提醒",
+        "type": "bool",
+        "default": true,
+        "hint": "开启后，买断价高于目标但当前竞拍价/起拍价达到目标时也会提醒；竞拍提醒不会取消关注任务。"
+      },
+      "price_watch_ttl_days": {
+        "description": "价格关注有效期（天）",
+        "type": "int",
+        "default": 7,
+        "hint": "默认 7 天，最长 30 天；到期会提醒一次并自动取消，避免长期无效关注越积越多。"
+      }
+    }
+  },
+  "maintenance": {
+    "description": "维护与更新",
+    "type": "object",
+    "default": {},
+    "items": {
+      "auto_update": {
+        "description": "每小时自动检查插件更新",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。"
+      }
+    }
+  },
   "client_id": {
-    "description": "STALZONE API 应用 Client-Id",
+    "description": "旧版兼容：STALZONE API 应用 Client-Id",
     "type": "string",
     "default": "",
     "hint": "在 EXBO 应用管理页创建应用并获批后获得；不是游戏账号。",
-    "obvious_hint": true
+    "obvious_hint": true,
+    "invisible": true
   },
   "client_secret": {
-    "description": "STALZONE API 应用 Client-Secret",
+    "description": "旧版兼容：STALZONE API 应用 Client-Secret",
     "type": "string",
     "default": "",
     "secret": true,
     "hint": "只填在 AstrBot 配置中，不要发到群里或提交到仓库。",
-    "obvious_hint": true
+    "obvious_hint": true,
+    "invisible": true
   },
   "region": {
-    "description": "默认区服",
+    "description": "旧版兼容：默认区服",
     "type": "string",
     "default": "ru",
     "options": [
@@ -32,10 +325,11 @@
       "东南亚 SEA",
       "东北亚 NEA"
     ],
-    "hint": "群内以 EU 玩家为主时改成 eu；演示环境常用 EU。"
+    "hint": "群内以 EU 玩家为主时改成 eu；演示环境常用 EU。",
+    "invisible": true
   },
   "api_base": {
-    "description": "API 环境",
+    "description": "旧版兼容：API 环境",
     "type": "string",
     "default": "https://eapi.stalzone.com",
     "options": [
@@ -46,10 +340,11 @@
       "生产环境（正式数据）",
       "演示环境（假数据，先跑通）"
     ],
-    "hint": "首次部署可先选演示环境；需要正式查询时切回生产环境。"
+    "hint": "首次部署可先选演示环境；需要正式查询时切回生产环境。",
+    "invisible": true
   },
   "render_mode": {
-    "description": "输出样式",
+    "description": "旧版兼容：输出样式",
     "type": "string",
     "default": "auto",
     "options": [
@@ -62,10 +357,11 @@
       "纯文本卡片",
       "强制图片"
     ],
-    "hint": "auto 最稳：Pillow 和中文字体可用时发图片，否则发纯文本。"
+    "hint": "auto 最稳：Pillow 和中文字体可用时发图片，否则发纯文本。",
+    "invisible": true
   },
   "auction_display_mode": {
-    "description": "拍卖在售显示模式",
+    "description": "旧版兼容：拍卖在售显示模式",
     "type": "string",
     "default": "aggregate",
     "options": [
@@ -76,22 +372,25 @@
       "聚合显示（推荐）",
       "全部显示"
     ],
-    "hint": "聚合显示：同数量同品质只显示最低买断，并沿用 30 条限制；全部显示：跳过聚合与截断，渲染所有查到的在售条目，图片可能很长。切换后下一次拍卖查询生效。"
+    "hint": "聚合显示：同数量同品质只显示最低买断，并沿用 30 条限制；全部显示：跳过聚合与截断，渲染所有查到的在售条目，图片可能很长。切换后下一次拍卖查询生效。",
+    "invisible": true
   },
   "auto_update": {
-    "description": "每小时自动检查插件更新",
+    "description": "旧版兼容：每小时自动检查插件更新",
     "type": "bool",
     "default": false,
-    "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。"
+    "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。",
+    "invisible": true
   },
   "font_path": {
-    "description": "中文字体路径（可选）",
+    "description": "旧版兼容：中文字体路径（可选）",
     "type": "string",
     "default": "",
-    "hint": "Linux 无中文字体时填写，例如 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc；留空自动查找。"
+    "hint": "Linux 无中文字体时填写，例如 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc；留空自动查找。",
+    "invisible": true
   },
   "card_background": {
-    "description": "全局卡片背景",
+    "description": "旧版兼容：全局卡片背景",
     "type": "string",
     "options": [
       "default",
@@ -113,132 +412,153 @@
       "16 爆炸战场"
     ],
     "default": "default",
-    "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。"
+    "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。",
+    "invisible": true
   },
   "card_background_custom": {
-    "description": "自定义背景图片路径",
+    "description": "旧版兼容：自定义背景图片路径",
     "type": "string",
     "default": "",
-    "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。"
+    "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。",
+    "invisible": true
   },
   "card_panel_opacity": {
-    "description": "卡片面板不透明度",
+    "description": "旧版兼容：卡片面板不透明度",
     "type": "float",
     "default": 0.9,
-    "hint": "0–1；0=背景最透，1=面板完全不透明。所有普通卡片共享；风暴海报等特殊页面仍保留自己的暗色处理。"
+    "hint": "0–1；0=背景最透，1=面板完全不透明。所有普通卡片共享；风暴海报等特殊页面仍保留自己的暗色处理。",
+    "invisible": true
   },
   "lunar_enrich": {
-    "description": "追加 Lunar 第三方战队战报",
+    "description": "旧版兼容：追加 Lunar 第三方战队战报",
     "type": "bool",
     "default": true,
-    "hint": "在角色资料里追加 K/D、KDA、战斗分和最近场次；数据来自 lunar-zone.com，非官方 API。关闭后不请求第三方。"
+    "hint": "在角色资料里追加 K/D、KDA、战斗分和最近场次；数据来自 lunar-zone.com，非官方 API。关闭后不请求第三方。",
+    "invisible": true
   },
   "sc_core_fallback": {
-    "description": "官方历史翻页失效时使用 SC CORE 补全",
+    "description": "旧版兼容：官方历史翻页失效时使用 SC CORE 补全",
     "type": "bool",
     "default": true,
-    "hint": "官方成交历史接口若重复返回同一页，改用 sccore.ru 的公开历史接口按时间游标补全旧记录；输出会标注“SC CORE 第三方存档”。关闭后只使用官方 API。"
+    "hint": "官方成交历史接口若重复返回同一页，改用 sccore.ru 的公开历史接口按时间游标补全旧记录；输出会标注“SC CORE 第三方存档”。关闭后只使用官方 API。",
+    "invisible": true
   },
   "llm_tools_enabled": {
-    "description": "允许 AI 调用查询工具",
+    "description": "旧版兼容：允许 AI 调用查询工具",
     "type": "bool",
     "default": true,
-    "hint": "开启后大模型可通过函数调用自行查询拍卖、物品、玩家、风暴、调整和通行证，并直接发送图片。需在 AstrBot 的模型服务中启用函数调用；默认开启。"
+    "hint": "开启后大模型可通过函数调用自行查询拍卖、物品、玩家、风暴、调整和通行证，并直接发送图片。需在 AstrBot 的模型服务中启用函数调用；默认开启。",
+    "invisible": true
   },
   "command_cooldown": {
-    "description": "同一群查询冷却（秒）",
+    "description": "旧版兼容：同一群查询冷却（秒）",
     "type": "float",
     "default": 1.0,
-    "hint": "同一群/会话两次查询的最小间隔，防止刷屏触发官方 API 限流；0 为关闭。"
+    "hint": "同一群/会话两次查询的最小间隔，防止刷屏触发官方 API 限流；0 为关闭。",
+    "invisible": true
   },
   "emission_auto_notify": {
-    "description": "自动辐射风暴提醒",
+    "description": "旧版兼容：自动辐射风暴提醒",
     "type": "bool",
     "default": true,
-    "hint": "自动风暴提醒总开关；2–4 小时窗口内每分钟查询，其他时间每 3 分钟探测。群发白名单为空时不发群图，但存在风暴订阅时仍会为订阅用户轮询并提醒。"
+    "hint": "自动风暴提醒总开关；2–4 小时窗口内每分钟查询，其他时间每 3 分钟探测。群发白名单为空时不发群图，但存在风暴订阅时仍会为订阅用户轮询并提醒。",
+    "invisible": true
   },
   "emission_notify_target": {
-    "description": "自动提醒平台前缀种子（可选）",
+    "description": "旧版兼容：自动提醒平台前缀种子（可选）",
     "type": "string",
     "default": "",
-    "hint": "可选，仅用于给纯群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；自定义 OneBot 适配器 ID（如 qq、napcat）也可。白名单为空时不会单独发送，也不会成为收件群。QQ 官方机器人无法用于自动提醒。"
+    "hint": "可选，仅用于给纯群号白名单提供平台前缀，例如 aiocqhttp:GroupMessage:123456；自定义 OneBot 适配器 ID（如 qq、napcat）也可。白名单为空时不会单独发送，也不会成为收件群。QQ 官方机器人无法用于自动提醒。",
+    "invisible": true
   },
   "emission_group_whitelist": {
-    "description": "自动提醒 QQ 群白名单",
+    "description": "旧版兼容：自动提醒 QQ 群白名单",
     "type": "list",
     "default": [],
     "items": {
       "type": "string"
     },
-    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。QQ 官方机器人（qq_official / qq_official_webhook）不支持主动提醒，不会进入发送队列。"
+    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送（黑名单优先）。QQ 官方机器人（qq_official / qq_official_webhook）不支持主动提醒，不会进入发送队列。",
+    "invisible": true
   },
   "emission_group_blacklist": {
-    "description": "自动提醒 QQ 群黑名单",
+    "description": "旧版兼容：自动提醒 QQ 群黑名单",
     "type": "list",
     "default": [],
     "items": {
       "type": "string"
     },
-    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。"
+    "hint": "每项填一个 OneBot QQ 群号，点“添加更多”可继续添加。黑名单优先级高于白名单，命中的群永不发送。",
+    "invisible": true
   },
   "hide_creator_watermark": {
-    "description": "隐藏制作者水印",
+    "description": "旧版兼容：隐藏制作者水印",
     "type": "bool",
     "default": false,
-    "hint": "开启后所有生成图片不再显示右下角 Created By @Sakura_Akira；默认关闭（显示水印）。"
+    "hint": "开启后所有生成图片不再显示右下角 Created By @Sakura_Akira；默认关闭（显示水印）。",
+    "invisible": true
   },
   "price_watch_enabled": {
-    "description": "神器价格关注",
+    "description": "旧版兼容：神器价格关注",
     "type": "bool",
     "default": true,
-    "hint": "允许用户用 /sz 关注 设置神器低价提醒；没有关注任务时不会发起任何轮询。"
+    "hint": "允许用户用 /sz 关注 设置神器低价提醒；没有关注任务时不会发起任何轮询。",
+    "invisible": true
   },
   "price_watch_interval": {
-    "description": "价格关注轮询间隔（秒）",
+    "description": "旧版兼容：价格关注轮询间隔（秒）",
     "type": "int",
-    "default": 120,
-    "hint": "默认 120 秒，范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。"
+    "default": 60,
+    "hint": "默认 60 秒（每分钟），范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。",
+    "invisible": true
   },
   "price_watch_per_user": {
-    "description": "每位用户最多关注神器数",
+    "description": "旧版兼容：每位用户最多关注神器数",
     "type": "int",
-    "default": 2,
-    "hint": "同一用户最多同时关注多少种不同神器；同一神器重复发送是更新规则，不新增。"
+    "default": 3,
+    "hint": "同一用户最多同时关注多少种不同神器；同一神器重复发送是更新规则，不新增。",
+    "invisible": true
   },
   "price_watch_user_total": {
-    "description": "每位用户最多关注条数",
+    "description": "旧版兼容：每位用户最多关注条数",
     "type": "int",
-    "default": 8,
-    "hint": "同一用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），默认 8，范围 1–100；防止单用户刷大量变体。"
+    "default": 12,
+    "hint": "同一用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），默认 12，范围 1–100；防止单用户刷大量变体。",
+    "invisible": true
   },
   "price_watch_session_items": {
-    "description": "每个会话最多关注神器数",
+    "description": "旧版兼容：每个会话最多关注神器数",
     "type": "int",
-    "default": 5,
-    "hint": "同一群聊/私聊最多同时关注多少种不同神器；不同群各自计算，不会互相占用名额。"
+    "default": 8,
+    "hint": "同一群聊/私聊最多同时关注多少种不同神器；不同群各自计算，不会互相占用名额。",
+    "invisible": true
   },
   "price_watch_batch": {
-    "description": "每轮最多查询神器数",
+    "description": "旧版兼容：每轮最多查询神器数",
     "type": "int",
-    "default": 5,
-    "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。"
+    "default": 8,
+    "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。",
+    "invisible": true
   },
   "price_watch_group_restrict": {
-    "description": "群聊关注仅管理员",
+    "description": "旧版兼容：群聊关注仅管理员",
     "type": "bool",
     "default": false,
-    "hint": "关闭（默认）时群内所有成员都可创建价格关注；开启后仅 AstrBot 管理员、QQ 群主或群管理员可创建。"
+    "hint": "关闭（默认）时群内所有成员都可创建价格关注；开启后仅 AstrBot 管理员、QQ 群主或群管理员可创建。",
+    "invisible": true
   },
   "price_watch_auction_alerts": {
-    "description": "竞拍价达到预期也提醒",
+    "description": "旧版兼容：竞拍价达到预期也提醒",
     "type": "bool",
     "default": true,
-    "hint": "开启后，买断价高于目标但当前竞拍价/起拍价达到目标时也会提醒；竞拍提醒不会取消关注任务。"
+    "hint": "开启后，买断价高于目标但当前竞拍价/起拍价达到目标时也会提醒；竞拍提醒不会取消关注任务。",
+    "invisible": true
   },
   "price_watch_ttl_days": {
-    "description": "价格关注有效期（天）",
+    "description": "旧版兼容：价格关注有效期（天）",
     "type": "int",
     "default": 7,
-    "hint": "默认 7 天，最长 30 天；到期会提醒一次并自动取消，避免长期无效关注越积越多。"
+    "hint": "默认 7 天，最长 30 天；到期会提醒一次并自动取消，避免长期无效关注越积越多。",
+    "invisible": true
   }
 }

@@ -9,6 +9,8 @@ archive and must always be labelled as such in user-facing output.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 from typing import Any
 
@@ -44,12 +46,23 @@ class ScCoreClient:
     async def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         if self._client is None:
             raise ScCoreError("SC CORE client is not open")
-        try:
-            response = await self._client.get(path, params=params)
-        except httpx.RequestError as exc:
-            raise ScCoreError(f"SC CORE request failed: {exc!r}") from exc
-        if response.status_code != 200:
+        response: httpx.Response | None = None
+        for attempt in range(3):
+            try:
+                response = await self._client.get(path, params=params)
+            except httpx.RequestError as exc:
+                if attempt < 2:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                raise ScCoreError(f"SC CORE request failed: {exc!r}") from exc
+            if response.status_code == 200:
+                break
+            if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                await asyncio.sleep(0.4 * (attempt + 1))
+                continue
             raise ScCoreError(f"SC CORE HTTP {response.status_code}")
+        if response is None or response.status_code != 200:
+            raise ScCoreError("SC CORE request failed")
         try:
             payload = response.json()
         except ValueError as exc:

@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.25"
+PLUGIN_VERSION = "1.14.26"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -324,6 +324,72 @@ ITEM_DB_BACKUP_KEEP = 3
 ITEM_DB_FULL_RATIO = 0.90
 ITEM_DB_ICON_COMPLETE_RATIO = 0.99
 ITEM_DB_ICON_COMPLETE_GAPS = 24
+# Config schema groups introduced in 1.14.26.  Flat aliases remain readable
+# so existing installations keep their settings after the UI grouping change.
+CONFIG_PATHS = {
+    "client_id": ("api", "client_id"),
+    "client_secret": ("api", "client_secret"),
+    "region": ("api", "region"),
+    "api_base": ("api", "api_base"),
+    "render_mode": ("display", "render_mode"),
+    "font_path": ("display", "font_path"),
+    "card_background": ("display", "card_background"),
+    "card_background_custom": ("display", "card_background_custom"),
+    "card_panel_opacity": ("display", "card_panel_opacity"),
+    "hide_creator_watermark": ("display", "hide_creator_watermark"),
+    "auction_display_mode": ("query", "auction_display_mode"),
+    "lunar_enrich": ("query", "lunar_enrich"),
+    "sc_core_fallback": ("query", "sc_core_fallback"),
+    "command_cooldown": ("query", "command_cooldown"),
+    "llm_tools_enabled": ("llm", "llm_tools_enabled"),
+    "emission_auto_notify": ("emission", "emission_auto_notify"),
+    "emission_notify_target": ("emission", "emission_notify_target"),
+    "emission_group_whitelist": ("emission", "emission_group_whitelist"),
+    "emission_group_blacklist": ("emission", "emission_group_blacklist"),
+    "price_watch_enabled": ("price_watch", "price_watch_enabled"),
+    "price_watch_interval": ("price_watch", "price_watch_interval"),
+    "price_watch_per_user": ("price_watch", "price_watch_per_user"),
+    "price_watch_user_total": ("price_watch", "price_watch_user_total"),
+    "price_watch_session_items": ("price_watch", "price_watch_session_items"),
+    "price_watch_batch": ("price_watch", "price_watch_batch"),
+    "price_watch_group_restrict": ("price_watch", "price_watch_group_restrict"),
+    "price_watch_auction_alerts": ("price_watch", "price_watch_auction_alerts"),
+    "price_watch_ttl_days": ("price_watch", "price_watch_ttl_days"),
+    "auto_update": ("maintenance", "auto_update"),
+}
+CONFIG_DEFAULTS = {
+    "client_id": "",
+    "client_secret": "",
+    "region": "ru",
+    "api_base": "https://eapi.stalzone.com",
+    "render_mode": "auto",
+    "font_path": "",
+    "card_background": "default",
+    "card_background_custom": "",
+    "card_panel_opacity": 0.90,
+    "hide_creator_watermark": False,
+    "auction_display_mode": "aggregate",
+    "lunar_enrich": True,
+    "sc_core_fallback": True,
+    "command_cooldown": 1.0,
+    "llm_tools_enabled": True,
+    "emission_auto_notify": True,
+    "emission_notify_target": "",
+    "emission_group_whitelist": [],
+    "emission_group_blacklist": [],
+    "price_watch_enabled": True,
+    "price_watch_interval": 60,
+    "price_watch_per_user": 3,
+    "price_watch_user_total": 12,
+    "price_watch_session_items": 8,
+    "price_watch_batch": 8,
+    "price_watch_group_restrict": False,
+    "price_watch_auction_alerts": True,
+    "price_watch_ttl_days": 7,
+    "auto_update": False,
+}
+_MISSING = object()
+
 GITHUB_PROXY_PREFIXES = (
     "https://gh-proxy.com/",
     "https://v4.gh-proxy.org/",
@@ -729,6 +795,7 @@ class StalzonePlugin(Star):
     def __init__(self, context: Context, config):
         super().__init__(context)
         self.config = config
+        self._migrate_config_groups()
         self._help_lock: asyncio.Lock | None = None
         self._help_cache_dir: Path | None = None
         self._usage_lock: asyncio.Lock | None = None
@@ -742,6 +809,7 @@ class StalzonePlugin(Star):
         self._api_cache_hits = 0
         self._api_cache_misses = 0
         self._api_semaphore: asyncio.Semaphore | None = None
+        self._background_api_lock = asyncio.Lock()
         self._api_health = ApiHealth()
         self._last_command_at: dict[str, float] = {}
         self._started_at = time.monotonic()
@@ -795,11 +863,112 @@ class StalzonePlugin(Star):
         self._apply_card_background()
 
     # ------------------------------------------------------------------ config
+    def _migrate_config_groups(self) -> None:
+        """Move legacy flat config into grouped schema paths.
+
+        AstrBot's grouped schema adds nested defaults; without this migration
+        a pre-grouping flat value could be ignored or removed.  Plain dict
+        configs (tests and legacy callers) keep their flat values untouched.
+        """
+        if type(self.config) is dict:
+            return
+        for key, path in CONFIG_PATHS.items():
+            try:
+                if key not in self.config:
+                    continue
+                flat = self.config.get(key)
+                node: Any = self.config
+                for part in path[:-1]:
+                    child = node.get(part)
+                    if not isinstance(child, dict):
+                        child = {}
+                        node[part] = child
+                    node = child
+                current = node.get(path[-1], _MISSING)
+                default = CONFIG_DEFAULTS.get(key, _MISSING)
+                if current is _MISSING or (
+                    default is not _MISSING
+                    and current == default
+                    and flat != default
+                ):
+                    node[path[-1]] = flat
+                self.config.pop(key, None)
+            except Exception:
+                logger.debug(
+                    "STALZONE config migration failed for %s",
+                    key,
+                    exc_info=True,
+                )
+
     def _cfg(self, key: str, default: Any = "") -> Any:
         try:
-            return self.config.get(key, default)
+            flat_found = key in self.config
+            flat = self.config.get(key)
         except AttributeError:
             return default
+        # Plain dict configs are the test/backward-compatible shape.  AstrBotConfig
+        # exposes save_config(); grouped values are authoritative there.
+        legacy_flat_first = type(self.config) is dict or not callable(
+            getattr(self.config, "save_config", None)
+        )
+        if legacy_flat_first and flat_found:
+            return flat
+        path = CONFIG_PATHS.get(key)
+        nested_found = False
+        nested = None
+        if path:
+            try:
+                node: Any = self.config
+                for part in path:
+                    if not isinstance(node, dict) or part not in node:
+                        break
+                    node = node[part]
+                else:
+                    nested_found = True
+                    nested = node
+            except Exception:
+                nested_found = False
+        if nested_found:
+            if not flat_found:
+                return nested
+            schema_default = CONFIG_DEFAULTS.get(key, _MISSING)
+            try:
+                if (
+                    schema_default is not _MISSING
+                    and nested == schema_default
+                    and flat != schema_default
+                ):
+                    # Old flat config wins until the user edits the grouped UI.
+                    return flat
+            except Exception:
+                pass
+            return nested
+        if flat_found:
+            return flat
+        return default
+
+    def _set_cfg(self, key: str, value: Any) -> None:
+        """Write a config value to both the grouped path and legacy flat key."""
+        try:
+            path = CONFIG_PATHS.get(key)
+            if path:
+                node: Any = self.config
+                for part in path[:-1]:
+                    child = node.get(part)
+                    if not isinstance(child, dict):
+                        child = {}
+                        node[part] = child
+                    node = child
+                node[path[-1]] = value
+        except Exception:
+            logger.debug("STALZONE grouped config write failed: %s", key, exc_info=True)
+        try:
+            # Plain dicts are the test/legacy shape; AstrBotConfig uses the
+            # grouped path so stale flat aliases cannot override a later UI edit.
+            if type(self.config) is dict:
+                self.config[key] = value
+        except Exception:
+            logger.debug("STALZONE legacy config write failed: %s", key, exc_info=True)
 
     def _hide_creator_watermark(self) -> bool:
         value = self._cfg("hide_creator_watermark", False)
@@ -917,7 +1086,7 @@ class StalzonePlugin(Star):
             if str(sub.get("user_id") or "") == target["user_id"]
         }
         try:
-            per_user = max(1, int(self._cfg("price_watch_per_user", 2) or 2))
+            per_user = max(1, int(self._cfg("price_watch_per_user", 3) or 3))
         except (TypeError, ValueError):
             per_user = 2
         if existing is None and item_id not in user_items and len(user_items) >= per_user:
@@ -932,7 +1101,7 @@ class StalzonePlugin(Star):
             try:
                 total_limit = max(
                     1,
-                    min(100, int(self._cfg("price_watch_user_total", 8) or 8)),
+                    min(100, int(self._cfg("price_watch_user_total", 12) or 12)),
                 )
             except (TypeError, ValueError):
                 total_limit = 8
@@ -949,7 +1118,7 @@ class StalzonePlugin(Star):
             if str(sub.get("session") or "") == target["session"]
         }
         try:
-            session_limit = max(1, int(self._cfg("price_watch_session_items", 5) or 5))
+            session_limit = max(1, int(self._cfg("price_watch_session_items", 8) or 8))
         except (TypeError, ValueError):
             session_limit = 5
         if (
@@ -1610,10 +1779,12 @@ class StalzonePlugin(Star):
                 ):
                     return False
                 state["last_probe_at"] = now.isoformat()
-        async with self._api_gate():
-            async with self._make_client() as client:
-                payload = await client.get_emission()
-                region = client.region
+        async with self._background_api_lock:
+            await self._wait_foreground_idle()
+            async with self._api_gate():
+                async with self._make_client() as client:
+                    payload = await client.get_emission()
+                    region = client.region
         if not isinstance(payload, dict):
             return False
         current_start = parse_auction_time(payload.get("currentStart"))
@@ -1939,11 +2110,16 @@ class StalzonePlugin(Star):
         if self._query_depth > 0:
             self._query_depth -= 1
 
-    async def _wait_arsenal_idle(self) -> None:
-        # Let any foreground command finish before pulling the next history page.
+    async def _wait_foreground_idle(self) -> None:
+        # Background refresh yields to interactive commands.  The scheduler
+        # still has other API permits, but waiting here avoids competing with
+        # a user who is actively querying.
         while self._query_depth > 0:
-            await asyncio.sleep(0.5)
-        await asyncio.sleep(0.2)
+            await asyncio.sleep(0.2)
+        await asyncio.sleep(0.1)
+
+    async def _wait_arsenal_idle(self) -> None:
+        await self._wait_foreground_idle()
 
     def _arsenal_median(
         self, payload: dict[str, Any], now: datetime | None = None
@@ -2023,6 +2199,16 @@ class StalzonePlugin(Star):
             dropped,
         )
 
+    async def _arsenal_fetch_history(self, client: Any, item_id: str) -> dict[str, Any]:
+        # Keep at most one background refresh request in flight and yield to
+        # foreground commands before consuming an API permit.
+        async with self._background_api_lock:
+            await self._wait_foreground_idle()
+            async with self._api_gate():
+                return await client.get_auction_history(
+                    item_id, limit=200, offset=0
+                )
+
     async def _refresh_arsenal_snapshot(self) -> None:
         if not self._arsenal_static:
             return
@@ -2054,10 +2240,9 @@ class StalzonePlugin(Star):
                         ).strip()
                         if not item_id or not item.get("accepted", True):
                             continue
-                        await self._wait_arsenal_idle()
                         try:
-                            payload = await client.get_auction_history(
-                                item_id, limit=200, offset=0
+                            payload = await self._arsenal_fetch_history(
+                                client, item_id
                             )
                         except asyncio.CancelledError:
                             raise
@@ -3485,14 +3670,14 @@ class StalzonePlugin(Star):
         interval = self._watch_interval()
         try:
             session_limit = max(
-                1, int(self._cfg("price_watch_session_items", 5) or 5)
+                1, int(self._cfg("price_watch_session_items", 8) or 8)
             )
         except (TypeError, ValueError):
             session_limit = 5
         try:
             # The scheduler hard-caps a tick at 10 items; don't advertise a
             # faster refresh than it can actually deliver.
-            batch = max(1, min(10, int(self._cfg("price_watch_batch", 5) or 5)))
+            batch = max(1, min(10, int(self._cfg("price_watch_batch", 8) or 8)))
         except (TypeError, ValueError):
             batch = 5
         refresh_minutes = max(1, -(-global_items // batch)) * max(1, interval // 60)
@@ -3923,7 +4108,7 @@ class StalzonePlugin(Star):
 
     def _watch_interval(self) -> int:
         try:
-            value = int(self._cfg("price_watch_interval", 120) or 120)
+            value = int(self._cfg("price_watch_interval", 60) or 60)
         except (TypeError, ValueError):
             value = 120
         return max(60, min(600, value))
@@ -4183,7 +4368,7 @@ class StalzonePlugin(Star):
                 self._watch_median_cache.pop(cache_key, None)
         keys = sorted(groups)
         try:
-            batch_size = max(1, min(10, int(self._cfg("price_watch_batch", 5) or 5)))
+            batch_size = max(1, min(10, int(self._cfg("price_watch_batch", 8) or 8)))
         except (TypeError, ValueError):
             batch_size = 5
         cursor = int(self._watch_state.get("cursor") or 0) % len(keys)
@@ -4202,29 +4387,31 @@ class StalzonePlugin(Star):
             if not group_subs:
                 continue
             try:
-                async with self._api_gate():
-                    async with self._make_client(region=region) as client:
-                        try:
-                            lots_payload = await client.get_auction_lots(
-                                item_id, limit=200
-                            )
-                        except Exception as exc:
-                            logger.warning(
-                                "STALZONE price-watch lots failed for %s: %s",
-                                item_id,
-                                exc,
-                            )
-                            continue
-                        relative_levels = {
-                            int(sub.get("level") or 0)
-                            for _key, sub in group_subs
-                            if sub.get("mode") == "relative"
-                        }
-                        medians_by_level: dict[int, dict[int | None, int]] = {}
-                        if relative_levels:
-                            medians_by_level = await self._watch_medians(
-                                client, region, item_id, relative_levels, now
-                            )
+                async with self._background_api_lock:
+                    await self._wait_foreground_idle()
+                    async with self._api_gate():
+                        async with self._make_client(region=region) as client:
+                            try:
+                                lots_payload = await client.get_auction_lots(
+                                    item_id, limit=200
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "STALZONE price-watch lots failed for %s: %s",
+                                    item_id,
+                                    exc,
+                                )
+                                continue
+                            relative_levels = {
+                                int(sub.get("level") or 0)
+                                for _key, sub in group_subs
+                                if sub.get("mode") == "relative"
+                            }
+                            medians_by_level: dict[int, dict[int | None, int]] = {}
+                            if relative_levels:
+                                medians_by_level = await self._watch_medians(
+                                    client, region, item_id, relative_levels, now
+                                )
             except Exception:
                 logger.exception(
                     "STALZONE price-watch query failed for %s", item_id
@@ -5396,8 +5583,8 @@ class StalzonePlugin(Star):
             blacklist = self._group_values("emission_group_blacklist")
         else:
             return USAGE["alert"]
-        self.config["emission_group_whitelist"] = whitelist
-        self.config["emission_group_blacklist"] = blacklist
+        self._set_cfg("emission_group_whitelist", whitelist)
+        self._set_cfg("emission_group_blacklist", blacklist)
         platform = str(
             getattr(getattr(event, "platform_meta", None), "id", "") or ""
         ).strip()
@@ -5406,8 +5593,9 @@ class StalzonePlugin(Star):
             and whitelist
             and not str(self._cfg("emission_notify_target", "") or "").strip()
         ):
-            self.config["emission_notify_target"] = (
-                f"{platform}:GroupMessage:{self._group_number(whitelist[0])}"
+            self._set_cfg(
+                "emission_notify_target",
+                f"{platform}:GroupMessage:{self._group_number(whitelist[0])}",
             )
         saved = self._persist_config()
         suffix = "" if saved else "（配置保存失败，重启后可能失效）"
@@ -5426,7 +5614,7 @@ class StalzonePlugin(Star):
             return USAGE["set_region"]
         if value not in VALID_REGIONS:
             return "区服只能是 ru / eu / na / sea / nea。"
-        self.config["region"] = value
+        self._set_cfg("region", value)
         saved = self._persist_config()
         suffix = "" if saved else "（配置保存失败，重启后可能失效）"
         return f"默认区服已切换为 {value.upper()}{suffix}。"
@@ -5448,7 +5636,7 @@ class StalzonePlugin(Star):
         mode = modes.get(value)
         if mode is None:
             return "拍卖显示模式只能是 0/聚合 或 1/全部。"
-        self.config["auction_display_mode"] = mode
+        self._set_cfg("auction_display_mode", mode)
         saved = self._persist_config()
         suffix = "" if saved else "（配置保存失败，重启后可能失效）"
         label = "全部显示" if mode == "full" else "聚合显示"
@@ -5886,15 +6074,32 @@ class StalzonePlugin(Star):
                     "Accept": "application/json",
                 },
             ) as client:
-                response = await client.get(
-                    "https://lunar-zone.com/web-api/auction/live/history",
-                    params={
-                        "item": item_id,
-                        "region": region,
-                        "limit": str(max(1, min(limit, 200))),
-                    },
-                )
-            if response.status_code != 200:
+                response = None
+                for attempt in range(3):
+                    try:
+                        response = await client.get(
+                            "https://lunar-zone.com/web-api/auction/live/history",
+                            params={
+                                "item": item_id,
+                                "region": region,
+                                "limit": str(max(1, min(limit, 200))),
+                            },
+                        )
+                    except (httpx.RequestError, asyncio.TimeoutError):
+                        if attempt < 2:
+                            await asyncio.sleep(0.4 * (attempt + 1))
+                            continue
+                        raise
+                    if response.status_code == 200:
+                        break
+                    if (
+                        response.status_code in {429, 500, 502, 503, 504}
+                        and attempt < 2
+                    ):
+                        await asyncio.sleep(0.4 * (attempt + 1))
+                        continue
+                    return None
+            if response is None or response.status_code != 200:
                 return None
             payload = response.json()
             return payload if isinstance(payload, dict) else None

@@ -560,6 +560,26 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("已加入", readded)
         self.assertEqual(plugin.config["emission_group_whitelist"], ["111"])
 
+    def test_grouped_config_migration_and_nested_values(self):
+        class GroupedConfig(dict):
+            def save_config(self):
+                return None
+
+        config = GroupedConfig(
+            {"region": "na", "api": {"region": "ru"}, "display": {}}
+        )
+        plugin = StalzonePlugin(Context(), config)
+        self.assertNotIn("region", config)
+        self.assertEqual(config["api"]["region"], "na")
+        self.assertEqual(plugin._cfg("region"), "na")
+        config["api"]["region"] = "eu"
+        self.assertEqual(plugin._cfg("region"), "eu")
+        config["api"]["region"] = "ru"
+        self.assertEqual(plugin._cfg("region"), "ru")
+        plugin._set_cfg("region", "sea")
+        self.assertEqual(config["api"]["region"], "sea")
+        self.assertNotIn("region", config)
+
     async def test_region_and_auction_mode_commands(self):
         plugin = self.make_plugin()
         self.assertIn("EU", plugin._handle_set_region("eu"))

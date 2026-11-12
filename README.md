@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.25-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.26-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -221,10 +221,10 @@
 - 支持价格缩写：`3K` = 3,000、`3M` / `3kk` = 3,000,000，大小写不限，也支持 `3,000,000` 和 `3 000 000`；`3.5M` 这类小数同样可用；
 - `-20%`：低于同等级、同品质近 3 天中位数的 20% 提醒；
 - `-20% 12000`：相对价，但绝对价不能超过 12000；
-- 每位用户最多 2 种神器，所有关注任务合计最多 8 条（同一神器的不同品质/等级各算一条，可在配置中调整）；每个会话最多 5 种不同神器；同一神器重复发送是更新规则；
+- 每位用户最多 3 种神器，所有关注任务合计最多 12 条（同一神器的不同品质/等级各算一条，可在配置中调整）；每个会话最多 8 种不同神器；同一神器重复发送是更新规则；
 - 创建关注时使用当前默认区服并记录；之后切换默认区服不会迁移已有任务，关注列表会显示任务实际所在区服；
 - 多个人关注同一神器时只查询一次，所有人共用同一份在售快照，但阈值、品质/等级和去重状态各自独立；
-- 每个 tick 每 2 分钟最多查询 5 种不同神器，超过时公平轮换，`关注列表` 会显示预计刷新间隔；
+- 默认每分钟轮询一次，每轮最多查询 8 种不同神器，超过时公平轮换，`关注列表` 会显示预计刷新间隔；
 - 买断命中：发送低价提醒，成功后自动取消该条关注；没买到需要重新关注；
 - 竞拍命中：买断高于目标但当前竞拍价/起拍价达到目标时提醒，只提醒、不取消关注；
 - 同一条挂单只提醒一次，不因当前竞拍价变化重复；不同挂单会分别提醒；
@@ -284,7 +284,7 @@
 
 ## 配置
 
-在 AstrBot WebUI → 插件 → `STALZONE 数据查询` 中配置：
+在 AstrBot WebUI → 插件 → `STALZONE 数据查询` 中配置。配置页按 **API 与区服 / 显示与图片 / 查询行为 / AI 查询 / 风暴提醒 / 神器价格关注 / 维护与更新** 分组，展开对应标题即可：
 
 | 配置项 | 默认 | 说明 |
 | --- | --- | --- |
@@ -309,14 +309,21 @@
 | `emission_group_whitelist` | 空 | QQ 群白名单；每项一个群号，可点“添加更多”继续添加。留空则完全不发送自动提醒；填写后向名单内每个群发送 |
 | `emission_group_blacklist` | 空 | QQ 群黑名单；每项一个群号，可点“添加更多”继续添加。优先级高于白名单 |
 | `price_watch_enabled` | `true` | 神器价格关注总开关；没有关注任务时不会轮询 |
-| `price_watch_interval` | `120` | 价格关注轮询间隔（秒），范围 60–600 |
-| `price_watch_per_user` | `2` | 每位用户最多关注的神器种类数；同一神器重复发送是更新 |
-| `price_watch_user_total` | `8` | 每位用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），范围 1–100 |
-| `price_watch_session_items` | `5` | 每个会话最多同时关注的不同神器数 |
-| `price_watch_batch` | `5` | 每轮最多查询的不同神器数；超过按顺序公平轮换 |
+| `price_watch_interval` | `60` | 价格关注轮询间隔（秒），默认每分钟，范围 60–600 |
+| `price_watch_per_user` | `3` | 每位用户最多关注的神器种类数；同一神器重复发送是更新 |
+| `price_watch_user_total` | `12` | 每位用户所有关注任务的总条数上限（同一神器的不同品质/等级各算一条），范围 1–100 |
+| `price_watch_session_items` | `8` | 每个会话最多同时关注的不同神器数 |
+| `price_watch_batch` | `8` | 每轮最多查询的不同神器数；超过按顺序公平轮换 |
 | `price_watch_group_restrict` | `false` | 开启后仅管理员/群主/群管可在群聊创建关注 |
 | `price_watch_auction_alerts` | `true` | 竞拍价/起拍价达到目标时也提醒；关闭后只监控买断价 |
 | `price_watch_ttl_days` | `7` | 关注有效期（天），到期提醒一次并自动取消 |
+
+### 网络与后台任务
+
+- 官方 STALZONE API 客户端默认 **3 次尝试**（2 次重试），对超时、网络错误、429 和 5xx 做退避重试；连续失败会打开 30 秒熔断，避免继续打爆 API。
+- Lunar 第三方战报和 SC CORE 历史补全也各自最多重试 3 次；失败时按可选数据回退，不影响主查询。
+- 风暴轮询、军械库后台刷新、价格关注共享同一个后台 API 锁：后台任务一次只发一个请求，并在每次请求前让路给前台用户查询；前台仍可使用其余 5 个并发许可，降低后台刷新期间用户查询失败/排队的情况。
+- 价格关注默认每分钟轮询，每轮最多 8 种不同神器；单用户最多 3 种/12 条、单会话最多 8 种。相较社区传闻的官方上限（20 次/秒、400 次/分钟，未确认）保持明显保守，不滥用 API。
 
 ### 自动风暴提醒
 
@@ -478,7 +485,7 @@ astrbot_plugin_stalzone/
 python -m unittest discover -s tests -v
 ```
 
-当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、官方数据库同步、神器估价、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **302 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。官方物品库的更新流程见 [`docs/official-item-database.md`](docs/official-item-database.md)。
+当前测试覆盖 API 客户端、熔断与诊断、格式化、物品索引、官方数据库同步、神器估价、PDA 富文本、图片渲染与视觉快照、候选卡、区服参数、缓存与主流程，共 **328 个测试**；GitHub Actions 在 Windows / Linux、Python 3.10 / 3.12 上自动跑测试，并执行覆盖率门槛（当前 80%，门槛 75%）。官方物品库的更新流程见 [`docs/official-item-database.md`](docs/official-item-database.md)。
 
 演示服冒烟测试（需要演示应用凭证）：
 

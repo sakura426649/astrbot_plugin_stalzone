@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.26 - 2026-11-12
+
+### Changed
+
+- WebUI config is now grouped into API & region, display & images, query behavior, AI queries, emission alerts, artifact price watch, and maintenance/update sections. Legacy flat keys remain readable so existing settings survive the schema change.
+- Price-watch defaults expanded to a one-minute interval, 3 artifact types / 12 total subscriptions per user, 8 artifacts per session and 8 artifacts per tick.
+- Background emission, arsenal and price-watch API requests now share a single background lock, yield to foreground commands before each call, and leave the remaining API permits for interactive queries. Lunar and SC CORE fallbacks now retry transient failures too.
+
 ## 1.14.25 - 2026-11-12
 
 ### Fixed
