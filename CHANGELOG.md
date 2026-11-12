@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.22 - 2026-11-12
+
+### Changed
+
+- Arsenal fixed prices: Large Artifact Fragment 1,500; Filter 2,500; Protoartifact 4,000; Strong Behemoth’s Eye 1,000 (reference). Detector Components 2,400; Antiseptic 750; Lymph 1,200 (recycle). Recycle entries render as a green `回收` label; fixed entries bypass the auction refresh.
+
 ## 1.14.21 - 2026-11-11
 
 ### Fixed

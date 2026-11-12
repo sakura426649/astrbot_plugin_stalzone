@@ -3975,7 +3975,8 @@ def format_arsenal_text(view: dict[str, Any] | None) -> str:
         rows.append("拍卖价格正在更新；当前只显示手动价或无报价物品。")
     notes = [
         f"{view.get('reset_label') or '每日 12:00 重置'}；"
-        f"无限制=无每日上限；不收=当前不接收；参考=内置快照价",
+        f"无限制=无每日上限；不收=当前不接收；"
+        f"参考/回收=固定价（回收为绿色）",
         f"价格快照：{view.get('generated_at') or '更新中'}；"
         f"后台空闲刷新，约 3 小时一次",
     ]
@@ -3984,7 +3985,9 @@ def format_arsenal_text(view: dict[str, Any] | None) -> str:
         [
             f"{str(view.get('region') or 'EU').upper()}｜共 {len(entries)} 项｜"
             f"{int(view.get('auction_count') or 0)} 拍卖价 / "
-            f"{int(view.get('manual_count') or 0)} 手动价"
+            f"{int(view.get('manual_count') or 0)} 手动价 / "
+            f"{int(view.get('reference_count') or 0)} 参考 / "
+            f"{int(view.get('recycle_count') or 0)} 回收"
         ],
         [("推荐（10K 成本从低到高）", rows), ("说明", notes)],
         "价格：近 3 日成交中位数并剔除极值｜手动价：策展设定｜时间为 UTC+8",

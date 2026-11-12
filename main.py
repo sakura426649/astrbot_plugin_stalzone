@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.21"
+PLUGIN_VERSION = "1.14.22"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -2168,9 +2168,16 @@ class StalzonePlugin(Star):
             unit: int | None = None
             unavailable = False
             reference = False
+            source_label = "拍卖"
             if accepted:
                 if source == "manual":
                     unit = self._arsenal_int(item.get("manual_price"))
+                    source_label = "手动"
+                elif source in {"reference", "recycle"}:
+                    unit = self._arsenal_int(item.get("manual_price"))
+                    if unit is None:
+                        unit = self._arsenal_int(item.get("seed_price"))
+                    source_label = "回收" if source == "recycle" else "参考"
                 else:
                     cached = self._arsenal_prices.get(key)
                     if isinstance(cached, dict):
@@ -2181,6 +2188,8 @@ class StalzonePlugin(Star):
                     if unit is None:
                         unit = self._arsenal_int(item.get("seed_price"))
                         reference = unit is not None
+                        if reference:
+                            source_label = "参考"
             per_ten_k = (
                 (10000 + rep - 1) // rep if rep else None
             )
@@ -2207,13 +2216,9 @@ class StalzonePlugin(Star):
                     "total_price_text": f"{total:,}" if total is not None else "—",
                     "days": days,
                     "source": (
-                        "手动"
-                        if source == "manual"
-                        else (
-                            "参考"
-                            if reference
-                            else ("拍卖" if unit is not None else "无报价")
-                        )
+                        source_label
+                        if unit is not None
+                        else ("无报价" if accepted else "—")
                     ),
                     "accepted": accepted,
                 }
@@ -2257,9 +2262,19 @@ class StalzonePlugin(Star):
                 for item in self._arsenal_static
                 if item.get("price_source") == "manual"
             ),
+            "reference_count": sum(
+                1
+                for item in self._arsenal_static
+                if item.get("price_source") == "reference"
+            ),
+            "recycle_count": sum(
+                1
+                for item in self._arsenal_static
+                if item.get("price_source") == "recycle"
+            ),
             "data_note": (
-                "拍卖价：近 3 日成交中位数并剔除极值｜手动价：策展设定｜"
-                "无限制=无每日上限｜不收=当前不接收｜参考=内置快照价"
+                "拍卖价：近 3 日成交中位数并剔除极值｜手动/参考/回收：策展固定价｜"
+                "无限制=无每日上限｜不收=当前不接收｜回收=绿色固定回收价"
             ),
             "cache_note": cache_note,
         }

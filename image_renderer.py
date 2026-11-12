@@ -2006,8 +2006,10 @@ def render_arsenal_card(
         (
             "价格来源",
             f"{int(view.get('auction_count') or 0)} 拍卖 / "
-            f"{int(view.get('manual_count') or 0)} 手动",
-            "手动价由策展设定；拍卖价取近 3 日成交中位数",
+            f"{int(view.get('manual_count') or 0)} 手动 / "
+            f"{int(view.get('reference_count') or 0)} 参考 / "
+            f"{int(view.get('recycle_count') or 0)} 回收",
+            "手动/参考/回收为固定价；拍卖取近 3 日成交中位数",
             muted,
         )
     )
@@ -2146,12 +2148,16 @@ def render_arsenal_card(
             if accepted:
                 source = str(entry.get("source") or "拍卖")
             source_color = (
-                "#FFB454"
-                if source == "手动"
+                "#54D6A1"
+                if source == "回收"
                 else (
-                    "#8FA2B8"
-                    if source == "参考"
-                    else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                    "#FFB454"
+                    if source == "手动"
+                    else (
+                        "#8FA2B8"
+                        if source == "参考"
+                        else ("#7FC4FF" if source == "拍卖" else "#71889A")
+                    )
                 )
             )
             draw.text(
