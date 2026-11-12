@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.24 - 2026-11-12
+
+### Fixed
+
+- `/sz 估价` now accepts levels without surrounding spaces: `原子 金+15`, `原子 金＋0`, `原子+15 金`, `原子 ＋0 金` and the spaced forms all parse correctly. The not-found card now shows only the item name (for example `马莲`), not the quality/level suffix.
+
 ## 1.14.23 - 2026-11-12
 
 ### Fixed

@@ -2086,7 +2086,14 @@ def parse_appraisal_query(
     aliases as auction filters.  Both are optional and may appear in either
     order (``原子 金 +15`` / ``原子 +15 金``).
     """
-    text = " ".join(str(argument or "").split())
+    # Users often omit spaces around the level: 马莲 金＋0 / 马莲＋0 金.
+    # Split sign+digits without touching item names without levels.
+    raw = re.sub(
+        r"([+＋])([0-9]{1,2})(?![0-9])",
+        lambda match: f" {match.group(1)}{match.group(2)} ",
+        str(argument or ""),
+    )
+    text = " ".join(raw.split())
     if not text:
         return "", None, None
     parts = text.split(" ")

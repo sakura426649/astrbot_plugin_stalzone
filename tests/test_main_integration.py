@@ -343,8 +343,15 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         usage = await collect(plugin, "/sz 估价")
         self.assertIn("用法：/sz 估价", usage)
 
+        attached = await collect(plugin, "/sz 估价 原子 金＋0")
+        self.assertIn("神器估价", attached)
+
         non_artifact = await collect(plugin, "/sz 估价 AK-308")
         self.assertIn("不是神器", non_artifact)
+
+        missing = await collect(plugin, "/sz 估价 马莲 金＋0")
+        self.assertIn("马莲", missing)
+        self.assertNotIn("金＋0", missing)
 
     async def test_appraisal_image_card(self):
         from image_renderer import find_cjk_font
