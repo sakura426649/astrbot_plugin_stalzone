@@ -3464,16 +3464,43 @@ def build_season_pass_view(result: Any) -> dict[str, Any]:
                 return 15
             return 0
 
+        def reward_chain(
+            current_tier: int,
+            final_tier: int,
+        ) -> tuple[list[dict[str, Any]], str]:
+            components: list[dict[str, Any]] = []
+            parts: list[str] = []
+            previous_levels = 0
+            for tier, total_levels in ((15, 3), (45, 8), (100, 20)):
+                step = total_levels - previous_levels
+                previous_levels = total_levels
+                if tier <= current_tier:
+                    components.append(
+                        {"tier": tier, "levels": 0, "claimed": True}
+                    )
+                    parts.append(f"{tier}档√")
+                elif tier <= final_tier:
+                    components.append(
+                        {"tier": tier, "levels": step, "claimed": False}
+                    )
+                    parts.append(f"{tier}档({step}级)")
+            return components, " + ".join(parts) if parts else "未达 15 档"
+
         def row(start: int, end: int | None) -> dict[str, Any]:
             current_xp = reward_xp(start)
             final_xp = reward_xp(min(100, start + future_tasks))
             increment = max(0, final_xp - current_xp)
+            current_tier = tier_of(current_xp)
+            final_tier = tier_of(final_xp)
+            components, reward_text = reward_chain(current_tier, final_tier)
             return {
                 "range": range_label(start, end),
-                "tier": tier_of(final_xp),
-                "current_tier": tier_of(current_xp),
+                "tier": final_tier,
+                "current_tier": current_tier,
                 "levels": increment // 1000,
                 "final": base_final + increment // 1000,
+                "components": components,
+                "reward_text": reward_text,
             }
 
         points = {min_done}
@@ -3496,17 +3523,20 @@ def build_season_pass_view(result: Any) -> dict[str, Any]:
             rows.append(row(start, end))
         if rows and all(int(item["levels"]) == 0 for item in rows):
             final_xp = reward_xp(min(100, min_done + future_tasks))
+            current_tier = tier_of(reward_xp(min_done))
+            final_tier = tier_of(final_xp)
+            components, reward_text = reward_chain(
+                current_tier, final_tier
+            )
             return [
                 {
                     "range": range_label(min_done, None),
-                    "tier": (
-                        100 if final_xp >= 20_000
-                        else 45 if final_xp >= 8_000
-                        else 15 if final_xp >= 3_000
-                        else 0
-                    ),
+                    "tier": final_tier,
+                    "current_tier": current_tier,
                     "levels": 0,
                     "final": base_final,
+                    "components": components,
+                    "reward_text": reward_text,
                 }
             ]
         return rows
@@ -3620,7 +3650,8 @@ def build_season_pass_view(result: Any) -> dict[str, Any]:
         footer += "｜每日前 15 个任务可吃超载"
     range_note = (
         "“今天任务已经做够”指达到每日目标 "
-        f"{daily_tasks} 个；已完成档位视为已领取，最终等级只加尚未领取的奖励差额。"
+        f"{daily_tasks} 个；已完成档位打√并置灰，"
+        "最终等级只加未打√档位的奖励差额。"
     )
     return {
         "level": level,
@@ -3656,20 +3687,12 @@ def format_season_pass(result: Any, *, view: dict[str, Any] | None = None) -> st
                 f"  {today.get('label') or ''}（{today.get('note') or ''}）"
             )
             for row in today.get("rows") or []:
-                tier_value = int(row.get("tier") or 0)
-                levels = int(row.get("levels") or 0)
-                if levels == 0 and tier_value:
-                    tier = "不再加"
-                elif tier_value:
-                    tier = f"{tier_value} 档"
-                    if int(row.get("current_tier") or 0):
-                        tier += f" 补+{levels} 级"
-                    else:
-                        tier += f" +{levels} 级"
-                else:
-                    tier = "未达 15 档"
+                reward_text = str(
+                    row.get("reward_text") or "未达 15 档"
+                )
                 lines.append(
-                    f"    {row.get('range') or ''}：{tier} → Lv {int(row['final'])}"
+                    f"    {row.get('range') or ''}：{reward_text}"
+                    f" → Lv {int(row['final'])}"
                 )
     inputs = "｜".join(f"{key} {value}" for key, value in view.get("input_chips") or [])
     return _truncate(

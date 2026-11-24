@@ -4944,51 +4944,83 @@ def render_pass_card(
             )
             row_y = my + 64
             for row in today.get("rows") or []:
-                tier = int(row.get("tier") or 0)
-                levels = int(row.get("levels") or 0)
-                current_tier = int(row.get("current_tier") or 0)
-                if levels == 0 and tier:
-                    tier_color = MUTED
-                    tier_text = "不再加"
-                elif tier >= 100:
-                    tier_color = gold
-                    tier_text = "100 档"
-                elif tier >= 45:
-                    tier_color = cyan
-                    tier_text = "45 档"
-                elif tier >= 15:
-                    tier_color = green
-                    tier_text = "15 档"
-                else:
-                    tier_color = MUTED
-                    tier_text = "未达 15 档"
-                if levels and tier:
-                    tier_text += (
-                        f" 补+{levels} 级"
-                        if current_tier
-                        else f" +{levels} 级"
-                    )
+                range_text = str(row.get("range") or "")
+                final_text = f"Lv {int(row.get('final') or 0)}"
                 draw.text(
                     (mx + 16, row_y + 22),
-                    str(row.get("range") or ""),
+                    range_text,
                     font=range_font,
                     fill="#C7D5E4",
                     anchor="lm",
                 )
                 draw.text(
-                    (mx + medium_w - 142, row_y + 22),
-                    tier_text,
-                    font=tier_font,
-                    fill=tier_color,
-                    anchor="rm",
-                )
-                draw.text(
                     (mx + medium_w - 16, row_y + 22),
-                    f"Lv {int(row.get('final') or 0)}",
+                    final_text,
                     font=final_font,
                     fill=TEXT,
                     anchor="rm",
                 )
+                chain_x = mx + 16 + width_of(range_text, range_font) + 14
+                components = list(row.get("components") or [])
+                if not components:
+                    draw.text(
+                        (chain_x, row_y + 22),
+                        "未达 15 档",
+                        font=tier_font,
+                        fill=MUTED,
+                        anchor="lm",
+                    )
+                else:
+                    tx = chain_x
+                    for index, component in enumerate(components):
+                        tier = int(component.get("tier") or 0)
+                        levels = int(component.get("levels") or 0)
+                        claimed = bool(component.get("claimed"))
+                        if tier >= 100:
+                            color = gold
+                        elif tier >= 45:
+                            color = cyan
+                        elif tier >= 15:
+                            color = green
+                        else:
+                            color = MUTED
+                        if claimed:
+                            text = f"{tier}档"
+                            draw.text(
+                                (tx, row_y + 22),
+                                text,
+                                font=tier_font,
+                                fill="#7D8D99",
+                                anchor="lm",
+                            )
+                            tx += width_of(text, tier_font)
+                            draw.text(
+                                (tx + 2, row_y + 22),
+                                "√",
+                                font=tier_font,
+                                fill="#7D8D99",
+                                anchor="lm",
+                            )
+                            tx += width_of("√", tier_font) + 2
+                        else:
+                            text = f"{tier}档({levels}级)"
+                            draw.text(
+                                (tx, row_y + 22),
+                                text,
+                                font=tier_font,
+                                fill=color,
+                                anchor="lm",
+                            )
+                            tx += width_of(text, tier_font)
+                        if index + 1 < len(components):
+                            draw.text(
+                                (tx + 4, row_y + 22),
+                                "+",
+                                font=tier_font,
+                                fill=MUTED,
+                                anchor="lm",
+                            )
+                            tx += width_of("+", tier_font) + 8
                 row_y += 44
         y += b_height + block_gap
 

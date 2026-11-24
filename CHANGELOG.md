@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.29 - 2026-11-24
+
+### Changed
+
+- Current-week reward display is now a cumulative chain to the right of each task range, e.g. `15档(3级) + 45档(5级)`, instead of a second line below the range.
+- Already-claimed tiers are shown grey with a checkmark, e.g. `15档√ + 45档(5级)`. The final level only includes the unclaimed difference.
+- A row already at 100 shows `15档√ + 45档√ + 100档√` and adds nothing. Ranges directly at the same claimed tier no longer show a separate “不再加” badge.
+- When the current week has no remaining task days after today is done, the ranges collapse to one row such as `本周已完成 20 个及以上：15档√`.
+
 ## 1.14.28 - 2026-11-24
 
 ### Added

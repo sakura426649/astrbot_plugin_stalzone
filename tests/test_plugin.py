@@ -2256,9 +2256,9 @@ class SeasonPassTests(unittest.TestCase):
         text = format_season_pass(result, view=view)
         self.assertIn("今天任务尚未做够（今天还可完成 40 个）", text)
         self.assertIn("今天任务已经做够（今天已完成 40 个及以上）", text)
-        self.assertIn("本周已完成 0–14 个：45 档 +8 级 → Lv 240", text)
-        self.assertIn("本周已完成 15–19 个：45 档 补+5 级 → Lv 237", text)
-        self.assertIn("本周已完成 100 个及以上：不再加 → Lv 232", text)
+        self.assertIn("本周已完成 0–14 个：15档(3级) + 45档(5级) → Lv 240", text)
+        self.assertIn("本周已完成 15–19 个：15档√ + 45档(5级) → Lv 237", text)
+        self.assertIn("本周已完成 100 个及以上：15档√ + 45档√ + 100档√ → Lv 232", text)
 
     def test_three_days_left_splits_claimed_tiers(self):
         cst = timezone(timedelta(hours=8))
@@ -2310,7 +2310,7 @@ class SeasonPassTests(unittest.TestCase):
             [("本周已完成 20 个及以上", 15, 0)],
         )
         text = format_season_pass(result, view=view)
-        self.assertIn("本周已完成 20 个及以上：不再加 → Lv 196", text)
+        self.assertIn("本周已完成 20 个及以上：15档√ → Lv 196", text)
 
     def test_calendar_aligned_forecast_at_thursday(self):
         cst = timezone(timedelta(hours=8))
@@ -2340,10 +2340,10 @@ class SeasonPassTests(unittest.TestCase):
         self.assertIn("本周剩余：6 天", text)
         self.assertIn("今天任务尚未做够", text)
         self.assertIn("今天任务已经做够", text)
-        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 183", text)
-        self.assertIn("本周已完成 10–14 个：100 档 +20 级 → Lv 195", text)
-        self.assertIn("本周已完成 15–24 个：45 档 补+5 级 → Lv 174", text)
-        self.assertIn("本周已完成 25–44 个：100 档 补+17 级 → Lv 186", text)
+        self.assertIn("本周已完成 0–9 个：15档(3级) + 45档(5级) → Lv 183", text)
+        self.assertIn("本周已完成 10–14 个：15档(3级) + 45档(5级) + 100档(12级) → Lv 195", text)
+        self.assertIn("本周已完成 15–24 个：15档√ + 45档(5级) → Lv 174", text)
+        self.assertIn("本周已完成 25–44 个：15档√ + 45档(5级) + 100档(12级) → Lv 186", text)
 
     def test_week_reset_boundary(self):
         cst = timezone(timedelta(hours=8))

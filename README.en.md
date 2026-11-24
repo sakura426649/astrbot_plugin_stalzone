@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.28-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.29-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -38,7 +38,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
-| Season Pass | Local XP/level prediction aligned to the Wednesday 12:00 reset; groups final levels by overload mode, today’s task completion, and dynamic current-week ranges. Completed 15/45/100 rewards are treated as already claimed; ranges only add the unclaimed difference |
+| Season Pass | Local XP/level prediction aligned to the Wednesday 12:00 reset; groups final levels by overload mode, today’s task completion, and dynamic current-week ranges. Reward chains show `15 tier (3 levels) + 45 tier (5 levels)`; claimed tiers are greyed out with a checkmark and are not added again |
 | Not found | A query-specific card repeats the name/ID and region, with a short correction hint |
 
 ### Platform support

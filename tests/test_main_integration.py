@@ -1305,7 +1305,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("每日合计：6,000", text)
         self.assertIn("每周任务数：105", text)
         self.assertIn("赛季基础经验（含超载）：160,000", text)
-        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 183", text)
+        self.assertIn("本周已完成 0–9 个：15档(3级) + 45档(5级) → Lv 183", text)
 
         alias = await collect(
             self.make_plugin(), "/sz 通行证等级预测 15 15+2 20"
@@ -1316,11 +1316,11 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             self.make_plugin(), "/sz 通行证 15 15 3 20"
         )
         self.assertIn("超载 3 次（有效 3）", four_params)
-        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 188", four_params)
+        self.assertIn("本周已完成 0–9 个：15档(3级) + 45档(5级) → Lv 188", four_params)
 
         no_overload = await collect(self.make_plugin(), "/sz 通行证 15 15 20")
         self.assertIn("预测等级：", no_overload)
-        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 173", no_overload)
+        self.assertIn("本周已完成 0–9 个：15档(3级) + 45档(5级) → Lv 173", no_overload)
         self.assertNotIn("使用超载", no_overload)
         self.assertNotIn("不使用超载", no_overload)
         self.assertNotIn("不用超载", no_overload)
