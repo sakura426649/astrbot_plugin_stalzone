@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.30 - 2026-11-24
+
+### Fixed
+
+- Replaced the `√` character (U+221A, square root) with a vector checkmark for claimed reward tiers. Microsoft YaHei has no `✓`/`✔` glyph, so the fallback square-root symbol looked like a radical in QQ images.
+- The range note now says “打勾” instead of showing `√`; text mode uses `✓`.
+
 ## 1.14.29 - 2026-11-24
 
 ### Changed

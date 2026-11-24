@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.29-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.30-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -78,7 +78,7 @@
 | **神器价格关注** | `/sz 关注` 按买断/竞拍价做低价提醒；买断命中提醒后自动取消，竞拍命中只提醒；支持绝对价、相对中位价和价格上限，关注列表自己的条目置顶 |
 | **候选卡** | 模糊匹配最多展示前 20 个，两列卡片显示序号、品质色名称、ID/类别和物品图标；`sz 候选 <序号>` 直接重放原查询 |
 | **平衡调整** | 合并 171 份 2023–2026 官方补丁公告（含 2026-10-28），按物品列出全部改动，支持武器、神器与配件 |
-| **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；按“是否使用超载 → 今天任务是否做够 → 本周累计任务数区间”分块展示最终等级；奖励链显示 `15档(3级) + 45档(5级)`，已领取档位置灰打√且不再加成，不请求游戏 API |
+| **通行证计算** | 本地计算每日/每周经验、超载与剩余天数；按“是否使用超载 → 今天任务是否做够 → 本周累计任务数区间”分块展示最终等级；奖励链显示 `15档(3级) + 45档(5级)`，已领取档位置灰打✓且不再加成，不请求游戏 API |
 | **指令说明** | 必须带参数的指令缺参时不再回一段易被 QQ 换行打乱的纯文本，而是发送同风格说明图：`<必填>` / `[可选]` 语法高亮、参数对齐表、权限条和可直接发送的示例；说明图按指令缓存 |
 | **查无结果** | 玩家/物品/拍卖/战队/调整未命中时发送提示图，重复查询名与区服，并给出修改建议 |
 

@@ -4994,14 +4994,29 @@ def render_pass_card(
                                 anchor="lm",
                             )
                             tx += width_of(text, tier_font)
-                            draw.text(
-                                (tx + 2, row_y + 22),
-                                "√",
-                                font=tier_font,
+                            check_x = tx + 4
+                            check_y = row_y + 22
+                            draw.line(
+                                (
+                                    check_x,
+                                    check_y,
+                                    check_x + 4,
+                                    check_y + 4,
+                                ),
                                 fill="#7D8D99",
-                                anchor="lm",
+                                width=2,
                             )
-                            tx += width_of("√", tier_font) + 2
+                            draw.line(
+                                (
+                                    check_x + 4,
+                                    check_y + 4,
+                                    check_x + 11,
+                                    check_y - 5,
+                                ),
+                                fill="#7D8D99",
+                                width=2,
+                            )
+                            tx += 14
                         else:
                             text = f"{tier}档({levels}级)"
                             draw.text(

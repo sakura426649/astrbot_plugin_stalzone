@@ -3478,7 +3478,7 @@ def build_season_pass_view(result: Any) -> dict[str, Any]:
                     components.append(
                         {"tier": tier, "levels": 0, "claimed": True}
                     )
-                    parts.append(f"{tier}档√")
+                    parts.append(f"{tier}档✓")
                 elif tier <= final_tier:
                     components.append(
                         {"tier": tier, "levels": step, "claimed": False}
@@ -3650,8 +3650,8 @@ def build_season_pass_view(result: Any) -> dict[str, Any]:
         footer += "｜每日前 15 个任务可吃超载"
     range_note = (
         "“今天任务已经做够”指达到每日目标 "
-        f"{daily_tasks} 个；已完成档位打√并置灰，"
-        "最终等级只加未打√档位的奖励差额。"
+        f"{daily_tasks} 个；已完成档位会置灰并打勾，"
+        "最终等级只加未打勾档位的奖励差额。"
     )
     return {
         "level": level,
