@@ -6,7 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -50,10 +50,12 @@ from command_parser import parse_command  # noqa: E402
 from season_pass import (  # noqa: E402
     calculate,
     daily_task_xp,
+    next_week_reset,
     parse_arguments,
     weekly_reward,
 )
 from formatters import (  # noqa: E402
+    build_season_pass_view,
     ARTEFACT_STAT_CN,
     ITEM_STAT_CN,
     QUALITY_COLORS,
@@ -2201,11 +2203,164 @@ class SeasonPassTests(unittest.TestCase):
         self.assertEqual(result.daily_total_xp, 9625)
 
     def test_no_overload_hides_overload_prediction(self):
-        text = format_season_pass(calculate(*parse_arguments("15 15 20")))
-        self.assertIn("预测等级：15 → 173 级", text)
-        self.assertNotIn("不使用超载", text)
+        cst = timezone(timedelta(hours=8))
+        result = calculate(
+            15,
+            15,
+            0,
+            20,
+            7,
+            now=datetime(2026, 11, 26, 12, 0, tzinfo=cst),
+        )
+        text = format_season_pass(result)
+        self.assertIn("预测等级：", text)
+        self.assertIn("今天任务尚未做够", text)
+        self.assertIn("今天任务已经做够", text)
+        self.assertIn("本周已完成 0–9 个", text)
         self.assertNotIn("使用超载", text)
+        self.assertNotIn("不使用超载", text)
         self.assertNotIn("不用超载", text)
+
+    def test_two_days_left_dynamic_ranges(self):
+        cst = timezone(timedelta(hours=8))
+        result = calculate(
+            15,
+            40,
+            2,
+            20,
+            7,
+            now=datetime(2026, 11, 30, 13, 0, tzinfo=cst),
+        )
+        view = build_season_pass_view(result)
+        block = view["blocks"][0]
+        not_done, done = block["today_blocks"]
+        self.assertEqual(
+            [(row["range"], row["tier"], row["levels"]) for row in not_done["rows"]],
+            [
+                ("本周已完成 0–14 个", 45, 8),
+                ("本周已完成 15–19 个", 45, 5),
+                ("本周已完成 20–44 个", 100, 17),
+                ("本周已完成 45–99 个", 100, 12),
+                ("本周已完成 100 个及以上", 100, 0),
+            ],
+        )
+        self.assertEqual(
+            [(row["range"], row["tier"], row["levels"]) for row in done["rows"]],
+            [
+                ("本周已完成 40–44 个", 45, 5),
+                ("本周已完成 45–59 个", 45, 0),
+                ("本周已完成 60–99 个", 100, 12),
+                ("本周已完成 100 个及以上", 100, 0),
+            ],
+        )
+        text = format_season_pass(result, view=view)
+        self.assertIn("今天任务尚未做够（今天还可完成 40 个）", text)
+        self.assertIn("今天任务已经做够（今天已完成 40 个及以上）", text)
+        self.assertIn("本周已完成 0–14 个：45 档 +8 级 → Lv 240", text)
+        self.assertIn("本周已完成 15–19 个：45 档 补+5 级 → Lv 237", text)
+        self.assertIn("本周已完成 100 个及以上：不再加 → Lv 232", text)
+
+    def test_three_days_left_splits_claimed_tiers(self):
+        cst = timezone(timedelta(hours=8))
+        result = calculate(
+            15,
+            40,
+            2,
+            20,
+            7,
+            now=datetime(2026, 11, 29, 13, 0, tzinfo=cst),
+        )
+        view = build_season_pass_view(result)
+        block = view["blocks"][0]
+        not_done, done = block["today_blocks"]
+        self.assertEqual(
+            [row["range"] for row in not_done["rows"]],
+            [
+                "本周已完成 0–14 个",
+                "本周已完成 15–44 个",
+                "本周已完成 45–99 个",
+                "本周已完成 100 个及以上",
+            ],
+        )
+        self.assertEqual(
+            [row["range"] for row in done["rows"]],
+            [
+                "本周已完成 40–44 个",
+                "本周已完成 45–99 个",
+                "本周已完成 100 个及以上",
+            ],
+        )
+
+    def test_last_week_day_ranges_for_today_done(self):
+        cst = timezone(timedelta(hours=8))
+        result = calculate(
+            15,
+            20,
+            2,
+            20,
+            7,
+            now=datetime(2026, 11, 24, 13, 0, tzinfo=cst),
+        )
+        view = build_season_pass_view(result)
+        self.assertEqual(result.current_week_days, 1)
+        self.assertEqual(view["days_left"], 1)
+        done = view["blocks"][0]["today_blocks"][1]
+        self.assertEqual(
+            [(row["range"], row["tier"], row["levels"]) for row in done["rows"]],
+            [("本周已完成 20 个及以上", 15, 0)],
+        )
+        text = format_season_pass(result, view=view)
+        self.assertIn("本周已完成 20 个及以上：不再加 → Lv 196", text)
+
+    def test_calendar_aligned_forecast_at_thursday(self):
+        cst = timezone(timedelta(hours=8))
+        result = calculate(
+            15,
+            15,
+            2,
+            20,
+            7,
+            now=datetime(2026, 11, 26, 12, 0, tzinfo=cst),
+        )
+        self.assertTrue(result.calendar_aligned)
+        self.assertEqual(result.current_week_days, 6)
+        self.assertEqual(result.current_week_active_days, 6)
+        self.assertEqual(result.full_weeks, 2)
+        self.assertEqual(result.remainder_days, 0)
+        self.assertEqual(result.active_days, 20)
+        self.assertEqual(result.season_base_xp, 150_000)
+        self.assertEqual(result.season_total_xp, 160_000)
+        self.assertEqual(result.final_level_without_overload, 165)
+        self.assertEqual(result.final_level_with_overload, 175)
+        self.assertEqual(
+            result.next_reset_at,
+            datetime(2026, 12, 2, 12, 0, tzinfo=cst),
+        )
+        text = format_season_pass(result)
+        self.assertIn("本周剩余：6 天", text)
+        self.assertIn("今天任务尚未做够", text)
+        self.assertIn("今天任务已经做够", text)
+        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 183", text)
+        self.assertIn("本周已完成 10–14 个：100 档 +20 级 → Lv 195", text)
+        self.assertIn("本周已完成 15–24 个：45 档 补+5 级 → Lv 174", text)
+        self.assertIn("本周已完成 25–44 个：100 档 补+17 级 → Lv 186", text)
+
+    def test_week_reset_boundary(self):
+        cst = timezone(timedelta(hours=8))
+        before = datetime(2026, 11, 25, 11, 59, tzinfo=cst)
+        after = datetime(2026, 11, 25, 12, 0, tzinfo=cst)
+        self.assertEqual(
+            next_week_reset(before),
+            datetime(2026, 11, 25, 12, 0, tzinfo=cst),
+        )
+        self.assertEqual(
+            next_week_reset(after),
+            datetime(2026, 12, 2, 12, 0, tzinfo=cst),
+        )
+        early = calculate(15, 15, 2, 20, 7, now=before)
+        fresh = calculate(15, 15, 2, 20, 7, now=after)
+        self.assertEqual(early.current_week_days, 1)
+        self.assertEqual(fresh.current_week_days, 7)
 
     def test_four_parameter_overload_form(self):
         self.assertEqual(

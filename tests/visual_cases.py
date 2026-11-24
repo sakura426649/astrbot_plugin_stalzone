@@ -361,7 +361,17 @@ def _diag() -> Path | None:
 
 
 def _pass() -> Path | None:
-    view = build_season_pass_view(calculate(15, 15, 2, 20, 7))
+    # Thursday 12:00 UTC+8: six days remain in the current week.
+    view = build_season_pass_view(
+        calculate(
+            15,
+            15,
+            2,
+            20,
+            7,
+            now=datetime(2026, 11, 26, 4, 0, tzinfo=timezone.utc),
+        )
+    )
     return render_pass_card(view)
 
 

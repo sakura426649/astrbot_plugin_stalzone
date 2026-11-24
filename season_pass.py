@@ -13,10 +13,34 @@ Rules (EU/global, 2026):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from math import ceil
+
+CST = timezone(timedelta(hours=8))
+WEEK_RESET_WEEKDAY = 2  # Wednesday
+WEEK_RESET_HOUR = 12
 
 
 class SeasonPassError(ValueError):
     """Invalid calculator input."""
+
+
+def next_week_reset(now: datetime) -> datetime:
+    """Return the next weekly reset (Wednesday 12:00 UTC+8)."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=CST)
+    else:
+        now = now.astimezone(CST)
+    days_ahead = (WEEK_RESET_WEEKDAY - now.weekday()) % 7
+    reset = (now + timedelta(days=days_ahead)).replace(
+        hour=WEEK_RESET_HOUR,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    if reset <= now:
+        reset += timedelta(days=7)
+    return reset
 
 
 def daily_task_xp(tasks: int) -> int:
@@ -64,6 +88,10 @@ class SeasonPassResult:
     season_total_xp: int
     final_level_without_overload: int
     final_level_with_overload: int
+    calendar_aligned: bool = False
+    current_week_days: int = 0
+    current_week_active_days: int = 0
+    next_reset_at: datetime | None = None
 
 
 def calculate(
@@ -72,6 +100,8 @@ def calculate(
     overloads: int,
     remaining_days: int,
     weekly_days: int = 7,
+    *,
+    now: datetime | None = None,
 ) -> SeasonPassResult:
     level = int(level)
     daily_tasks = int(daily_tasks)
@@ -111,6 +141,44 @@ def calculate(
         + full_weeks * weekly_bonus
         + weekly_reward(partial_tasks)
     )
+    calendar_aligned = False
+    current_week_days = 0
+    current_week_active_days = 0
+    next_reset_at: datetime | None = None
+    if now is not None:
+        # Align the forecast with the real weekly reset.  The current week's
+        # reward is deliberately excluded from the base forecast: the caller
+        # presents 15/45/100 claim scenarios separately, so adding it here
+        # would double-count a reward that may already be in ``level``.
+        next_reset_at = next_week_reset(now)
+        reference = (
+            now.replace(tzinfo=CST)
+            if now.tzinfo is None
+            else now.astimezone(CST)
+        )
+        seconds_to_reset = max(
+            0.0, (next_reset_at - reference).total_seconds()
+        )
+        current_week_days = min(
+            remaining_days,
+            max(0, ceil(seconds_to_reset / 86_400)),
+        )
+        after_current = max(0, remaining_days - current_week_days)
+        full_weeks, remainder = divmod(after_current, 7)
+        current_week_active_days = min(weekly_days, current_week_days)
+        partial_days = min(weekly_days, remainder)
+        active_days = (
+            current_week_active_days
+            + full_weeks * weekly_days
+            + partial_days
+        )
+        partial_tasks = daily_tasks * partial_days
+        season_base = (
+            daily_base * active_days
+            + full_weeks * weekly_bonus
+            + weekly_reward(partial_tasks)
+        )
+        calendar_aligned = True
     season_overload = daily_overload * active_days
     season_total = season_base + season_overload
 
@@ -138,6 +206,10 @@ def calculate(
         season_total_xp=season_total,
         final_level_without_overload=level + season_base // 1000,
         final_level_with_overload=level + season_total // 1000,
+        calendar_aligned=calendar_aligned,
+        current_week_days=current_week_days,
+        current_week_active_days=current_week_active_days,
+        next_reset_at=next_reset_at,
     )
 
 

@@ -246,7 +246,7 @@ class CountingClanClient(FakeClient):
 
 class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     def make_plugin(self):
-        return StalzonePlugin(
+        plugin = StalzonePlugin(
             Context(),
             {
                 "region": "eu",
@@ -257,6 +257,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
                 "command_cooldown": 0,
             },
         )
+        plugin._pass_now = datetime(
+            2026, 11, 26, 12, 0, tzinfo=timezone(timedelta(hours=8))
+        )
+        return plugin
 
     async def test_help(self):
         text = await collect(self.make_plugin(), "/sz help")
@@ -1300,8 +1304,8 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("STALZONE · 通行证计算", text)
         self.assertIn("每日合计：6,000", text)
         self.assertIn("每周任务数：105", text)
-        self.assertIn("赛季总经验（含超载）：168,000", text)
-        self.assertIn("15 → 183", text)
+        self.assertIn("赛季基础经验（含超载）：160,000", text)
+        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 183", text)
 
         alias = await collect(
             self.make_plugin(), "/sz 通行证等级预测 15 15+2 20"
@@ -1311,11 +1315,12 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         four_params = await collect(
             self.make_plugin(), "/sz 通行证 15 15 3 20"
         )
-        self.assertIn("超载 3（有效 3）", four_params)
-        self.assertIn("使用超载：15 → 188", four_params)
+        self.assertIn("超载 3 次（有效 3）", four_params)
+        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 188", four_params)
 
         no_overload = await collect(self.make_plugin(), "/sz 通行证 15 15 20")
-        self.assertIn("预测等级：15 → 173 级", no_overload)
+        self.assertIn("预测等级：", no_overload)
+        self.assertIn("本周已完成 0–9 个：45 档 +8 级 → Lv 173", no_overload)
         self.assertNotIn("使用超载", no_overload)
         self.assertNotIn("不使用超载", no_overload)
         self.assertNotIn("不用超载", no_overload)
@@ -1326,7 +1331,7 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(result, PluginReply)
         self.assertEqual(result.sub, "pass")
         self.assertTrue(result.pass_view["has_overload"])
-        self.assertEqual(result.pass_view["final_with"], 183)
+        self.assertEqual(result.pass_view["final_with"], 175)
         from image_renderer import find_cjk_font, render_pass_card
 
         if not find_cjk_font():
@@ -2452,7 +2457,7 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
             self.unified_msg_origin = target
 
     def make_plugin(self):
-        return StalzonePlugin(
+        plugin = StalzonePlugin(
             Context(),
             {
                 "region": "eu",
@@ -2464,6 +2469,10 @@ class AutoEmissionTests(unittest.IsolatedAsyncioTestCase):
                 "emission_notify_target": self.GROUP_TARGET,
             },
         )
+        plugin._pass_now = datetime(
+            2026, 11, 26, 12, 0, tzinfo=timezone(timedelta(hours=8))
+        )
+        return plugin
 
     def test_watermark_switch_applies_globally(self):
         import image_renderer as renderer

@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.28 - 2026-11-24
+
+### Added
+
+- Season-pass forecasts align with the real weekly reset (Wednesday 12:00 UTC+8).
+- The pass card is now organized hierarchically: one overloading block, two medium blocks for “today not enough / today enough”, and dynamic small ranges for the current week's completed task count.
+- Small ranges are computed from the daily task target, remaining task days in the current week, and whether today's target is already done. Examples:
+  - 2 days left, 40/day, today not done: `0–19` tasks → 45 tier, `20+` → 100 tier.
+  - 2 days left, 40/day, today done: `40–59` → 45 tier, `60+` → 100 tier.
+  - 3 days left, 40/day, today done: guaranteed 100 tier, one row only.
+- Each small range shows the final predicted level directly. Weekly reward XP is no longer shown in these boxes, and users do not add weekly task counts manually.
+- Ranges are split again at the 15 / 45 / 100 completed-task boundaries. A completed tier is treated as claimed immediately and already included in the current level; the range only adds the difference to the next unclaimed tier. For example, with 15 already claimed, completing 45 adds only 5 levels, not 8. A range already at 100 shows `不再加`.
+
+### Changed
+
+- “Today done” means the daily target has been completed, not merely that one task was done. The card states this in plain language.
+- When the projected final tier equals the already-claimed tier, the row explicitly shows `不再加` and keeps the base level.
+
 ## 1.14.27 - 2026-11-12
 
 ### Changed

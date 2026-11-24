@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.27"
+PLUGIN_VERSION = "1.14.28"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -839,6 +839,7 @@ class StalzonePlugin(Star):
         self._arsenal_task: asyncio.Task | None = None
         self._arsenal_lock: asyncio.Lock | None = None
         self._query_depth = 0
+        self._pass_now: datetime | None = None
         self._load_arsenal_cache()
         self._prune_arsenal_cache()
         self._update_lock = asyncio.Lock()
@@ -7192,6 +7193,7 @@ class StalzonePlugin(Star):
                 overloads,
                 remaining_days,
                 weekly_days,
+                now=self._pass_now or datetime.now(CST),
             )
         except SeasonPassError as exc:
             return str(exc)

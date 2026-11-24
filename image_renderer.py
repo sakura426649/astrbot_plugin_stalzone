@@ -4765,7 +4765,7 @@ def render_pass_card(
     *,
     font_path: str | None = None,
 ) -> Path | None:
-    """Render the season-pass forecast with the prediction as the hero."""
+    """Render season-pass scenarios as overload / today / task-range blocks."""
     if (
         Image is None
         or ImageDraw is None
@@ -4780,18 +4780,19 @@ def render_pass_card(
     mono_path = find_mono_font(path)
     try:
         title_font = ImageFont.truetype(str(display_path), 34)
-        section_font = ImageFont.truetype(str(path), 21)
         body_font = ImageFont.truetype(str(path), 16)
-        label_font = ImageFont.truetype(str(path), 13)
-        small_font = ImageFont.truetype(str(path), 12)
-        hero_label = ImageFont.truetype(str(path), 15)
-        hero_heading = ImageFont.truetype(str(path), 18)
-        note_font = ImageFont.truetype(str(path), 14)
-        hero_from = ImageFont.truetype(str(path), 36)
-        hero_to = ImageFont.truetype(str(display_path), 48)
-        hero_secondary = ImageFont.truetype(str(display_path), 30)
-        secondary_font = ImageFont.truetype(str(path), 24)
+        block_title = ImageFont.truetype(str(path), 20)
+        medium_title = ImageFont.truetype(str(path), 17)
+        medium_note = ImageFont.truetype(str(path), 12)
+        range_font = ImageFont.truetype(str(path), 14)
+        tier_font = ImageFont.truetype(str(path), 12)
+        final_font = ImageFont.truetype(str(display_path), 28)
         chip_font = ImageFont.truetype(str(path), 13)
+        note_font = ImageFont.truetype(str(path), 13)
+        detail_label = ImageFont.truetype(str(path), 13)
+        detail_value = ImageFont.truetype(str(display_path), 23)
+        detail_sub = ImageFont.truetype(str(path), 12)
+        small_font = ImageFont.truetype(str(path), 12)
         mono_font = ImageFont.truetype(str(mono_path or path), 12)
     except Exception:
         return None
@@ -4800,185 +4801,260 @@ def render_pass_card(
         return int(draw.textlength(str(value), font=fnt))
 
     W, PAD = 1200, 46
-    has_overload = bool(view.get("has_overload"))
+    state = {
+        "draw": None,
+    }
+    blocks = list(view.get("blocks") or [])
+    chips = list(view.get("input_chips") or [])
+    detail_cards = list(view.get("detail_cards") or [])
     level = int(view.get("level") or 0)
-    final = int(view.get("final_level") or level)
-    final_without = int(view.get("final_without") or level)
-    final_with = int(view.get("final_with") or final_without)
-    gain = int(view.get("gain") or 0)
-    gain_with = int(view.get("gain_with") or 0)
-    gain_without = int(view.get("gain_without") or 0)
+    has_overload = bool(view.get("has_overload"))
 
-    left_x, left_w = PAD, 540
-    right_x, right_w = 610, W - 610 - PAD
-    hero_y = 122
-    hero_h = 240 if has_overload else 160
-    sections_y = hero_y + hero_h + 78
-    groups = [
-        ("每日任务", "DAILY", list(view.get("daily_rows") or [])),
-        ("每周任务", "WEEKLY", list(view.get("weekly_rows") or [])),
-        ("赛季汇总", "SEASON", list(view.get("season_rows") or [])),
-    ]
-    left_groups = groups[:2]
-    right_groups = groups[2:]
+    chips_y = 124
+    blocks_y = 178
+    block_gap = 16
+    medium_gap = 14
+    inner_pad = 20
+    inner_w = W - 2 * PAD - 2 * inner_pad
+    medium_w = (inner_w - medium_gap) // 2
 
-    def group_h(rows: list[tuple[Any, Any]]) -> int:
-        return 38 + len(rows) * 29 + 12
+    def medium_height(today: dict[str, Any]) -> int:
+        return 62 + len(today.get("rows") or []) * 44 + 8
 
-    left_end = sections_y + sum(group_h(rows) for _, _, rows in left_groups)
-    right_end = sections_y + sum(group_h(rows) for _, _, rows in right_groups)
-    height = max(820, max(left_end, right_end) + 92)
+    def block_height(block: dict[str, Any]) -> int:
+        heights = [
+            medium_height(today)
+            for today in block.get("today_blocks") or []
+        ]
+        return 52 + (max(heights) if heights else 0) + 16
+
+    blocks_total = sum(block_height(block) for block in blocks)
+    if len(blocks) > 1:
+        blocks_total += block_gap * (len(blocks) - 1)
+    note_y = blocks_y + blocks_total + 12
+    detail_y = note_y + 30
+    detail_cards_y = detail_y + 38
+    detail_h = 84
+    footer_y = detail_cards_y + detail_h + 38
+    height = max(640, footer_y + 74)
+
     canvas = _card_canvas(W, height, alpha=234)
     if canvas is None:
         return None
     draw = ImageDraw.Draw(canvas)
+    state["draw"] = draw
 
     green = "#69F0B0"
     cyan = "#7FC4FF"
-    gain_color = green if gain > 0 else ("#FF7A7A" if gain < 0 else MUTED)
-    draw.text((PAD, 32), "STALZONE · 通行证预测", font=title_font, fill=TEXT)
+    gold = "#FFD479"
+
+    def chip_value(key: str, default: str = "—") -> str:
+        return next((str(value) for name, value in chips if name == key), default)
+
+    draw.text((PAD, 30), "STALZONE · 通行证预测", font=title_font, fill=TEXT)
     draw.text(
         (W - PAD, 36),
         "SEASON PASS / FORECAST",
-        font=mono_font, fill=(115, 150, 168), anchor="ra",
-    )
-    input_chips = list(view.get("input_chips") or [])
-    daily_text = str(input_chips[1][1]) if len(input_chips) > 1 else "—"
-    remaining_text = next(
-        (str(value) for key, value in input_chips if key == "剩余天数"), "—"
-    )
-    weekly_text = next(
-        (str(value) for key, value in input_chips if key == "每周计划"), "—"
+        font=mono_font,
+        fill=(115, 150, 168),
+        anchor="ra",
     )
     draw.text(
         (PAD, 80),
-        f"当前 Lv {level}  ·  每日 {daily_text}  ·  剩余 {remaining_text}  ·  每周 {weekly_text}",
-        font=body_font, fill="#C7D5E4",
+        f"当前 Lv {level}  ·  每日 {chip_value('每日任务')}  ·  "
+        f"剩余 {chip_value('剩余天数')}  ·  每周 {chip_value('每周计划')}",
+        font=body_font,
+        fill="#C7D5E4",
     )
     draw.line((PAD, 110, W - PAD, 110), fill=(80, 120, 115, 80), width=1)
 
-    draw.rounded_rectangle(
-        (PAD, hero_y, W - PAD, hero_y + hero_h), radius=18,
-        fill=(8, 18, 22, 230), outline=(70, 150, 120, 100), width=1,
-    )
-    draw.rounded_rectangle(
-        (PAD + 1, hero_y + 22, PAD + 5, hero_y + hero_h - 22),
-        radius=2, fill=green,
-    )
-    draw.text((PAD + 24, hero_y + 14), "预测结果 / FORECAST", font=hero_heading, fill=green)
-    def draw_levels(
-        base_y: int,
-        current_size: int,
-        final_size: int,
-        final_value: int,
-        final_color: str,
-        left_label: str,
-        final_label: str = "",
-        label_color: str = MUTED,
-    ) -> int:
-        current_font = ImageFont.truetype(str(path), current_size)
-        final_font = ImageFont.truetype(str(display_path), final_size)
-        start_x = PAD + 58
-        x = start_x
-        draw.text((x, base_y), f"Lv {level}", font=current_font, fill=MUTED, anchor="ls")
-        x += width_of(f"Lv {level}", current_font) + 18
-        draw.text((x, base_y), "→", font=current_font, fill=MUTED, anchor="ls")
-        x += width_of("→", current_font) + 18
-        draw.text((x, base_y), f"Lv {final_value}", font=final_font, fill=final_color, anchor="ls")
-        draw.text((start_x, base_y - 46), left_label, font=label_font, fill=label_color, anchor="ls")
-        if final_label:
-            draw.text((x, base_y - 46), final_label, font=label_font, fill=label_color, anchor="ls")
-        return x + width_of(f"Lv {final_value}", final_font)
-
-    if has_overload:
-        end_x = draw_levels(
-            hero_y + 120, 34, 40, final_with, green, "使用超载", label_color=green
-        )
-        draw.text(
-            (end_x + 8, hero_y + 122), f"+{gain_with} 级",
-            font=small_font, fill="#A7DCC4", anchor="ls",
-        )
-        end_x = draw_levels(
-            hero_y + 195, 34, 40, final_without, cyan, "不使用超载", label_color=MUTED
-        )
-        draw.text(
-            (end_x + 8, hero_y + 197), f"+{gain_without} 级",
-            font=small_font, fill="#A6D3EE", anchor="ls",
-        )
-    else:
-        base_y = hero_y + 110
-        end_x = draw_levels(
-            base_y, 34, 40, final, gain_color, "当前", "预测等级", gain_color
-        )
-        delta_text = f"+{gain} 级" if gain > 0 else "等级不变"
-        draw.text(
-            (end_x + 8, base_y + 2), delta_text,
-            font=small_font, fill="#A7DCC4" if gain > 0 else "#9AA8B4", anchor="ls",
-        )
-
-    # Methodology note: a centered panel in the free right side of the hero.
-    note = str(view.get("note") or "")
-    note_left = 688
-    note_right = W - PAD - 22
-    note_top = hero_y + 34
-    note_bottom = hero_y + hero_h - 24
-    draw.rounded_rectangle(
-        (note_left, note_top, note_right, note_bottom), radius=12,
-        fill=(9, 20, 25, 185), outline=(70, 120, 115, 75), width=1,
-    )
-    note_inner_w = note_right - note_left - 32
-    note_lines = _wrap(note, note_font, note_inner_w)[:3]
-    block_h = 22 + len(note_lines) * 20
-    note_y = note_top + max(12, (note_bottom - note_top - block_h) // 2)
-    note_center = (note_left + note_right) // 2
-    draw.text((note_center, note_y), "预测说明 / NOTE", font=hero_label, fill=cyan, anchor="ma")
-    note_y += 24
-    for line in note_lines:
-        draw.text((note_center, note_y), line, font=note_font, fill="#AFC3D1", anchor="ma")
-        note_y += 20
-
-    chip_y = hero_y + hero_h + 20
+    # Input chips.
     cx = PAD
-    for key, value in input_chips:
+    for key, value in chips:
         text = f"{key} {value}"
         cw = width_of(text, chip_font) + 28
         draw.rounded_rectangle(
-            (cx, chip_y, cx + cw, chip_y + 32), radius=16,
-            fill=(14, 25, 32, 225), outline=(74, 110, 125, 90), width=1,
+            (cx, chips_y, cx + cw, chips_y + 32),
+            radius=16,
+            fill=(14, 25, 32, 225),
+            outline=(74, 110, 125, 90),
+            width=1,
         )
-        draw.text((cx + 14, chip_y + 8), text, font=chip_font, fill="#B9CDD9")
+        draw.text(
+            (cx + 14, chips_y + 8),
+            text,
+            font=chip_font,
+            fill="#B9CDD9",
+        )
         cx += cw + 8
 
-    def draw_group(title: str, subtitle: str, rows: list[tuple[Any, Any]], x: int, y: int, w: int) -> None:
-        _draw_section_heading(draw, x, y, title, section_font, green)
-        draw.text((x + w, y + 6), subtitle, font=mono_font, fill=(80, 120, 130), anchor="ra")
-        draw.line((x, y + 34, x + w, y + 34), fill=(70, 110, 105, 75), width=1)
-        yy = y + 44
-        for key, value in rows:
-            draw.text((x, yy), str(key), font=label_font, fill=MUTED)
-            draw.text(
-                (x + w, yy), _fit_text(draw, str(value), small_font, w - 150),
-                font=small_font, fill=TEXT, anchor="ra",
+    y = blocks_y
+    for block in blocks:
+        accent = green if block.get("accent") == "green" else cyan
+        b_height = block_height(block)
+        draw.rounded_rectangle(
+            (PAD, y, W - PAD, y + b_height),
+            radius=18,
+            fill=(8, 18, 22, 230),
+            outline=(70, 150, 120, 100) if accent == green else (70, 120, 160, 100),
+            width=1,
+        )
+        draw.rounded_rectangle(
+            (PAD + 1, y + 18, PAD + 5, y + b_height - 18),
+            radius=2,
+            fill=accent,
+        )
+        draw.text(
+            (PAD + 24, y + 14),
+            str(block.get("label") or ""),
+            font=block_title,
+            fill=accent,
+        )
+        mediums = list(block.get("today_blocks") or [])
+        m_height = max(
+            (medium_height(today) for today in mediums),
+            default=0,
+        )
+        for index, today in enumerate(mediums):
+            mx = PAD + inner_pad + index * (medium_w + medium_gap)
+            my = y + 52
+            draw.rounded_rectangle(
+                (mx, my, mx + medium_w, my + m_height),
+                radius=14,
+                fill=(10, 23, 29, 220),
+                outline=(74, 116, 115, 80),
+                width=1,
             )
-            yy += 29
+            draw.text(
+                (mx + 16, my + 12),
+                str(today.get("label") or ""),
+                font=medium_title,
+                fill="#DCEAF3",
+            )
+            draw.text(
+                (mx + 16, my + 36),
+                str(today.get("note") or ""),
+                font=medium_note,
+                fill=MUTED,
+            )
+            draw.line(
+                (mx + 16, my + 54, mx + medium_w - 16, my + 54),
+                fill=(70, 110, 105, 75),
+                width=1,
+            )
+            row_y = my + 64
+            for row in today.get("rows") or []:
+                tier = int(row.get("tier") or 0)
+                levels = int(row.get("levels") or 0)
+                current_tier = int(row.get("current_tier") or 0)
+                if levels == 0 and tier:
+                    tier_color = MUTED
+                    tier_text = "不再加"
+                elif tier >= 100:
+                    tier_color = gold
+                    tier_text = "100 档"
+                elif tier >= 45:
+                    tier_color = cyan
+                    tier_text = "45 档"
+                elif tier >= 15:
+                    tier_color = green
+                    tier_text = "15 档"
+                else:
+                    tier_color = MUTED
+                    tier_text = "未达 15 档"
+                if levels and tier:
+                    tier_text += (
+                        f" 补+{levels} 级"
+                        if current_tier
+                        else f" +{levels} 级"
+                    )
+                draw.text(
+                    (mx + 16, row_y + 22),
+                    str(row.get("range") or ""),
+                    font=range_font,
+                    fill="#C7D5E4",
+                    anchor="lm",
+                )
+                draw.text(
+                    (mx + medium_w - 142, row_y + 22),
+                    tier_text,
+                    font=tier_font,
+                    fill=tier_color,
+                    anchor="rm",
+                )
+                draw.text(
+                    (mx + medium_w - 16, row_y + 22),
+                    f"Lv {int(row.get('final') or 0)}",
+                    font=final_font,
+                    fill=TEXT,
+                    anchor="rm",
+                )
+                row_y += 44
+        y += b_height + block_gap
 
-    y = sections_y
-    for title, subtitle, rows in left_groups:
-        draw_group(title, subtitle, rows, left_x, y, left_w)
-        y += group_h(rows)
-    y = sections_y
-    for title, subtitle, rows in right_groups:
-        draw_group(title, subtitle, rows, right_x, y, right_w)
-        y += group_h(rows)
+    range_note = str(view.get("range_note") or "")
+    draw.text((PAD, note_y), range_note, font=note_font, fill=MUTED)
 
-    footer_y = height - 74
-    draw.line((PAD, footer_y, W - PAD, footer_y), fill=(75, 110, 105, 65), width=1)
+    draw.text((PAD, detail_y), "计算明细", font=medium_title, fill=green)
+    draw.line(
+        (PAD, detail_y + 27, W - PAD, detail_y + 27),
+        fill=(70, 110, 105, 75),
+        width=1,
+    )
+    gap = 18
+    card_w = (W - 2 * PAD - 2 * gap) // 3
+    for index, card in enumerate(detail_cards):
+        x = PAD + index * (card_w + gap)
+        draw.rounded_rectangle(
+            (x, detail_cards_y, x + card_w, detail_cards_y + detail_h),
+            radius=12,
+            fill=(9, 20, 25, 195),
+            outline=(70, 110, 115, 65),
+            width=1,
+        )
+        draw.text(
+            (x + 16, detail_cards_y + 10),
+            str(card.get("label") or ""),
+            font=detail_label,
+            fill=MUTED,
+        )
+        draw.text(
+            (x + 16, detail_cards_y + 31),
+            str(card.get("value") or ""),
+            font=detail_value,
+            fill=TEXT,
+        )
+        draw.text(
+            (x + 16, detail_cards_y + 63),
+            _fit_text(
+                draw,
+                str(card.get("sub") or ""),
+                detail_sub,
+                card_w - 32,
+            ),
+            font=detail_sub,
+            fill="#91A7B6",
+        )
+
+    draw.line(
+        (PAD, footer_y, W - PAD, footer_y),
+        fill=(75, 110, 105, 65),
+        width=1,
+    )
     draw.text(
-        (PAD, footer_y + 12), str(view.get("footer") or ""),
-        font=small_font, fill=MUTED,
+        (PAD, footer_y + 12),
+        str(view.get("footer") or ""),
+        font=small_font,
+        fill=MUTED,
     )
     _draw_signature(
-        draw, W, height - 58, path, small_font, max_bottom=height, tip_x=PAD
+        draw,
+        W,
+        height - 58,
+        path,
+        small_font,
+        max_bottom=height,
+        tip_x=PAD,
     )
 
     out_dir = Path(tempfile.gettempdir()) / "astrbot_plugin_stalzone"

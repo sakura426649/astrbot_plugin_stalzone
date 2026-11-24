@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.27-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.28-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -38,7 +38,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
-| Season Pass | Local XP/level prediction, no game API request |
+| Season Pass | Local XP/level prediction aligned to the Wednesday 12:00 reset; groups final levels by overload mode, today’s task completion, and dynamic current-week ranges. Completed 15/45/100 rewards are treated as already claimed; ranges only add the unclaimed difference |
 | Not found | A query-specific card repeats the name/ID and region, with a short correction hint |
 
 ### Platform support
@@ -79,7 +79,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | `/sz item <name/ID> [quality] [category]` | Item stats, description, category and icon; quality/category filters |
 | `/sz candidate <number>` | Replay the previous query with a candidate |
 | `/sz balance <item>` | Official balance-change history |
-| `/sz pass <level> <daily> [overload] <days>` | Season-pass level prediction |
+| `/sz pass <level> <daily> [overload] <days>` | Season-pass level prediction grouped by overload, today completion, and weekly task ranges |
 | `/sz clan <name/tag/UUID>` | Clan profile; parenthesized tags take priority and any tag length works |
 | `/sz clans [page]` | Clan list |
 | `/sz operations [map]` | Recent operation sessions |
