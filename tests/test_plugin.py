@@ -2553,6 +2553,28 @@ class ItemIndexTests(unittest.TestCase):
         self.assertGreater(len(self.index.items), 2500)
         self.assertEqual([item["id"] for item in self.index.items if not item["zh"]], [])
 
+    def test_part_1_and_3_icons_are_swapped_to_match_rank(self):
+        for first_id, third_id in (
+            ("gnz45", "55j5q"),
+            ("y4643", "4kjko"),
+            ("6ojw0", "19yr2"),
+            ("kr2rp", "j0w0g"),
+        ):
+            first = self.index.get(first_id)
+            third = self.index.get(third_id)
+            self.assertIsNotNone(first, first_id)
+            self.assertIsNotNone(third, third_id)
+            self.assertTrue(first["icon"].endswith(f"/{third_id}.png"))
+            self.assertTrue(third["icon"].endswith(f"/{first_id}.png"))
+        # Families whose upstream icons are already correct must stay put.
+        for item_id in ("21wo5", "77dlj", "kr2np", "j0w5g"):
+            item = self.index.get(item_id)
+            self.assertTrue(item["icon"].endswith(f"/{item_id}.png"))
+        # Schematics have the part number drawn into the icon itself; they
+        # must not be swapped by the weapon-part correction.
+        schematic = self.index.get("nxc9y6yv")
+        self.assertTrue(schematic["icon"].endswith("/nxc9y6yv.png"))
+
     def test_new_season_items_resolve_with_icons(self):
         self.assertGreaterEqual(len(self.index.items), 2636)
         for query, item_id in (

@@ -205,6 +205,44 @@ def _aliases(item: dict[str, Any]) -> list[str]:
     return normalized
 
 
+_PART_ICON_SWAPS = {
+    # The official icon set has #1/#3 reversed for these Master/Stalker
+    # weapon-part families.  VIKING Tactics is already correct upstream and
+    # Legend/Veteran part families are left untouched.
+    "gnz45": "55j5q",
+    "55j5q": "gnz45",
+    "y4643": "4kjko",
+    "4kjko": "y4643",
+    "6ojw0": "19yr2",
+    "19yr2": "6ojw0",
+    "kr2rp": "j0w0g",
+    "j0w0g": "kr2rp",
+}
+
+
+def normalize_part_icons(items: list[dict[str, Any]]) -> None:
+    """Swap known upstream-reversed weapon-part #1/#3 display icons.
+
+    Only the icon URL is changed.  Item names, IDs, ranks and auction/item
+    lookup keys must remain untouched.  The correction is deliberately an
+    explicit map: the upstream database also contains part families whose
+    #1/#3 icons are already correct, so blindly swapping every numbered part
+    would break those.
+    """
+    for item in items:
+        item_id = str(item.get("id") or "")
+        sibling = _PART_ICON_SWAPS.get(item_id)
+        if sibling is None:
+            continue
+        icon = str(item.get("icon") or "")
+        if not icon:
+            continue
+        prefix, separator, _filename = icon.rpartition("/")
+        if not separator:
+            continue
+        item["icon"] = f"{prefix}/{sibling}.png"
+
+
 class ItemIndex:
     """Searchable ID ↔ English ↔ Russian ↔ Chinese item index."""
 
@@ -317,6 +355,7 @@ class ItemIndex:
             self._alias_cache[item_id] = self._merge_aliases(
                 item_id, _aliases(item)
             )
+        normalize_part_icons(self.items)
         self.generated_at = str(payload.get("generated_at") or "")
 
     def _load_details(self) -> None:

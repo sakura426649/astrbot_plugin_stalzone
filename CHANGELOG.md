@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.32 - 2026-11-28
+
+### Fixed
+
+- Corrected reversed Part #1 / Part #3 display icons for ACOG 2x40, DOTSAT, Lantac BMD and Lantac Dragon. The upstream icon files use the opposite red/blue assets from their Master/Stalker metadata.
+- The correction only swaps icon URLs at display time; names, IDs, ranks, auction lookups and candidate selection are unchanged. VIKING Tactics is already correct upstream and remains untouched; numbered schematics are also unaffected.
+
 ## 1.14.31 - 2026-11-27
 
 ### Fixed
