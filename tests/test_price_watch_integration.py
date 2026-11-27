@@ -88,6 +88,15 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         plugin._make_client = lambda region=None: client  # type: ignore[assignment]
         return plugin
 
+    async def test_foreground_wait_is_bounded(self):
+        plugin = self.make_plugin()
+        plugin._query_depth = 1
+        started = asyncio.get_running_loop().time()
+        waited = await plugin._wait_foreground_idle(max_wait=0.05)
+        elapsed = asyncio.get_running_loop().time() - started
+        self.assertGreaterEqual(waited, 0.05)
+        self.assertLess(elapsed, 1.0)
+
     async def test_watch_usage_and_list_dispatch(self):
         plugin = self.make_plugin()
         usage = await integration.collect(plugin, "/sz 关注")

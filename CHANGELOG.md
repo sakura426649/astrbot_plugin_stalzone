@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.31 - 2026-11-27
+
+### Fixed
+
+- Price-watch background requests now wait at most 5 seconds for foreground commands before proceeding with the remaining API permits. Previously an unexpectedly long or leaked foreground query could block watch polling for minutes.
+- Watch slow paths now log lock wait, foreground wait, API time and total time, making future latency directly diagnosable.
+- After the API call, watch now refreshes its check timestamp instead of using the tick-start timestamp. This keeps the remaining-time text and the two-minute near-expiry filter accurate after a long wait.
+- The watch loop now schedules start-to-start, so a slow tick no longer adds its full duration on top of the polling interval.
+
 ## 1.14.30 - 2026-11-24
 
 ### Fixed

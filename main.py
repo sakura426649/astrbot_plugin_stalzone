@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.30"
+PLUGIN_VERSION = "1.14.31"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -2132,13 +2132,27 @@ class StalzonePlugin(Star):
         if self._query_depth > 0:
             self._query_depth -= 1
 
-    async def _wait_foreground_idle(self) -> None:
-        # Background refresh yields to interactive commands.  The scheduler
-        # still has other API permits, but waiting here avoids competing with
-        # a user who is actively querying.
-        while self._query_depth > 0:
+    async def _wait_foreground_idle(self, max_wait: float = 5.0) -> float:
+        # Background refresh yields to interactive commands, but a leaked or
+        # unusually long foreground command must not block price-watch for
+        # minutes.  The remaining API permits still leave room for
+        # interactive queries if this bounded wait expires.
+        started = time.monotonic()
+        while (
+            self._query_depth > 0
+            and time.monotonic() - started < max_wait
+        ):
             await asyncio.sleep(0.2)
+        elapsed = time.monotonic() - started
+        if self._query_depth > 0:
+            logger.warning(
+                "STALZONE background wait for foreground exceeded %.1fs "
+                "(depth=%s); proceeding with remaining API permits",
+                elapsed,
+                self._query_depth,
+            )
         await asyncio.sleep(0.1)
+        return elapsed
 
     async def _wait_arsenal_idle(self) -> None:
         await self._wait_foreground_idle()
@@ -4400,6 +4414,12 @@ class StalzonePlugin(Star):
         ]
         self._watch_state["cursor"] = (cursor + len(selected)) % len(keys)
         interval = self._watch_interval()
+        logger.debug(
+            "STALZONE price-watch tick groups=%s selected=%s batch=%s",
+            len(keys),
+            len(selected),
+            batch_size,
+        )
         for region, item_id in selected:
             group_subs = [
                 (key, sub)
@@ -4408,9 +4428,16 @@ class StalzonePlugin(Star):
             ]
             if not group_subs:
                 continue
+            queued_at = time.monotonic()
+            lock_wait = 0.0
+            foreground_wait = 0.0
+            api_elapsed = 0.0
             try:
+                lock_started = time.monotonic()
                 async with self._background_api_lock:
-                    await self._wait_foreground_idle()
+                    lock_wait = time.monotonic() - lock_started
+                    foreground_wait = await self._wait_foreground_idle()
+                    api_started = time.monotonic()
                     async with self._api_gate():
                         async with self._make_client(region=region) as client:
                             try:
@@ -4434,12 +4461,28 @@ class StalzonePlugin(Star):
                                 medians_by_level = await self._watch_medians(
                                     client, region, item_id, relative_levels, now
                                 )
+                    api_elapsed = time.monotonic() - api_started
+                total_wait = time.monotonic() - queued_at
+                if total_wait > max(30, interval * 2):
+                    logger.warning(
+                        "STALZONE price-watch slow item=%s lock_wait=%.1fs "
+                        "foreground=%.1fs api=%.1fs total=%.1fs",
+                        item_id,
+                        lock_wait,
+                        foreground_wait,
+                        api_elapsed,
+                        total_wait,
+                    )
             except Exception:
                 logger.exception(
                     "STALZONE price-watch query failed for %s", item_id
                 )
                 continue
             rows = watch_lot_rows(lots_payload, item_id)
+            # Use a fresh timestamp: the API query and foreground wait may have
+            # taken long enough that the tick-start timestamp would make
+            # ``min_end`` and the alert's remaining-time text stale.
+            checked_at = datetime.now(timezone.utc)
             item = self.item_index.get(item_id) or {"id": item_id}
             for key, sub in group_subs:
                 # A command may have cancelled or replaced this subscription
@@ -4451,7 +4494,7 @@ class StalzonePlugin(Star):
                         int(sub.get("level") or 0), {}
                     )
                     buyouts, auctions = self._watch_matches(
-                        sub, rows, medians, now, interval
+                        sub, rows, medians, checked_at, interval
                     )
                     if not self._cfg_bool("price_watch_auction_alerts", True):
                         auctions = []
@@ -4462,7 +4505,7 @@ class StalzonePlugin(Star):
                     ) or medians.get(None)
                     if median:
                         sub["last_median"] = int(median)
-                    sub["last_checked"] = now.isoformat()
+                    sub["last_checked"] = checked_at.isoformat()
                     if buyouts:
                         matches = buyouts
                         kind = "buyout"
@@ -4483,7 +4526,7 @@ class StalzonePlugin(Star):
                         item,
                         best,
                         extra=max(0, len(matches) - 1),
-                        now=now,
+                        now=checked_at,
                     )
                     if not sent:
                         continue
@@ -4496,7 +4539,7 @@ class StalzonePlugin(Star):
                     renewed = (
                         str(current.get("expires_at") or "") != expiry_snapshot
                     )
-                    stamp = now.isoformat()
+                    stamp = checked_at.isoformat()
                     # The card only shows the best lot.  Mark just that lot as
                     # seen; another qualifying auction lot should get its own
                     # alert on a later tick (the user asked for different low
@@ -4533,13 +4576,15 @@ class StalzonePlugin(Star):
     async def _watch_loop(self) -> None:
         await asyncio.sleep(20)
         while True:
+            started = time.monotonic()
             try:
                 await self._watch_tick()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("STALZONE price-watch tick failed")
-            await asyncio.sleep(self._watch_interval())
+            elapsed = time.monotonic() - started
+            await asyncio.sleep(max(1.0, self._watch_interval() - elapsed))
 
     async def _handle_candidate(self, argument: str, event: Any) -> str | PluginReply:
         match = re.fullmatch(r"\s*#?(\d{1,2})\s*", str(argument or ""))
