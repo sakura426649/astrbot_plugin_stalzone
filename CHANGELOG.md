@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.2 - 2026-11-28
+
+### Changed
+
+- The help card's **其他 / MORE** module now leads with `/sz 军械库`, `/sz 估价` and `/sz 候选`; name-management commands (起别名/改名/别名列表) moved to the second description line. The text help lists 军械库, 估价 and 候选 before the name-management commands as well.
+
 ## 1.15.1 - 2026-11-28
 
 ### Fixed
