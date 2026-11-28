@@ -1187,6 +1187,89 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._schedule_item_db_sync()
         self.assertIsNone(plugin._item_db_sync_task)
 
+    def test_background_upload_keeps_only_newest_file(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            folder = (
+                base
+                / "files"
+                / "display"
+                / "card_background_upload"
+            )
+            folder.mkdir(parents=True)
+            first = folder / "first.png"
+            second = folder / "second.png"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            plugin = self.make_plugin()
+            plugin._cache_dir = lambda: base  # type: ignore[assignment]
+            plugin.config["card_background_upload"] = [
+                "files/display/card_background_upload/first.png",
+                "files/display/card_background_upload/second.png",
+            ]
+            plugin._normalize_background_upload()
+            files = list(folder.iterdir())
+            self.assertEqual([path.name for path in files], ["background.png"])
+            self.assertEqual(files[0].read_bytes(), b"second")
+            self.assertEqual(
+                plugin._cfg("card_background_upload", []),
+                ["files/display/card_background_upload/background.png"],
+            )
+            self.assertEqual(
+                plugin._uploaded_background_path(), files[0]
+            )
+
+            # Re-uploading a third file overwrites the same canonical file.
+            third = folder / "third.png"
+            third.write_bytes(b"third")
+            plugin.config["card_background_upload"] = [
+                "files/display/card_background_upload/background.png",
+                "files/display/card_background_upload/third.png",
+            ]
+            plugin._normalize_background_upload()
+            files = list(folder.iterdir())
+            self.assertEqual([path.name for path in files], ["background.png"])
+            self.assertEqual(files[0].read_bytes(), b"third")
+
+            captured = []
+            plugin.config["card_background_custom"] = str(
+                base / "legacy-not-used.jpg"
+            )
+            with patch.object(
+                main_module,
+                "set_card_background",
+                lambda preset, custom, opacity: captured.append(
+                    (preset, str(custom), opacity)
+                )
+                or Path("x"),
+            ):
+                plugin._apply_card_background()
+            self.assertEqual(captured[0][1], str(files[0]))
+
+    def test_legacy_background_path_migrates_to_upload(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            legacy = base / "old.jpg"
+            legacy.write_bytes(b"legacy")
+            plugin = self.make_plugin()
+            plugin._cache_dir = lambda: base  # type: ignore[assignment]
+            plugin.config["card_background_custom"] = str(legacy)
+            plugin.config["card_background_upload"] = []
+            plugin._migrate_background_custom_to_upload(base)
+            canonical = (
+                base
+                / "files"
+                / "display"
+                / "card_background_upload"
+                / "background.jpg"
+            )
+            self.assertEqual(canonical.read_bytes(), b"legacy")
+            self.assertEqual(
+                plugin._cfg("card_background_upload", []),
+                ["files/display/card_background_upload/background.jpg"],
+            )
+            self.assertEqual(plugin._cfg("card_background_custom", ""), "")
+
     def test_price_watch_interval_migrates_to_low_power_once(self):
         with tempfile.TemporaryDirectory() as raw:
             plugin = self.make_plugin()

@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.5 - 2026-11-28
+
+### Changed
+
+- The custom card background setting is now a WebUI upload button instead of a path text field. Only one background is kept: the newest upload is copied over a stable `background.<ext>` file and older uploads are removed. The legacy path key stays hidden as a fallback for existing configs.
+
 ## 1.15.4 - 2026-11-28
 
 ### Added

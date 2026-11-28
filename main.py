@@ -318,7 +318,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.15.4"
+PLUGIN_VERSION = "1.15.5"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -342,6 +342,7 @@ CONFIG_PATHS = {
     "render_mode": ("display", "render_mode"),
     "font_path": ("display", "font_path"),
     "card_background": ("display", "card_background"),
+    "card_background_upload": ("display", "card_background_upload"),
     "card_background_custom": ("display", "card_background_custom"),
     "card_panel_opacity": ("display", "card_panel_opacity"),
     "hide_creator_watermark": ("display", "hide_creator_watermark"),
@@ -373,6 +374,7 @@ CONFIG_DEFAULTS = {
     "render_mode": "auto",
     "font_path": "",
     "card_background": "default",
+    "card_background_upload": [],
     "card_background_custom": "",
     "card_panel_opacity": 0.90,
     "hide_creator_watermark": False,
@@ -903,12 +905,137 @@ class StalzonePlugin(Star):
         self._watch_lock = asyncio.Lock()
         self._watch_median_cache: dict[tuple[str, str, int], tuple[float, dict[int | None, int]]] = {}
         set_creator_watermark_hidden(self._hide_creator_watermark())
+        self._migrate_background_custom_to_upload(data_dir)
+        self._normalize_background_upload(data_dir)
         self._apply_card_background()
 
+    def _background_upload_values(self) -> list[str]:
+        raw = self._cfg("card_background_upload", [])
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            return []
+        return [str(value).strip() for value in raw if str(value).strip()]
+
+    def _uploaded_background_path(self) -> Path | None:
+        """Return the last valid uploaded background, newest upload wins."""
+        data_dir = self._cache_dir().resolve(strict=False)
+        upload_dir = (
+            data_dir / "files" / "display" / "card_background_upload"
+        ).resolve(strict=False)
+        for value in reversed(self._background_upload_values()):
+            rel = value.replace("\\", "/").lstrip("/")
+            if not rel:
+                continue
+            target = (data_dir / rel).resolve(strict=False)
+            try:
+                target.relative_to(upload_dir)
+            except ValueError:
+                continue
+            if target.is_file():
+                return target
+        return None
+
+    def _migrate_background_custom_to_upload(self, data_dir: Path) -> None:
+        """Move a legacy path-based background into the upload field once."""
+        if self._background_upload_values():
+            return
+        legacy = str(self._cfg("card_background_custom", "") or "").strip()
+        if not legacy:
+            return
+        candidate = Path(legacy).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(__file__).resolve().parent / candidate
+        candidate = candidate.resolve(strict=False)
+        if not candidate.is_file():
+            return
+        ext = candidate.suffix.lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+            return
+        base = data_dir.resolve(strict=False)
+        upload_dir = (
+            base / "files" / "display" / "card_background_upload"
+        ).resolve(strict=False)
+        canonical = upload_dir / f"background{ext}"
+        try:
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            if candidate != canonical:
+                shutil.copy2(candidate, canonical)
+            for path in upload_dir.iterdir():
+                if path.is_file() and path.resolve(strict=False) != canonical:
+                    path.unlink(missing_ok=True)
+            rel = canonical.relative_to(base).as_posix()
+            self._set_cfg("card_background_upload", [rel])
+            self._set_cfg("card_background_custom", "")
+            self._persist_config()
+            logger.info(
+                "STALZONE legacy custom background migrated to upload field"
+            )
+        except Exception:
+            logger.warning(
+                "STALZONE legacy background migration failed",
+                exc_info=True,
+            )
+
+    def _normalize_background_upload(self, data_dir: Path | None = None) -> None:
+        """Keep exactly one uploaded background and overwrite it on re-upload.
+
+        AstrBot's file field appends every upload to the config list.  Copy the
+        newest file to a stable ``background.<ext>`` name, delete the older
+        uploads and shrink the config to that one path.
+        """
+        base = (data_dir or self._cache_dir()).resolve(strict=False)
+        values = self._background_upload_values()
+        if not values:
+            return
+        upload_dir = (
+            base / "files" / "display" / "card_background_upload"
+        ).resolve(strict=False)
+        chosen: Path | None = None
+        for value in reversed(values):
+            rel = value.replace("\\", "/").lstrip("/")
+            if not rel:
+                continue
+            target = (base / rel).resolve(strict=False)
+            try:
+                target.relative_to(upload_dir)
+            except ValueError:
+                continue
+            if target.is_file():
+                chosen = target
+                break
+        if chosen is None:
+            return
+        ext = chosen.suffix.lower()
+        if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+            logger.warning(
+                "STALZONE background upload has unsupported extension: %s",
+                chosen.name,
+            )
+            return
+        canonical = upload_dir / f"background{ext}"
+        try:
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            if chosen != canonical:
+                shutil.copy2(chosen, canonical)
+            for path in upload_dir.iterdir():
+                if path.is_file() and path.resolve(strict=False) != canonical:
+                    path.unlink(missing_ok=True)
+            rel = canonical.relative_to(base).as_posix()
+            if values != [rel]:
+                self._set_cfg("card_background_upload", [rel])
+                self._persist_config()
+        except Exception:
+            logger.warning(
+                "STALZONE background upload normalization failed",
+                exc_info=True,
+            )
+
     def _apply_card_background(self) -> Path:
+        uploaded = self._uploaded_background_path()
         return set_card_background(
             self._cfg("card_background", "default"),
-            self._cfg("card_background_custom", ""),
+            uploaded or self._cfg("card_background_custom", ""),
             self._cfg("card_panel_opacity", 0.90),
         )
 

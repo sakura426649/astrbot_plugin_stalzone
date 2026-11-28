@@ -107,11 +107,24 @@
         "default": "default",
         "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。"
       },
+      "card_background_upload": {
+        "description": "自定义卡片背景（上传）",
+        "type": "file",
+        "default": [],
+        "file_types": [
+          "jpg",
+          "jpeg",
+          "png",
+          "webp"
+        ],
+        "hint": "点击上传背景图片；只使用最后上传的一张，再次上传会覆盖之前的背景文件。建议 2048×2048（1:1）以内，支持 jpg/png/webp。"
+      },
       "card_background_custom": {
-        "description": "自定义背景图片路径",
+        "description": "旧版兼容：自定义背景图片路径",
         "type": "string",
         "default": "",
-        "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。"
+        "hint": "旧版路径配置，仅在没有上传背景图时回退使用；支持 jpg/png/webp。",
+        "invisible": true
       },
       "card_panel_opacity": {
         "description": "卡片面板不透明度",
@@ -415,11 +428,24 @@
     "hint": "default=内置暗色背景；官方壁纸 01–16=内置官方壁纸。所有生成的卡片共享同一背景。",
     "invisible": true
   },
+  "card_background_upload": {
+    "description": "旧版兼容：自定义卡片背景（上传）",
+    "type": "file",
+    "default": [],
+    "file_types": [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp"
+    ],
+    "hint": "点击上传背景图片；只使用最后上传的一张，再次上传会覆盖之前的背景文件。建议 2048×2048（1:1）以内，支持 jpg/png/webp。",
+    "invisible": true
+  },
   "card_background_custom": {
     "description": "旧版兼容：自定义背景图片路径",
     "type": "string",
     "default": "",
-    "hint": "可选，填绝对路径（相对路径按插件目录解析）；支持 jpg/png/webp。填写且文件存在时优先于上面的预设。",
+    "hint": "旧版路径配置，仅在没有上传背景图时回退使用；支持 jpg/png/webp。",
     "invisible": true
   },
   "card_panel_opacity": {
