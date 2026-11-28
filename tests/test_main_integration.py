@@ -1052,6 +1052,46 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("完整包", reason)
         self.assertEqual(main_module._version_key("v1.5.2"), (1, 5, 2))
 
+    def test_auto_update_schedule_and_one_time_default_migration(self):
+        cst = timezone(timedelta(hours=8))
+        due = main_module.StalzonePlugin._auto_update_due
+        self.assertTrue(due(datetime(2026, 11, 28, 12, tzinfo=cst), None))
+        yesterday = datetime(2026, 11, 27, 23, 0, tzinfo=cst)
+        self.assertFalse(
+            due(datetime(2026, 11, 28, 3, 59, tzinfo=cst), yesterday)
+        )
+        self.assertTrue(
+            due(datetime(2026, 11, 28, 4, 0, tzinfo=cst), yesterday)
+        )
+        self.assertTrue(
+            due(
+                datetime(2026, 11, 28, 4, 0, tzinfo=cst),
+                datetime(2026, 11, 28, 0, 30, tzinfo=cst),
+            )
+        )
+        self.assertFalse(
+            due(
+                datetime(2026, 11, 28, 4, 0, tzinfo=cst),
+                datetime(2026, 11, 28, 3, 59, tzinfo=cst),
+            )
+        )
+        self.assertFalse(
+            due(
+                datetime(2026, 11, 28, 20, 0, tzinfo=cst),
+                datetime(2026, 11, 28, 4, 1, tzinfo=cst),
+            )
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            plugin = self.make_plugin()
+            plugin.config["auto_update"] = False
+            root = Path(raw)
+            plugin._migrate_auto_update_default(root)
+            self.assertTrue(plugin._cfg_bool("auto_update", True))
+            self.assertTrue((root / "auto_update_default_v1.marker").is_file())
+            plugin.config["auto_update"] = False
+            plugin._migrate_auto_update_default(root)
+            self.assertFalse(plugin._cfg_bool("auto_update", True))
+
     def test_github_proxy_url_candidates(self):
         url = "https://github.com/x/y/releases/download/v1/a.zip"
         self.assertEqual(

@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.33-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.14.34-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -69,7 +69,7 @@
 | **辐射风暴** | 以「距离上次风暴」为主视觉的大字计时卡，同时展示当前风暴状态、上次开始/结束时间 |
 | **自动风暴提醒** | 仅 OneBot 群可用；上一场结束后的 2–4 小时窗口内每分钟查询，其他时间每 3 分钟低频率探测，检测到新风暴后向白名单内每个 QQ 群发送「风暴已开始」警报图，黑名单优先；白名单为空时不发群图，但若存在风暴订阅仍会轮询并提醒订阅用户。QQ 官方机器人受被动回复限制，不参与自动提醒 |
 | **AI 函数调用** | 注册 7 个 LLM 工具（拍卖、拍卖历史、物品、玩家、风暴、调整、通行证），模型可从自然语言中自行提取参数并直接发送查询图片；需模型支持函数调用，可在配置中关闭 |
-| **插件自更新** | `/sz 插件更新` / `/sz 更新` / `/sz update`：检查 GitHub Release，按本地图标缺失情况自动选择完整包或轻量包，异步下载、备份、覆盖并热重载；可选每小时自动检查 |
+| **插件自更新** | `/sz 插件更新` / `/sz 更新` / `/sz update`：检查 GitHub Release，按本地图标缺失情况自动选择完整包或轻量包，异步下载、备份、覆盖并热重载；默认启动检查一次，每天 04:00 再检查一次 |
 | **平台适配** | 查询指令与图片回复支持 OneBot（`aiocqhttp`）和 QQ 官方机器人（`qq_official` / `qq_official_webhook`）；自动风暴提醒目前只支持 OneBot |
 | **玩家档案** | 战术档案卡、阵营徽记、战队/职位、PvP 估算分和完整统计；区服胶囊居中显示，不推断在线状态 |
 | **战队** | 按名称、标签或 UUID 查询；优先匹配名称括号内的标签，标签长度不限、不区分大小写；支持战队列表 |
@@ -280,7 +280,7 @@
 - 下载、备份、解压、覆盖均异步执行。为避免短时间消息过多触发风控，聊天里只在开始更新时提示一次“当前版本 → 新版本（完整/轻量包）”，热重载完成后提示“已更新到 vX，热重载完成”；中间步骤不逐条播报，只有连接超时、下载失败等错误才补发提示。
 - 直连 GitHub 的 API、图标清单或安装包失败/超时/无法连接时，会自动改走 `https://gh-proxy.com/`，再失败再尝试 `https://v4.gh-proxy.org/`，无需手动切换。
 - 覆盖前会把旧插件目录备份到插件数据目录的 `update_backups/<版本>-<时间>/`；只保留最近 3 份，启动时和每次新备份后自动清理更旧的，避免几十次更新累积几百 MB。覆盖失败会自动用备份回滚。GitHub API/下载超时会提示网络错误，并保留旧版本。
-- 手动更新固定需要 AstrBot 管理员、QQ 群主或群管理员权限。打开 `auto_update` 后，插件每小时自动检查一次，发现新版会走同一套备份/更新/热重载流程；默认关闭。自动更新本身保持静默，只写日志；手动 `/sz 更新` 会在热重载完成后向发起会话补发「已更新到 vX，热重载完成」提醒。
+- 手动更新固定需要 AstrBot 管理员、QQ 群主或群管理员权限。`auto_update` 默认开启：插件启动后检查一次，之后每天 04:00（UTC+8）再检查一次；发现新版会走同一套备份/更新/热重载流程。自动更新本身保持静默，只写日志；手动 `/sz 更新` 会在热重载完成后向发起会话补发「已更新到 vX，热重载完成」提醒。
 
 ## 配置
 
@@ -295,7 +295,7 @@
 | `render_mode` | `auto` | `auto` / `text` / `image` |
 | `auction_display_mode` | `aggregate` | `aggregate`（聚合显示，同数量同品质只留最低买断，沿用 30 条限制）或 `full`（全部显示，跳过聚合与截断，渲染所有查到的在售条目） |
 | `llm_tools_enabled` | `true` | 允许大模型通过函数调用主动查询并发送图片；需在 AstrBot 模型服务中启用函数调用 |
-| `auto_update` | `false` | 开启后每小时检查一次 GitHub Release；有新版自动异步更新并热重载 |
+| `auto_update` | `true` | 插件启动后检查一次，每天 04:00 再检查一次 GitHub Release；有新版自动异步更新并热重载 |
 | `font_path` | 空 | Linux 中文字体路径；留空自动查找 Noto CJK / 文泉驿 / 微软雅黑 |
 | `card_background` | `default` | 全局卡片背景；可选内置官方壁纸 `01 仓库小队` … `16 爆炸战场`，所有卡片共享 |
 | `card_background_custom` | 空 | 自定义背景图片绝对路径（或以插件目录为基准的相对路径），支持 jpg/png/webp；非空且文件存在时优先于预设 |

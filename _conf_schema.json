@@ -283,10 +283,10 @@
     "default": {},
     "items": {
       "auto_update": {
-        "description": "每小时自动检查插件更新",
+        "description": "自动检查并更新插件",
         "type": "bool",
-        "default": false,
-        "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。"
+        "default": true,
+        "hint": "默认开启：插件启动后检查一次，之后每天首次轮询到 04:00（UTC+8）后再检查一次。发现新版会自动备份、选择完整包/轻量包、异步覆盖并热重载；自动更新保持静默，只写日志。可关闭。"
       }
     }
   },
@@ -376,10 +376,10 @@
     "invisible": true
   },
   "auto_update": {
-    "description": "旧版兼容：每小时自动检查插件更新",
+    "description": "旧版兼容：自动检查并更新插件",
     "type": "bool",
-    "default": false,
-    "hint": "开启后每小时通过 GitHub Release 检查版本；有新版会自动备份旧插件、选择完整包/轻量包、异步覆盖并热重载。默认关闭。",
+    "default": true,
+    "hint": "默认开启：插件启动后检查一次，之后每天首次轮询到 04:00（UTC+8）后再检查一次。发现新版会自动备份、选择完整包/轻量包、异步覆盖并热重载；自动更新保持静默，只写日志。可关闭。",
     "invisible": true
   },
   "font_path": {

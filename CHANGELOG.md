@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.34 - 2026-11-28
+
+### Changed
+
+- `auto_update` now defaults to on. The plugin checks GitHub Releases once after startup and again on the first poll after 04:00 UTC+8 each day, instead of every hour.
+- Existing installations still carrying the old default `false` are migrated to `true` once. A marker file prevents a later explicit opt-out from being re-enabled on restart or later plugin updates.
+
 ## 1.14.33 - 2026-11-28
 
 ### Added

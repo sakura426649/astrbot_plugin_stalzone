@@ -310,7 +310,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.33"
+PLUGIN_VERSION = "1.14.34"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -386,7 +386,7 @@ CONFIG_DEFAULTS = {
     "price_watch_group_restrict": False,
     "price_watch_auction_alerts": True,
     "price_watch_ttl_days": 7,
-    "auto_update": False,
+    "auto_update": True,
 }
 _MISSING = object()
 CONFIG_OLD_DEFAULTS = {
@@ -822,6 +822,7 @@ class StalzonePlugin(Star):
         self._last_command_at: dict[str, float] = {}
         self._started_at = time.monotonic()
         data_dir = self._cache_dir()
+        self._migrate_auto_update_default(data_dir)
         self.item_index = ItemIndex(
             overrides_path=data_dir / "item_name_overrides.json",
             aliases_path=data_dir / "item_aliases.json",
@@ -920,6 +921,37 @@ class StalzonePlugin(Star):
                     "STALZONE config default upgrade failed for %s",
                     key,
                     exc_info=True,
+                )
+
+    def _migrate_auto_update_default(self, data_dir: Path) -> None:
+        """Enable auto-update once for installs that still have the old default.
+
+        A marker keeps a later explicit opt-out from being undone on restart.
+        """
+        marker = data_dir / "auto_update_default_v1.marker"
+        if marker.exists():
+            return
+        try:
+            if not self._cfg_bool("auto_update", True):
+                self._set_cfg("auto_update", True)
+                self._persist_config()
+                logger.info(
+                    "STALZONE auto-update default migrated to enabled "
+                    "(startup + daily 04:00 check); set auto_update=false "
+                    "to opt out"
+                )
+        except Exception:
+            logger.debug(
+                "STALZONE auto-update default migration failed",
+                exc_info=True,
+            )
+        finally:
+            try:
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text("1", encoding="utf-8")
+            except OSError:
+                logger.debug(
+                    "STALZONE auto-update migration marker could not be written"
                 )
 
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -1999,8 +2031,11 @@ class StalzonePlugin(Star):
         if self._update_auto_task is not None and not self._update_auto_task.done():
             return
         self._update_auto_task = asyncio.create_task(self._update_auto_loop())
-        if bool(self._cfg("auto_update", False)):
-            logger.info("STALZONE automatic plugin update enabled (hourly)")
+        if self._cfg_bool("auto_update", True):
+            logger.info(
+                "STALZONE automatic plugin update enabled "
+                "(startup check + daily 04:00 UTC+8)"
+            )
 
     @staticmethod
     def _arsenal_int(value: Any, default: int | None = None) -> int | None:
@@ -5140,19 +5175,35 @@ class StalzonePlugin(Star):
             )
         return False, 0, "本地常用物品图标完整，使用轻量包"
 
+    @staticmethod
+    def _auto_update_due(now: datetime, last_check: datetime | None) -> bool:
+        """Startup check once, then the first poll after 04:00 UTC+8 each day."""
+        if last_check is None:
+            return True
+        if now.hour < 4:
+            return False
+        if last_check.date() == now.date() and last_check.hour >= 4:
+            return False
+        # Avoid an immediate second check when startup happens just before 04:00.
+        return (now - last_check).total_seconds() >= 600
+
     async def _update_auto_loop(self) -> None:
         try:
             await asyncio.sleep(60)
+            last_check: datetime | None = None
             while True:
-                if bool(self._cfg("auto_update", False)):
-                    try:
-                        result = await self._run_self_update(None, auto=True)
-                        logger.info("STALZONE automatic update: %s", result)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        logger.exception("STALZONE automatic update failed")
-                await asyncio.sleep(3600)
+                if self._cfg_bool("auto_update", True):
+                    now = datetime.now(CST)
+                    if self._auto_update_due(now, last_check):
+                        try:
+                            result = await self._run_self_update(None, auto=True)
+                            logger.info("STALZONE automatic update: %s", result)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception:
+                            logger.exception("STALZONE automatic update failed")
+                        last_check = now
+                await asyncio.sleep(60)
         except asyncio.CancelledError:
             raise
 
