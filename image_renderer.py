@@ -2761,7 +2761,7 @@ def render_watch_list_card(
     draw.text((margin + 22, 54), "神器价格关注", font=title_font, fill=body)
     draw.text(
         (margin + 24, 116),
-        "买断命中提醒后自动取消 · 竞拍命中只提醒",
+        "买断命中提醒后自动取消 · 竞拍命中只提醒 · 官方限制：上架满 10 分钟才对外暴露",
         font=subtitle_font,
         fill="#A9BACD",
     )
@@ -3166,7 +3166,8 @@ def render_watch_created_card(
     draw.text((margin + 22, 54), title, font=title_font, fill=body)
     draw.text(
         (margin + 24, 110),
-        f"神器价格关注 · {str(view.get('region') or 'EU').upper()} · 已开始监控",
+        f"神器价格关注 · {str(view.get('region') or 'EU').upper()} · 已开始监控"
+        " · 官方限制：上架满 10 分钟才对外暴露",
         font=subtitle_font,
         fill="#A9BACD",
     )
@@ -3354,7 +3355,7 @@ def render_watch_alert_card(
     draw.text((margin + 22, 56), "神器价格提醒", font=title_font, fill=body)
     draw.text(
         (margin + 24, 112),
-        "官方拍卖 API · 价格为卢布 · 买断可能已被抢购",
+        "官方限制：上架满 10 分钟才对外暴露 · 价格为卢布 · 买断可能已被抢购",
         font=subtitle_font,
         fill="#A9BACD",
     )
@@ -3947,7 +3948,7 @@ def render_help_card(
             "价格关注",
             "PRICE WATCH",
             "/sz 关注 <神器> <品质> +等级 <目标价>",
-            ["买断命中提醒后取消；竞拍只提醒", "关注列表 /sz 关注列表"],
+            ["买断命中提醒后取消；竞拍只提醒", "官方限制：上架满 10 分钟才可见｜列表 /sz 关注列表"],
             "#54D6A1",
         ),
         (

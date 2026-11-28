@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.15.2-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.15.3-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -35,7 +35,7 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Clan | Search by name, parenthesized tag, tag field or UUID; tags of any length, case-insensitive; clan list |
 | Item | 2,636 entries (2,367 from the official EXBO database plus 269 legacy supplements), 1,359 detail records, 828 bundled official common icons plus an optional 2,621-icon extension pack |
 | Artifact appraisal | `/sz 估价` estimates artifact prices from recent sales and active buyouts: min/max/median, P25/P75, current lowest active buyout, `+0`–`+15` level breakdown, quality split and a fair-buy line; artifacts only |
-| Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list |
+| Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list. The official API only exposes listings 10 minutes after creation, so alerts trail the in-game market by at least 10 minutes plus up to one polling interval |
 | Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only; alias/rename ambiguity continues through the same candidate flow |
 | Name management | Admin-only alias add/list/remove and display-name rename; aliases are additive, old names are preserved as aliases, collisions are checked globally |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
@@ -121,11 +121,11 @@ The WebUI groups settings under **API & region / Display & images / Query behavi
 | `emission_group_whitelist` | empty | QQ group allow-list; add one group number per entry. Empty sends nothing; every listed group gets the alert |
 | `emission_group_blacklist` | empty | QQ group deny-list; add one group number per entry. Takes priority over the allow-list |
 | `price_watch_enabled` | `true` | Artifact price-watch switch; no polling when there are no subscriptions |
-| `price_watch_interval` | `60` | Poll interval in seconds, default every minute, 60–600 |
+| `price_watch_interval` | `180` | Poll interval in seconds, default every three minutes, 60–600. The official API hides listings for 10 minutes; shorter intervals only gain a little detection time at a much higher request cost |
 | `price_watch_per_user` | `3` | Maximum distinct artifact types per user; re-sending the same item updates it |
 | `price_watch_user_total` | `12` | Maximum total subscriptions per user (quality/level variants each count), 1–100 |
 | `price_watch_session_items` | `8` | Maximum distinct artifacts per session |
-| `price_watch_batch` | `8` | Distinct artifacts polled per tick; extra items rotate fairly. On upgrade, old defaults 120/2/8/5/5 migrate to 60/3/12/8/8; custom values are kept |
+| `price_watch_batch` | `8` | Distinct artifacts polled per tick; extra items rotate fairly. On upgrade, old interval defaults 60/120/300 migrate once to 180, and old defaults 2/8/5/5 migrate to 3/12/8/8; later custom values are kept |
 | `price_watch_group_restrict` | `false` | When on, only admins/group owners/managers can create watches in groups |
 | `price_watch_auction_alerts` | `true` | Also alert on auction/start price hits; off means buyout-only monitoring |
 | `price_watch_ttl_days` | `7` | Watch lifetime in days; expiry notifies once and removes it |
@@ -135,7 +135,7 @@ The WebUI groups settings under **API & region / Display & images / Query behavi
 - The official STALZONE client makes up to 3 attempts (2 retries) with backoff for timeouts, network errors, 429 and 5xx; three consecutive failures open a 30-second circuit breaker.
 - Optional Lunar and SC CORE enrichment clients also retry up to 3 times and fall back without affecting the primary query.
 - Emission polling, arsenal refresh and price-watch share one background API lock: at most one background request is in flight, and it yields to foreground commands before each call; interactive queries still have the remaining five permits.
-- Price watch defaults to a one-minute interval, at most 8 distinct artifacts per tick, 3 types / 12 subscriptions per user and 8 types per session. This stays well below the community-reported (unconfirmed) 20 requests/s and 400 requests/min limits.
+- Price watch defaults to a three-minute interval, at most 8 distinct artifacts per tick, 3 types / 12 subscriptions per user and 8 types per session. The official API already delays new listings by about 10 minutes, so shorter polling is avoided to keep background load stable and low.
 
 ### Automatic emission alerts
 
@@ -211,6 +211,7 @@ The official history endpoint returns at most **200 records per request**. The p
 
 `/sz 关注 <artifact> <quality> +level <price|-N%> [cap]` watches artifact prices.
 
+- **Official delay**: the auction API only exposes listings 10 minutes after they are created, while the game shows them earlier. Alerts therefore trail the in-game market by at least 10 minutes, plus up to one polling interval (three minutes by default); this is an official anti-flipping limit, not a missed check.
 - `8000`: alert when the buyout unit price is at most 8,000;
 - price abbreviations are accepted case-insensitively: `3K` = 3,000, `3M` / `3kk` = 3,000,000, plus `3,000,000`, `3 000 000` and `3.5M`;
 - `-20%`: alert when it is 20% below the 3-day median for the same level/quality;
@@ -219,7 +220,7 @@ The official history endpoint returns at most **200 records per request**. The p
 - each user has at most 3 artifact types and 12 total subscriptions (quality/level variants each count; configurable), and each session at most 8 distinct artifacts; re-sending the same item updates the rule;
 - a watch captures the default region when it is created; changing the default later does not migrate existing watches, and the list shows each watch's actual region;
 - users watching the same artifact share one API fetch per cycle, while thresholds, quality/level and dedupe state stay per user;
-- every minute the scheduler polls at most 8 distinct artifacts and rotates fairly if there are more;
+- the scheduler runs every three minutes and polls at most 8 distinct artifacts, rotating fairly if there are more; because the official API is already 10 minutes behind, polling is deliberately not shortened;
 - a buyout hit sends an alert and then cancels that subscription; if it was sniped, re-follow manually;
 - an auction hit only sends an alert and keeps the subscription; the same lot is never alerted twice, but a different low auction lot will alert again;
 - `/sz 关注列表 [page]` shows everyone in the current session with your own entries pinned, up to eight subscriptions per page (e.g. `/sz 关注列表 2`); normal users can only cancel their own, admins can cancel anyone in the session.

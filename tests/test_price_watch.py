@@ -148,6 +148,7 @@ class WatchViewTests(unittest.TestCase):
         self.assertTrue(view["auto_cancel"])
         self.assertIn("自动取消", view["hint"])
         self.assertIn("7,800", format_watch_alert_text(view))
+        self.assertIn("10 分钟", format_watch_alert_text(view))
 
     def test_alert_view_auction(self):
         match = {
@@ -171,7 +172,7 @@ class WatchViewTests(unittest.TestCase):
             "session_items": 2,
             "session_limit": 5,
             "global_items": 3,
-            "refresh_minutes": 2,
+            "refresh_minutes": 3,
             "users": [
                 {
                     "user_name": "Sakura",
@@ -203,6 +204,7 @@ class WatchViewTests(unittest.TestCase):
         self.assertIn("Sakura  [你]", text)
         self.assertIn("小明", text)
         self.assertIn("本群 2/5", text)
+        self.assertIn("10 分钟", text)
         self.assertLess(text.index("Sakura"), text.index("小明"))
 
 

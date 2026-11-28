@@ -35,6 +35,17 @@ PRICE_MULTIPLIERS = {
 }
 WATCH_DEFAULT_TTL_DAYS = 7
 WATCH_MAX_TTL_DAYS = 30
+# The official auction API only exposes a listing about ten minutes after it
+# was created in game.  Watch alerts therefore cannot be faster than that;
+# poll slowly and keep the background API load low.
+WATCH_API_DELAY_MINUTES = 10
+WATCH_API_DELAY_NOTE = (
+    f"官方限制：拍卖物品上架满 {WATCH_API_DELAY_MINUTES} 分钟才对外暴露，"
+    "提醒会相应延迟。"
+)
+# Do not filter lots by the (now longer) polling interval: a listing with a
+# couple of minutes left can still be worth alerting on.
+WATCH_MIN_REMAINING_MINUTES = 2
 
 
 class WatchQueryError(ValueError):
@@ -468,6 +479,7 @@ def format_watch_alert_text(view: dict[str, Any]) -> str:
     if extra:
         lines.append(f"同轮另有 {extra} 条符合条件的挂单。")
     lines.append(str(view.get("hint") or ""))
+    lines.append(WATCH_API_DELAY_NOTE)
     return "\n".join(line for line in lines if line)
 
 
@@ -476,7 +488,8 @@ def format_watch_list(view: dict[str, Any]) -> str:
         f"{view.get('region')} · 本群 {int(view.get('session_items') or 0)}/"
         f"{int(view.get('session_limit') or 5)} 种"
         f"｜全局 {int(view.get('global_items') or 0)} 种"
-        f"｜预计每 {int(view.get('refresh_minutes') or 2)} 分钟刷新",
+        f"｜预计每 {int(view.get('refresh_minutes') or 5)} 分钟刷新",
+        WATCH_API_DELAY_NOTE,
     ]
     pages = max(1, int(view.get("pages") or 1))
     page = max(1, int(view.get("page") or 1))

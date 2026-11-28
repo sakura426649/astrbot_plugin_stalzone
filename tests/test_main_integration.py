@@ -1187,6 +1187,20 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         plugin._schedule_item_db_sync()
         self.assertIsNone(plugin._item_db_sync_task)
 
+    def test_price_watch_interval_migrates_to_low_power_once(self):
+        with tempfile.TemporaryDirectory() as raw:
+            plugin = self.make_plugin()
+            root = Path(raw)
+            plugin.config["price_watch_interval"] = 60
+            plugin._migrate_price_watch_low_power(root)
+            self.assertEqual(plugin._cfg("price_watch_interval", 180), 180)
+            marker = root / "price_watch_low_power_v2.marker"
+            self.assertTrue(marker.is_file())
+            # A later explicit choice must not be rewritten on every restart.
+            plugin.config["price_watch_interval"] = 60
+            plugin._migrate_price_watch_low_power(root)
+            self.assertEqual(plugin._cfg("price_watch_interval", 180), 60)
+
     def test_github_proxy_url_candidates(self):
         url = "https://github.com/x/y/releases/download/v1/a.zip"
         self.assertEqual(

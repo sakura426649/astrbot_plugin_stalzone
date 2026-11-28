@@ -11,6 +11,7 @@ import tests.test_main_integration as integration
 import image_renderer
 import main as main_module
 from main import StalzonePlugin
+from price_watch import watch_lot_rows
 
 
 def _text(result):
@@ -96,6 +97,38 @@ class PriceWatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
         elapsed = asyncio.get_running_loop().time() - started
         self.assertGreaterEqual(waited, 0.05)
         self.assertLess(elapsed, 1.0)
+
+    def test_default_watch_interval_is_low_power(self):
+        plugin = self.make_plugin()
+        plugin.config.pop("price_watch_interval", None)
+        self.assertEqual(plugin._watch_interval(), 180)
+
+    def test_short_lot_still_matches_after_interval_increase(self):
+        plugin = self.make_plugin()
+        now = datetime.now(timezone.utc)
+        payload = {
+            "lots": [
+                {
+                    "amount": 1,
+                    "currentPrice": 7000,
+                    "buyoutPrice": 7800,
+                    "startTime": now.isoformat(),
+                    "endTime": (now + timedelta(minutes=5)).isoformat(),
+                    "additional": {"qlt": 4, "ptn": 15},
+                }
+            ]
+        }
+        sub = {
+            "quality": 4,
+            "level": 15,
+            "mode": "absolute",
+            "threshold": 8000,
+            "seen": {},
+        }
+        buyouts, _auctions = plugin._watch_matches(
+            sub, watch_lot_rows(payload, "wg53"), {}, now
+        )
+        self.assertTrue(buyouts)
 
     async def test_watch_usage_and_list_dispatch(self):
         plugin = self.make_plugin()

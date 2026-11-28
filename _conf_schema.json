@@ -230,8 +230,8 @@
       "price_watch_interval": {
         "description": "价格关注轮询间隔（秒）",
         "type": "int",
-        "default": 60,
-        "hint": "默认 60 秒（每分钟），范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。"
+        "default": 180,
+        "hint": "默认 180 秒（每 3 分钟），范围 60–600。官方拍卖 API 只返回上架满 10 分钟的挂单，继续缩短间隔只能把发现时间提前一点，却会成倍增加 API 压力；建议保持 180。每个 tick 最多查询 price_watch_batch 种不同神器，超过时公平轮换。"
       },
       "price_watch_per_user": {
         "description": "每位用户最多关注神器数",
@@ -255,7 +255,7 @@
         "description": "每轮最多查询神器数",
         "type": "int",
         "default": 8,
-        "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。"
+        "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。官方 API 有约 10 分钟延迟，默认 8 已足够，不建议调高。"
       },
       "price_watch_group_restrict": {
         "description": "群聊关注仅管理员",
@@ -508,8 +508,8 @@
   "price_watch_interval": {
     "description": "旧版兼容：价格关注轮询间隔（秒）",
     "type": "int",
-    "default": 60,
-    "hint": "默认 60 秒（每分钟），范围 60–600。每个 tick 最多查询 price_watch_batch 种不同神器；超过时公平轮换，实际刷新间隔会变长。",
+    "default": 180,
+    "hint": "默认 180 秒（每 3 分钟），范围 60–600。官方拍卖 API 只返回上架满 10 分钟的挂单，继续缩短间隔只能把发现时间提前一点，却会成倍增加 API 压力；建议保持 180。每个 tick 最多查询 price_watch_batch 种不同神器，超过时公平轮换。",
     "invisible": true
   },
   "price_watch_per_user": {
@@ -537,7 +537,7 @@
     "description": "旧版兼容：每轮最多查询神器数",
     "type": "int",
     "default": 8,
-    "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。",
+    "hint": "每个轮询 tick 最多查询多少种不同神器；超过后按顺序公平轮换，避免官方 API 压力过大。官方 API 有约 10 分钟延迟，默认 8 已足够，不建议调高。",
     "invisible": true
   },
   "price_watch_group_restrict": {

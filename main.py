@@ -155,8 +155,10 @@ try:  # Package import (normal AstrBot plugin loading).
     )
     from .lunar_client import LunarProfileClient
     from .price_watch import (
+        WATCH_API_DELAY_NOTE,
         WATCH_DEFAULT_TTL_DAYS,
         WATCH_MAX_TTL_DAYS,
+        WATCH_MIN_REMAINING_MINUTES,
         WatchQueryError,
         build_watch_alert_view,
         format_watch_alert_text,
@@ -276,8 +278,10 @@ except ImportError:  # Direct execution / flat import fallback.
     )
     from lunar_client import LunarProfileClient  # type: ignore[no-redef]
     from price_watch import (  # type: ignore[no-redef]
+        WATCH_API_DELAY_NOTE,
         WATCH_DEFAULT_TTL_DAYS,
         WATCH_MAX_TTL_DAYS,
+        WATCH_MIN_REMAINING_MINUTES,
         WatchQueryError,
         build_watch_alert_view,
         format_watch_alert_text,
@@ -314,7 +318,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.15.2"
+PLUGIN_VERSION = "1.15.3"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -382,7 +386,7 @@ CONFIG_DEFAULTS = {
     "emission_group_whitelist": [],
     "emission_group_blacklist": [],
     "price_watch_enabled": True,
-    "price_watch_interval": 60,
+    "price_watch_interval": 180,
     "price_watch_per_user": 3,
     "price_watch_user_total": 12,
     "price_watch_session_items": 8,
@@ -394,7 +398,6 @@ CONFIG_DEFAULTS = {
 }
 _MISSING = object()
 CONFIG_OLD_DEFAULTS = {
-    "price_watch_interval": (120, 60),
     "price_watch_per_user": (2, 3),
     "price_watch_user_total": (8, 12),
     "price_watch_session_items": (5, 8),
@@ -645,6 +648,7 @@ USAGE = {
     "watch": (
         "用法：/sz 关注 <神器> <品质> +等级 <目标价|-N%> [上限]\n"
         "说明：关注神器价格；买断命中提醒后自动取消，竞拍命中只提醒\n"
+        "提示：官方拍卖 API 只返回上架满 10 分钟的挂单；游戏内更早可见，提醒会相应延迟\n"
         "参数：\n"
         "  神器   必填，中文名 / 英文名 / 神器ID\n"
         "  品质   必填，白/绿/蓝/粉/红/金\n"
@@ -864,6 +868,7 @@ class StalzonePlugin(Star):
         self._started_at = time.monotonic()
         data_dir = self._cache_dir()
         self._migrate_auto_update_default(data_dir)
+        self._migrate_price_watch_low_power(data_dir)
         self.item_index = ItemIndex(
             overrides_path=data_dir / "item_name_overrides.json",
             aliases_path=data_dir / "item_aliases.json",
@@ -997,6 +1002,45 @@ class StalzonePlugin(Star):
             except OSError:
                 logger.debug(
                     "STALZONE auto-update migration marker could not be written"
+                )
+
+    def _migrate_price_watch_low_power(self, data_dir: Path) -> None:
+        """Move old fast watch defaults to the low-power 3-minute cadence.
+
+        The official auction API hides listings for their first ten minutes,
+        so polling every minute only increases API load.  A v2 marker also
+        covers the unreleased 300-second trial default; a later explicit value
+        is never rewritten.
+        """
+        marker = data_dir / "price_watch_low_power_v2.marker"
+        if marker.exists():
+            return
+        try:
+            current = self._cfg("price_watch_interval", 180)
+            try:
+                value = int(current)
+            except (TypeError, ValueError):
+                value = 180
+            if value in (60, 120, 300):
+                self._set_cfg("price_watch_interval", 180)
+                self._persist_config()
+                logger.info(
+                    "STALZONE price-watch interval migrated from %ss to 180s "
+                    "(official auction API exposes listings after 10 minutes)",
+                    value,
+                )
+        except Exception:
+            logger.debug(
+                "STALZONE price-watch interval migration failed",
+                exc_info=True,
+            )
+        finally:
+            try:
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text("1", encoding="utf-8")
+            except OSError:
+                logger.debug(
+                    "STALZONE price-watch migration marker could not be written"
                 )
 
     def _cfg(self, key: str, default: Any = "") -> Any:
@@ -4116,7 +4160,6 @@ class StalzonePlugin(Star):
             watch_lot_rows(lots_payload, item_id),
             medians_map,
             now,
-            self._watch_interval(),
         )
         if current_buyouts:
             best = current_buyouts[0]
@@ -4195,6 +4238,7 @@ class StalzonePlugin(Star):
         text = (
             f"{action}：{label}{chr(10)}"
             f"有效期至 {expiry_text} UTC+8。{chr(10)}"
+            f"{WATCH_API_DELAY_NOTE}{chr(10)}"
             + (
                 "买断命中会提醒并自动取消；竞拍命中只提醒，不自动取消。"
                 if auction_alerts
@@ -4227,9 +4271,9 @@ class StalzonePlugin(Star):
 
     def _watch_interval(self) -> int:
         try:
-            value = int(self._cfg("price_watch_interval", 60) or 60)
+            value = int(self._cfg("price_watch_interval", 180) or 180)
         except (TypeError, ValueError):
-            value = 120
+            value = 180
         return max(60, min(600, value))
 
     def _watch_remaining_text(self, end: Any, now: datetime) -> str:
@@ -4251,7 +4295,6 @@ class StalzonePlugin(Star):
         rows: list[dict[str, Any]],
         medians: dict[int | None, int],
         now: datetime,
-        interval: int,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         quality_filter = sub.get("quality")
         level_filter = int(sub.get("level") or 0)
@@ -4259,7 +4302,7 @@ class StalzonePlugin(Star):
         threshold = int(sub.get("threshold") or 0)
         relative_pct = int(sub.get("relative_pct") or 0)
         cap = sub.get("cap")
-        min_end = now + timedelta(seconds=interval * 2)
+        min_end = now + timedelta(minutes=WATCH_MIN_REMAINING_MINUTES)
         buyouts: list[dict[str, Any]] = []
         auctions: list[dict[str, Any]] = []
         for row in rows:
@@ -4577,7 +4620,7 @@ class StalzonePlugin(Star):
                         int(sub.get("level") or 0), {}
                     )
                     buyouts, auctions = self._watch_matches(
-                        sub, rows, medians, checked_at, interval
+                        sub, rows, medians, checked_at
                     )
                     if not self._cfg_bool("price_watch_auction_alerts", True):
                         auctions = []

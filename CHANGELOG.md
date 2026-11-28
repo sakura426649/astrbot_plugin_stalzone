@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.3 - 2026-11-28
+
+### Changed
+
+- Price watch now prioritizes stability and low API load: the default polling interval is 180 seconds (three minutes) instead of 60, and installs still on the old 60/120/300-second defaults migrate once. The official auction API only exposes listings ten minutes after creation, so shorter polling cannot detect new listings much sooner.
+- Watch creation, list, alert, help and usage cards now explain the official ten-minute auction API delay.
+
 ## 1.15.2 - 2026-11-28
 
 ### Changed

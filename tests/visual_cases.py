@@ -516,7 +516,7 @@ def _watch_list_long() -> Path | None:
         "session_items": 1,
         "session_limit": 5,
         "global_items": 1,
-        "refresh_minutes": 2,
+        "refresh_minutes": 3,
         "users": [
             {
                 "user_name": "Sakura",
@@ -593,7 +593,7 @@ def _watch_list() -> Path | None:
         "session_items": 3,
         "session_limit": 5,
         "global_items": 4,
-        "refresh_minutes": 2,
+        "refresh_minutes": 3,
         "users": [
             {
                 "user_id": "u1",
