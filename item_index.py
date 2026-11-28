@@ -184,6 +184,29 @@ def _matches_category(item: dict[str, Any], category: str) -> bool:
     return current == category or current.startswith(f"{category}/")
 
 
+def _extra_aliases(item: dict[str, Any]) -> list[str]:
+    """Community aliases beyond the canonical zh/en/ru names."""
+    zh = str(item.get("zh") or "").strip()
+    en = str(item.get("en") or "").strip()
+    category = str(item.get("cat") or "")
+    base = _base_name(zh) if zh else ""
+    extra: list[str] = []
+    if category.startswith("artefact/") and "hedgehog" in en.lower():
+        # The Chinese community name uses 刺球 for Hedgehog; players often
+        # search for 刺猬 instead.  Add both the literal and the common
+        # 钢铁刺猬 expansion for the steel variant.
+        if base.endswith("刺球"):
+            hedgehog_alias = f"{base[:-2]}刺猬"
+            extra.append(hedgehog_alias)
+            if base.startswith("钢") and not base.startswith("钢铁"):
+                extra.append(f"钢铁{hedgehog_alias[1:]}")
+    if category.startswith("artefact/") and en.strip().lower() == "magma":
+        # Players usually call the Magma artifact 岩浆; the skin
+        # 岩浆战士 (Magma Warrior) otherwise wins a raw substring search.
+        extra.append("岩浆")
+    return extra
+
+
 def _aliases(item: dict[str, Any]) -> list[str]:
     zh = str(item.get("zh") or "").strip()
     en = str(item.get("en") or "").strip()
@@ -191,6 +214,7 @@ def _aliases(item: dict[str, Any]) -> list[str]:
     values = [item.get("id", ""), en, ru, zh, _base_name(zh) if zh else ""]
     values.extend(_PAREN_RE.findall(zh))
     values.extend(_PAREN_RE.findall(en))
+    values.extend(_extra_aliases(item))
     # Some names contain a slash-separated alias ("X / Y").
     for value in list(values):
         if " / " in value:
@@ -564,6 +588,14 @@ class ItemIndex:
             return matches[0], matches
         if matches:
             q = _normalize(raw)
+            exact_artifacts = [
+                item
+                for item in matches
+                if q in {_normalize(value) for value in _extra_aliases(item)}
+                and str(item.get("cat") or "").startswith("artefact/")
+            ]
+            if len(exact_artifacts) == 1:
+                return exact_artifacts[0], matches
             english = [
                 item
                 for item in matches

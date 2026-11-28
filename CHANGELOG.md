@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.14.33 - 2026-11-28
+
+### Added
+
+- Hedgehog artifacts now accept the common “刺猬” aliases: 刺球 → 刺猬, 钢刺球 → 钢刺猬 / 钢铁刺猬, 冰刺球 → 冰刺猬. The alias is generated from the English `Hedgehog` name and current Chinese name.
+- The Magma artifact now accepts `岩浆` as an alias. Exact extra-alias matches on artifacts take priority over substring matches, so `岩浆` resolves to 熔岩(Magma), while `岩浆战士` still resolves to the Magma Warrior skin.
+
 ## 1.14.32 - 2026-11-28
 
 ### Fixed

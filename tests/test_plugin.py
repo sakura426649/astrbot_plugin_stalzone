@@ -2575,6 +2575,20 @@ class ItemIndexTests(unittest.TestCase):
         schematic = self.index.get("nxc9y6yv")
         self.assertTrue(schematic["icon"].endswith("/nxc9y6yv.png"))
 
+    def test_hedgehog_and_magma_aliases(self):
+        for query, item_id in (
+            ("钢刺猬", "5rd1"),
+            ("钢铁刺猬", "5rd1"),
+            ("冰刺猬", "5r5g"),
+            ("岩浆", "jkq7"),
+        ):
+            item, matches = self.index.resolve(query)
+            self.assertIsNotNone(item, query)
+            self.assertEqual(item["id"], item_id, query)
+        skin, _ = self.index.resolve("岩浆战士")
+        self.assertIsNotNone(skin)
+        self.assertEqual(skin["id"], "rwk1l")
+
     def test_new_season_items_resolve_with_icons(self):
         self.assertGreaterEqual(len(self.index.items), 2636)
         for query, item_id in (
