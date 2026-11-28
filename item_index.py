@@ -185,13 +185,22 @@ def _matches_category(item: dict[str, Any], category: str) -> bool:
     return current == category or current.startswith(f"{category}/")
 
 
+_ITEM_EXTRA_ALIASES = {
+    # The official English name is "Elbrus Short Range Detector"; players
+    # commonly call it 厄尔布鲁士探测器 after the Russian name.
+    "gdj6": ["厄尔布鲁士探测器"],
+}
+
+
 def _extra_aliases(item: dict[str, Any]) -> list[str]:
     """Community aliases beyond the canonical zh/en/ru names."""
     zh = str(item.get("zh") or "").strip()
     en = str(item.get("en") or "").strip()
     category = str(item.get("cat") or "")
     base = _base_name(zh) if zh else ""
-    extra: list[str] = []
+    extra: list[str] = list(
+        _ITEM_EXTRA_ALIASES.get(str(item.get("id") or "").strip(), [])
+    )
     if category.startswith("artefact/") and "hedgehog" in en.lower():
         # The Chinese community name uses 刺球 for Hedgehog; players often
         # search for 刺猬 instead.  Add both the literal and the common

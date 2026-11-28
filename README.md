@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.15.3-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.15.4-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -374,7 +374,7 @@
 
 键是物品 ID（用 `/sz 物品 原子` 可看到），值是别名数组。别名不区分大小写，空格和连字符会归一化；保存后在 WebUI 重载插件即可生效。别名只在本机生效，不会修改或重写 `item_index.json`。可参考 [`docs/item_aliases.example.json`](docs/item_aliases.example.json)。
 
-也可以直接用管理员命令维护，不需要手改 JSON：`/sz 起别名 <物品/ID> <别名>` 追加别名，`/sz 别名列表 <物品/ID>` 查看，`/sz 删除别名 <物品/ID> <别名>` 删除；`/sz 改名 <物品/ID> <新名称>` 修改显示名并把旧名保留为别名。`/sz 别名列表` 会同时列出插件内置的社区别名（如 钢刺球 → 钢刺猬/钢铁刺猬、岩浆 → 熔岩）和本地自定义别名。显示名写入 `item_name_overrides.json`，别名写入 `item_aliases.json`，两者都会在官方索引更新时保留。
+也可以直接用管理员命令维护，不需要手改 JSON：`/sz 起别名 <物品/ID> <别名>` 追加别名，`/sz 别名列表 <物品/ID>` 查看，`/sz 删除别名 <物品/ID> <别名>` 删除；`/sz 改名 <物品/ID> <新名称>` 修改显示名并把旧名保留为别名。`/sz 别名列表` 会同时列出插件内置的社区别名（如 钢刺球 → 钢刺猬/钢铁刺猬、岩浆 → 熔岩、火龙探测器 → 厄尔布鲁士探测器）和本地自定义别名。显示名写入 `item_name_overrides.json`，别名写入 `item_aliases.json`，两者都会在官方索引更新时保留。
 
 名称表还会在数据目录生成 `item_name_defaults.json` 作为同步基线：新版本里作者修正了某个默认译名时，未被用户改过的条目会自动跟进；用户改过/重命名过的条目、以及所有别名不会被覆盖。新物品加入后，更新插件即可显示新译名，运行 `/sz 检查` 会把它们补进名称表。首次建立基线的用户，旧表中与当前默认值不同的条目会被当作自定义保留。
 

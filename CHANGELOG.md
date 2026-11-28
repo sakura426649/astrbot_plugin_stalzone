@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.4 - 2026-11-28
+
+### Added
+
+- 火龙探测器 (`gdj6`) now accepts **厄尔布鲁士探测器** as a built-in search alias, shown in `/sz 别名列表` and the item card's name-index panel.
+
 ## 1.15.3 - 2026-11-28
 
 ### Changed

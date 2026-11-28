@@ -2601,6 +2601,17 @@ class ItemIndexTests(unittest.TestCase):
         )
         self.assertEqual(self.index.builtin_aliases("jkq7"), ["岩浆"])
 
+    def test_detector_builtin_alias(self):
+        item, _matches = self.index.resolve("厄尔布鲁士探测器")
+        self.assertIsNotNone(item)
+        self.assertEqual(item["id"], "gdj6")
+        self.assertEqual(
+            self.index.builtin_aliases("gdj6"), ["厄尔布鲁士探测器"]
+        )
+        canonical, _matches = self.index.resolve("火龙探测器")
+        self.assertIsNotNone(canonical)
+        self.assertEqual(canonical["id"], "gdj6")
+
     def test_new_season_items_resolve_with_icons(self):
         self.assertGreaterEqual(len(self.index.items), 2636)
         for query, item_id in (
