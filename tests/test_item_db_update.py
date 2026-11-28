@@ -13,6 +13,7 @@ from item_db_update import (
     extract_full_icons,
     extract_official_items,
     icon_coverage,
+    merge_translation_overrides,
     write_overrides_jsonc,
 )
 from item_index import ItemIndex, strip_json_comments
@@ -104,6 +105,9 @@ class ItemDBUpdateTests(unittest.TestCase):
             self.assertEqual(by_id["food1"]["zh"], "Food")
             self.assertEqual(by_id["food1"]["zh_source"], "fallback")
             self.assertEqual(stats["untranslated"], ["food1"])
+            self.assertEqual(stats["new_items"], 1)
+            self.assertEqual(stats["updated_items"], 1)
+            self.assertEqual(stats["removed_items"], 1)
 
             translated, stats2 = build_merged_index(
                 merged,
@@ -189,6 +193,35 @@ class ItemDBUpdateTests(unittest.TestCase):
             self.assertIn("// en: Food | key: item.food.food1.name", text)
             parsed = json.loads(strip_json_comments(text))
             self.assertEqual(parsed, {"abc": "", "food1": "食物"})
+
+    def test_three_way_translation_merge_preserves_user_edits(self):
+        items = [
+            {"id": "a", "en": "Alpha", "zh": "新默认", "zh_source": "exact"},
+            {"id": "b", "en": "Beta", "zh": "新默认", "zh_source": "exact"},
+            {"id": "c", "en": "Gamma", "zh": "新物品", "zh_source": "exact"},
+            {"id": "d", "en": "Delta", "zh": "新默认", "zh_source": "exact"},
+        ]
+        merged, baseline, stats = merge_translation_overrides(
+            items,
+            {"a": "旧默认", "b": "自定义", "d": ""},
+            {"a": "旧默认", "b": "旧默认", "d": "旧默认"},
+        )
+        self.assertEqual(merged["a"], "新默认")
+        self.assertEqual(merged["b"], "自定义")
+        self.assertEqual(merged["c"], "新物品")
+        self.assertEqual(merged["d"], "新默认")
+        self.assertEqual(baseline["a"], "新默认")
+        self.assertEqual(stats, {"updated": 2, "preserved": 1, "new_items": 1})
+
+    def test_three_way_merge_without_baseline_keeps_differing_local_names(self):
+        merged, baseline, stats = merge_translation_overrides(
+            [{"id": "a", "en": "Alpha", "zh": "新默认", "zh_source": "exact"}],
+            {"a": "旧名称"},
+            {},
+        )
+        self.assertEqual(merged["a"], "旧名称")
+        self.assertEqual(baseline["a"], "新默认")
+        self.assertEqual(stats["preserved"], 1)
 
     def test_full_translation_table_prefills_chinese_and_keeps_edits(self):
         items = [

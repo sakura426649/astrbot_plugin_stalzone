@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.14.34-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.15.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -36,7 +36,8 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | Item | 2,636 entries (2,367 from the official EXBO database plus 269 legacy supplements), 1,359 detail records, 828 bundled official common icons plus an optional 2,621-icon extension pack |
 | Artifact appraisal | `/sz 估价` estimates artifact prices from recent sales and active buyouts: min/max/median, P25/P75, current lowest active buyout, `+0`–`+15` level breakdown, quality split and a fair-buy line; artifacts only |
 | Price watch | `/sz 关注` alerts on artifact buyouts/auctions; a buyout hit alerts then cancels the task, an auction hit only alerts; absolute/relative thresholds and price caps; own entries pinned in the session list |
-| Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only |
+| Candidates | Two-column cards with index, quality-colored name, ID/category and icon; top 20 only; alias/rename ambiguity continues through the same candidate flow |
+| Name management | Admin-only alias add/list/remove and display-name rename; aliases are additive, old names are preserved as aliases, collisions are checked globally |
 | Balance | 168 official patch notes from 2023–2026, extracted per item |
 | Season Pass | Local XP/level prediction aligned to the Wednesday 12:00 reset; groups final levels by overload mode, today’s task completion, and dynamic current-week ranges. Reward chains show `15 tier (3 levels) + 45 tier (5 levels)`; claimed tiers are greyed out with a checkmark and are not added again |
 | Not found | A query-specific card repeats the name/ID and region, with a short correction hint |
@@ -76,8 +77,12 @@ Real-time data comes from the official API. Credentials stay in AstrBot configur
 | `/sz emission [region]` | Time since the last emission and current status |
 | `/sz 风暴订阅 [cancel/status]` | One-shot subscription to the next storm (group mention, private DM) |
 | `/sz player <name/UUID> [region]` | Public profile, clan, PvP estimate and optional Lunar data |
-| `/sz item <name/ID> [quality] [category]` | Item stats, description, category and icon; quality/category filters |
-| `/sz candidate <number>` | Replay the previous query with a candidate |
+| `/sz item <name/ID> [quality] [category]` | Item stats, description, category and icon, including the name-index aliases |
+| `/sz candidate <number>` | Replay the previous query with a candidate; also continues a pending alias/rename action |
+| `/sz alias <item/ID> <alias>` | Add a searchable alias (admin; additive only) |
+| `/sz rename <item/ID> <new name>` | Change display name and keep the old name as an alias (admin) |
+| `/sz aliases <item/ID>` | Show display name, English name, ID and aliases |
+| `/sz removealias <item/ID> <alias>` | Remove a custom alias (admin) |
 | `/sz balance <item>` | Official balance-change history |
 | `/sz pass <level> <daily> [overload] <days>` | Season-pass level prediction grouped by overload, today completion, and weekly task ranges |
 | `/sz clan <name/tag/UUID>` | Clan profile; parenthesized tags take priority and any tag length works |

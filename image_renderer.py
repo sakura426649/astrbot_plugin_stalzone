@@ -786,7 +786,7 @@ def render_text_card(
         if set(stripped) <= SEP_CHARS:
             blocks.append(("rule", "", body_font, BORDER, 14))
             continue
-        if stripped.startswith(("▸", "◆")):
+        if stripped.startswith(("▸", "◆", "●")):
             blocks.append(("section", stripped, section_font, ACCENT, 18))
             continue
         for wrapped in _wrap(line, body_font, content_width):
@@ -853,6 +853,28 @@ def render_text_card(
             and not line.startswith(("ID：", "类别：", "等级：", "距离衰减："))
         ):
             _draw_artifact_stat_line(draw, PAD, y, line, font)
+            bbox = font.getbbox(line or "Ag")
+            y += bbox[3] - bbox[1] + 6
+        elif (
+            kind == "body"
+            and item_meta
+            and line.startswith(("显示名称：", "英文名：", "物品 ID：", "别名："))
+        ):
+            label, _, value = line.partition("：")
+            draw.text((PAD, y), label + "：", font=font, fill=MUTED)
+            value_color = TEXT
+            if label == "显示名称":
+                value_color = item_color(item_meta) or TEXT
+            elif label == "别名":
+                value_color = ACCENT
+            elif label == "物品 ID":
+                value_color = "#AFC3D1"
+            draw.text(
+                (PAD + draw.textlength(label + "：", font=font), y),
+                value,
+                font=font,
+                fill=value_color,
+            )
             bbox = font.getbbox(line or "Ag")
             y += bbox[3] - bbox[1] + 6
         elif kind == "body" and line.startswith("等级："):
@@ -3952,9 +3974,9 @@ def render_help_card(
         (
             "其他",
             "MORE",
-            "/sz 军械库 · /sz 估价 · /sz 战队",
+            "/sz 起别名 · /sz 改名 · /sz 别名列表",
             [
-                "神器估价、军械库、战队、拍卖历史",
+                "名称索引/别名；军械库、估价、战队",
                 "帮助 /sz help｜行动/区服｜候选 /sz 1｜诊断 /sz diag",
             ],
             "#8FA2B8",

@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.0 - 2026-11-28
+
+### Added
+
+- Item cards now include a **Name Index / 名称索引** section with display name, English name, item ID, custom aliases and a custom-name marker.
+- New admin commands: `/sz 起别名`, `/sz 改名` (or `/sz 重命名`), `/sz 别名列表`, `/sz 删除别名`.
+- Aliases are additive, can contain spaces, and are globally uniqueness-checked. Renaming preserves the old display name as an alias unless it conflicts with another item.
+- Ambiguous targets show the normal icon candidate card; `sz 候选 <n>` continues the pending alias/rename operation instead of starting a new query.
+- Every successful update check now schedules one background official-item-index check per day. It checks the official commit first, skips unchanged downloads, and writes the name table without blocking queries or startup. If the name table is missing during a rename, the command runs the same internal check once and falls back to generating it from the local index if the network fails.
+- `/sz 检查` now downloads the archive for the exact official commit instead of the mutable `main.zip`, avoiding stale proxy/CDN archives that reported a new commit but merged zero items. The result now reports new, field-updated and removed item counts, and explicitly says when a commit changed only docs/icons/CI.
+
+### Changed
+
+- Name management is limited to the AstrBot administrator because it changes global search results.
+- Alias, rename and delete operations are serialized with item-database updates and use atomic writes plus `.bak` backups.
+- The editable name table now uses a baseline file (`item_name_defaults.json`). On later official-index updates, entries still matching the previous author baseline adopt improved translations; non-empty values that differ are treated as user edits/renames and preserved. New items receive the new author translation automatically, while `item_aliases.json` and existing custom names stay intact. The first baseline migration cannot distinguish old generated values from custom edits, so it preserves all differing values safely.
+
 ## 1.14.34 - 2026-11-28
 
 ### Changed

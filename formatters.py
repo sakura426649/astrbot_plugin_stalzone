@@ -3217,8 +3217,23 @@ def format_item(item: dict[str, Any], details: dict[str, Any] | None = None) -> 
     name = item.get("display") or zh or en or str(item.get("id") or "未知物品")
     rank = str(details.get("rank") or "").strip()
     category = str(item.get("cat") or "")
+    name_aliases = [
+        str(value).strip()
+        for value in (item.get("name_aliases") or [])
+        if str(value).strip()
+    ]
+    name_rows = [
+        f"显示名称：{zh or en or name}"
+        + ("（自定义）" if item.get("name_custom") else ""),
+        f"英文名：{en or '—'}",
+        f"物品 ID：{item.get('id', '未知')}",
+    ]
+    if name_aliases:
+        shown = "、".join(name_aliases[:8])
+        if len(name_aliases) > 8:
+            shown += f" 等 {len(name_aliases)} 个"
+        name_rows.append(f"别名：{shown}")
     identity = [
-        f"ID：{item.get('id', '未知')}",
         f"类别：{item.get('cat_label') or item.get('cat') or '未知'}",
     ]
     if rank:
@@ -3289,6 +3304,7 @@ def format_item(item: dict[str, Any], details: dict[str, Any] | None = None) -> 
         stat_rows.extend(f"距离衰减：{x}" for x in falloff[:2])
 
     sections = [
+        ("名称索引", name_rows),
         ("标识", identity),
         ("属性", stat_rows or ["WIKI 未收录该物品的详细属性"]),
     ]
@@ -4189,7 +4205,11 @@ def format_help(region: str, *, demo: bool = False) -> str:
         "/sz emission / 风暴 [EU/RU/NA/SEA/NEA] — 查看上次风暴时间与当前状态，可指定区服",
         "/sz 风暴订阅 [取消|状态] — 订阅下一场风暴，到来时在当前群聊 @ 或在私聊提醒（一次性）",
         "/sz player / 玩家 <角色名/UUID> [EU/RU/NA/SEA/NEA] — 查看角色资料、战队与区服",
-        "/sz item / 物品 <中文名/英文名/ID> [品质] [类型] — 查看物品属性、描述和 ID；如 准镜 红 瞄具",
+        "/sz item / 物品 <中文名/英文名/ID> [品质] [类型] — 查看物品属性、描述、名称索引和别名",
+        "/sz 起别名 <物品名/ID> <别名> — 为物品添加可搜索别名（仅管理员；只增不替换）",
+        "/sz 改名 / 重命名 <物品名/ID> <新名称> — 修改显示名称，旧名自动保留为别名（仅管理员）",
+        "/sz 别名列表 <物品名/ID> — 查看显示名称、英文名、ID 和自定义别名",
+        "/sz 删除别名 <物品名/ID> <别名> — 删除一条自定义别名（仅管理员）",
         "/sz 候选 <序号> / sz <序号> — 使用最近一次候选继续查询；sz 1 是简写",
         "/sz 调整 / 平衡 <武器/神器> — 查看 2023-2026 官方平衡调整记录",
         "/sz 通行证计算 <等级> <每日任务>[+超载] <剩余天数> [每周天数] — 计算通行证经验与等级预测",

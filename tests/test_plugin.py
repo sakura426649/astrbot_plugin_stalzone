@@ -2414,6 +2414,11 @@ class ParserTests(unittest.TestCase):
             "/sz 角色 Sakura": ("player", "Sakura"),
             "/sz profile Sakura": ("player", "Sakura"),
             "/sz 物品 寒冰": ("item", "寒冰"),
+            "/sz 起别名 原子 小原子": ("alias_add", "原子 小原子"),
+            "/sz 改名 原子 玻尔原子": ("item_rename", "原子 玻尔原子"),
+            "/sz 重命名 原子 玻尔原子": ("item_rename", "原子 玻尔原子"),
+            "/sz 别名列表 原子": ("alias_list", "原子"),
+            "/sz 删除别名 原子 小原子": ("alias_remove", "原子 小原子"),
             "/sz 调整 AK-308": ("balance", "AK-308"),
             "/sz 调整历史 多面体": ("balance", "多面体"),
             "/sz 候选 1": ("candidate", "1"),
@@ -2603,6 +2608,102 @@ class ItemIndexTests(unittest.TestCase):
             self.assertTrue(
                 (PLUGIN_ROOT / "item_icons" / f"{item_id}.png").is_file()
             )
+
+    def test_alias_add_rename_and_persistence(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            index_path = root / "item_index.json"
+            overrides_path = root / "item_name_overrides.json"
+            aliases_path = root / "item_aliases.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "a",
+                                "en": "Alpha",
+                                "zh": "甲",
+                                "cat": "artefact/thermal",
+                                "key": "k.a",
+                            },
+                            {
+                                "id": "b",
+                                "en": "Beta",
+                                "zh": "乙",
+                                "cat": "artefact/thermal",
+                                "key": "k.b",
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            overrides_path.write_text(
+                json.dumps({"a": "甲", "b": "乙"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            index = ItemIndex(
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+            self.assertEqual(index.add_alias("a", "小甲"), "小甲")
+            self.assertEqual(index.resolve("小甲")[0]["id"], "a")
+            with self.assertRaises(ValueError):
+                index.add_alias("b", "小甲")
+            old_name, preserved = index.rename("a", "大字")
+            self.assertEqual(old_name, "甲")
+            self.assertTrue(preserved)
+            self.assertEqual(index.resolve("大字")[0]["id"], "a")
+            self.assertEqual(index.resolve("甲")[0]["id"], "a")
+            self.assertIn('"a": "大字"', overrides_path.read_text(encoding="utf-8"))
+            reloaded = ItemIndex(
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+            self.assertEqual(reloaded.resolve("大字")[0]["id"], "a")
+            self.assertIn("甲", reloaded.custom_aliases("a"))
+            self.assertEqual(reloaded.remove_alias("a", "甲"), "甲")
+
+    def test_ensure_name_table_from_current_index(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            index_path = root / "item_index.json"
+            overrides_path = root / "item_name_overrides.json"
+            aliases_path = root / "item_aliases.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "a",
+                                "en": "Alpha",
+                                "zh": "甲",
+                                "cat": "artefact/thermal",
+                                "key": "k.a",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            index = ItemIndex(
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+            index.ensure_name_table()
+            self.assertTrue(overrides_path.is_file())
+            self.assertIn('"a": "甲"', overrides_path.read_text(encoding="utf-8"))
 
     def test_official_database_metadata(self):
         import json
@@ -2925,6 +3026,15 @@ class V2FormatterTests(unittest.TestCase):
         self.assertIn("寒冰 / Chilly", text)
         self.assertIn("ljn2", text)
         self.assertIn("/sz auction ljn2", text)
+
+    def test_format_item_name_index(self):
+        item = self._item("ljn2")
+        item["name_aliases"] = ["寒冰碎片", "冰晶"]
+        item["name_custom"] = True
+        text = format_item(item)
+        self.assertIn("● 名称索引", text)
+        self.assertIn("显示名称：寒冰(Chilly)（自定义）", text)
+        self.assertIn("别名：寒冰碎片、冰晶", text)
 
     def test_item_candidates(self):
         text = format_item_candidates("Razor", [self._item("ljn2"), self._item("9nd0")])

@@ -947,7 +947,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             async def no_full(_event):
                 return False, "skip"
 
+            downloaded_urls = []
+
             async def download(_url, destination, *, timeout=180.0):
+                downloaded_urls.append(_url)
                 with zipfile.ZipFile(destination, "w") as archive:
                     archive.writestr(
                         "db-main/ru/items/weapon/rifle/abc.json",
@@ -995,6 +998,10 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             plugin._fetch_official_commit = commit  # type: ignore[assignment]
             text = await plugin._run_item_db_update(FakeEvent("/sz"))
             self.assertIn("物品库检查/补全完成", text)
+            self.assertTrue(
+                downloaded_urls
+                and downloaded_urls[0].endswith("/archive/abc123.zip")
+            )
             merged = json.loads(index_path.read_text(encoding="utf-8"))
             by_id = {item["id"]: item for item in merged["items"]}
             self.assertEqual(by_id["abc"]["zh"], "旧枪")
@@ -1009,6 +1016,11 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("// en: Food", override_text)
             self.assertIn("| key: item.food.food1.name", override_text)
             self.assertTrue((data / "item_icons" / "food1.png").is_file())
+            baseline = json.loads(
+                (data / "item_name_defaults.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(baseline["defaults"]["abc"], "旧枪")
+            self.assertEqual(baseline["defaults"]["food1"], "")
 
             async def unexpected_download(*_args, **_kwargs):
                 raise AssertionError("official archive should not be downloaded")
@@ -1091,6 +1103,16 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             plugin.config["auto_update"] = False
             plugin._migrate_auto_update_default(root)
             self.assertFalse(plugin._cfg_bool("auto_update", True))
+
+    def test_item_db_daily_sync_guards_today(self):
+        plugin = self.make_plugin()
+        plugin._item_db_sync_state = {
+            "last_sync_date": datetime.now(
+                main_module.CST
+            ).strftime("%Y-%m-%d")
+        }
+        plugin._schedule_item_db_sync()
+        self.assertIsNone(plugin._item_db_sync_task)
 
     def test_github_proxy_url_candidates(self):
         url = "https://github.com/x/y/releases/download/v1/a.zip"
@@ -1338,6 +1360,145 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(replayed.auction_view)
         self.assertIn("暂不支持拍卖查询", replayed.text)
         self.assertTrue(replayed.auction_view["unsupported"])
+
+    async def test_item_name_commands(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            index_path = root / "item_index.json"
+            overrides_path = root / "item_name_overrides.json"
+            aliases_path = root / "item_aliases.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "a",
+                                "en": "Alpha",
+                                "zh": "甲",
+                                "cat": "artefact/thermal",
+                                "key": "k.a",
+                            },
+                            {
+                                "id": "b",
+                                "en": "Beta",
+                                "zh": "乙",
+                                "cat": "artefact/thermal",
+                                "key": "k.b",
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            overrides_path.write_text(
+                json.dumps({"a": "甲", "b": "乙"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            from item_index import ItemIndex
+
+            plugin = self.make_plugin()
+            plugin.item_index = ItemIndex(
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+
+            class AdminEvent(FakeEvent):
+                role = "admin"
+
+                def is_admin(self):
+                    return True
+
+            async def run(text: str) -> str:
+                results = []
+                async for item in plugin.sz(AdminEvent(text)):
+                    results.append(item[1])
+                return chr(10).join(results)
+
+            added = await run("/sz 起别名 甲 小甲")
+            self.assertIn("已为", added)
+            self.assertEqual(plugin.item_index.resolve("小甲")[0]["id"], "a")
+            listed = await run("/sz 别名列表 甲")
+            self.assertIn("小甲", listed)
+            renamed = await run("/sz 改名 甲 大字")
+            self.assertIn("显示名称已更新", renamed)
+            self.assertEqual(plugin.item_index.resolve("大字")[0]["id"], "a")
+            self.assertEqual(plugin.item_index.resolve("甲")[0]["id"], "a")
+            removed = await run("/sz 删除别名 大字 小甲")
+            self.assertIn("删除别名", removed)
+            denied = await collect(plugin, "/sz 起别名 大字 另一个")
+            self.assertIn("仅 AstrBot 管理员", denied)
+
+    async def test_item_name_command_candidate_continuation(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            index_path = root / "item_index.json"
+            overrides_path = root / "item_name_overrides.json"
+            aliases_path = root / "item_aliases.json"
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "a",
+                                "en": "Alpha",
+                                "zh": "同名",
+                                "cat": "artefact/thermal",
+                                "key": "k.a",
+                            },
+                            {
+                                "id": "b",
+                                "en": "Beta",
+                                "zh": "同名",
+                                "cat": "artefact/thermal",
+                                "key": "k.b",
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            overrides_path.write_text(
+                json.dumps({"a": "同名", "b": "同名"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            from item_index import ItemIndex
+
+            plugin = self.make_plugin()
+            plugin.item_index = ItemIndex(
+                index_path,
+                overrides_path=overrides_path,
+                aliases_path=aliases_path,
+            )
+
+            class ChoiceEvent(FakeEvent):
+                role = "admin"
+                unified_msg_origin = "aiocqhttp:GroupMessage:123"
+
+                def is_admin(self):
+                    return True
+
+                def get_sender_id(self):
+                    return "u1"
+
+            event = ChoiceEvent("/sz 起别名 同名 小名")
+            first = []
+            async for item in plugin.sz(event):
+                first.append(item[1])
+            self.assertIn("候选", chr(10).join(first))
+            second = []
+            async for item in plugin.sz(ChoiceEvent("/sz 候选 1")):
+                second.append(item[1])
+            self.assertIn("已为", chr(10).join(second))
+            self.assertEqual(plugin.item_index.resolve("小名")[0]["id"], "a")
 
     async def test_season_pass_calculator(self):
         text = await collect(self.make_plugin(), "/sz 通行证 15 15+2 20")

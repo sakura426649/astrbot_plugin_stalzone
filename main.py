@@ -142,11 +142,13 @@ try:  # Package import (normal AstrBot plugin loading).
     )
     from .item_db_update import (
         OFFICIAL_ARCHIVE_URL,
+        OFFICIAL_REPO,
         build_merged_index,
         extract_full_icons,
         extract_official_items,
         icon_coverage,
         build_translation_overrides,
+        merge_translation_overrides,
         load_json,
         write_json_atomic,
         write_overrides_jsonc,
@@ -261,11 +263,13 @@ except ImportError:  # Direct execution / flat import fallback.
     )
     from item_db_update import (  # type: ignore[no-redef]
         OFFICIAL_ARCHIVE_URL,
+        OFFICIAL_REPO,
         build_merged_index,
         extract_full_icons,
         extract_official_items,
         icon_coverage,
         build_translation_overrides,
+        merge_translation_overrides,
         load_json,
         write_json_atomic,
         write_overrides_jsonc,
@@ -310,7 +314,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.14.34"
+PLUGIN_VERSION = "1.15.0"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -497,6 +501,10 @@ IMAGE_COMMANDS = {
     "watch",
     "watch_list",
     "watch_cancel",
+    "alias_add",
+    "item_rename",
+    "alias_list",
+    "alias_remove",
 }
 
 
@@ -581,6 +589,7 @@ class PendingChoice:
     watch_threshold: int | None = None
     watch_relative_pct: int | None = None
     watch_cap: int | None = None
+    value: str | None = None
 
 USAGE = {
     "auction": (
@@ -678,6 +687,38 @@ USAGE = {
         "  /sz 物品 准镜 红\n"
         "  /sz 物品 准镜 红 瞄具\n"
         "  /sz 物品 准镜 瞄具"
+    ),
+    "alias_add": (
+        "用法：/sz 起别名 <物品名/ID> <别名>\n"
+        "说明：为物品添加可搜索别名；只追加不替换，可重复添加多个；仅管理员可用\n"
+        "参数：\n"
+        "  物品   必填，中文名 / 英文名 / 物品ID\n"
+        "  别名   必填，最长 80 字符\n"
+        "示例：\n"
+        "  /sz 起别名 原子 小原子\n"
+        "  /sz 起别名 wg53 原子核心"
+    ),
+    "item_rename": (
+        "用法：/sz 改名 <物品名/ID> <新名称>\n"
+        "说明：修改物品的显示名称；旧名称会自动保留为别名；仅管理员可用\n"
+        "参数：\n"
+        "  物品     必填，中文名 / 英文名 / 物品ID\n"
+        "  新名称   必填，最长 80 字符\n"
+        "示例：\n"
+        "  /sz 改名 原子 玻尔原子\n"
+        "  /sz 重命名 wg53 玻尔原子"
+    ),
+    "alias_list": (
+        "用法：/sz 别名列表 <物品名/ID>\n"
+        "说明：查看物品的显示名称、英文名和自定义别名\n"
+        "示例：\n"
+        "  /sz 别名列表 原子"
+    ),
+    "alias_remove": (
+        "用法：/sz 删除别名 <物品名/ID> <别名>\n"
+        "说明：删除一条自定义别名；仅管理员可用\n"
+        "示例：\n"
+        "  /sz 删除别名 原子 小原子"
     ),
     "player": (
         "用法：/sz 玩家 <角色名/UUID> [区服]\n"
@@ -831,6 +872,9 @@ class StalzonePlugin(Star):
         self._auto_state_path = data_dir / "emission_auto_state.json"
         self._auto_state = self._load_auto_state()
         self._auto_task: asyncio.Task | None = None
+        self._item_db_sync_path = data_dir / "item_db_sync_state.json"
+        self._item_db_sync_state = self._load_item_db_sync_state()
+        self._item_db_sync_task: asyncio.Task | None = None
         self._arsenal_items_path = Path(__file__).with_name("arsenal_items.json")
         self._arsenal_static = self._load_arsenal_static()
         self._arsenal_cache_path = data_dir / "arsenal_prices.json"
@@ -2026,8 +2070,9 @@ class StalzonePlugin(Star):
         )
 
     def _start_auto_update(self) -> None:
-        # Keep the hourly loop alive even while the option is off, so enabling
-        # it in the WebUI does not require a plugin reload.
+        # Keep the daily loop alive even while the option is off, so enabling
+        # it in the WebUI does not require a plugin reload. GitHub updates do
+        # not depend on STALZONE API credentials.
         if self._update_auto_task is not None and not self._update_auto_task.done():
             return
         self._update_auto_task = asyncio.create_task(self._update_auto_loop())
@@ -3492,6 +3537,7 @@ class StalzonePlugin(Star):
         watch_threshold: int | None = None,
         watch_relative_pct: int | None = None,
         watch_cap: int | None = None,
+        value: str | None = None,
     ) -> None:
         if event is None or len(candidates) <= 1:
             return
@@ -3523,6 +3569,7 @@ class StalzonePlugin(Star):
             watch_threshold=watch_threshold,
             watch_relative_pct=watch_relative_pct,
             watch_cap=watch_cap,
+            value=value,
         )
 
     @staticmethod
@@ -4665,6 +4712,17 @@ class StalzonePlugin(Star):
                 event, f"{selected} {color} +{level} {target}"
             )
             return self._with_render_sub(result, "watch")
+        if pending.kind in {"alias_add", "alias_remove", "item_rename"}:
+            if not self._event_is_name_admin(event):
+                return "该名称管理操作仅 AstrBot 管理员可用。"
+            if not pending.value:
+                return "候选操作缺少要写入的别名/新名称，请重新发送指令。"
+            async with self._item_db_lock:
+                if pending.kind == "alias_add":
+                    return self._apply_alias_add(selected, pending.value)
+                if pending.kind == "alias_remove":
+                    return self._apply_alias_remove(selected, pending.value)
+                return self._apply_item_rename(selected, pending.value)
         if pending.kind == "item":
             result = await self._handle_item(selected, event=event)
             return self._with_render_sub(result, "item")
@@ -4702,6 +4760,18 @@ class StalzonePlugin(Star):
         return "候选类型无效，请重新发起查询。"
 
     # --------------------------------------------------------------- self update
+    @staticmethod
+    def _event_is_name_admin(event: Any) -> bool:
+        """Name changes are global, so only the bot administrator may run them."""
+        checker = getattr(event, "is_admin", None)
+        if callable(checker):
+            try:
+                if bool(checker()):
+                    return True
+            except Exception:
+                pass
+        return str(getattr(event, "role", "") or "").lower() == "admin"
+
     @staticmethod
     def _event_is_admin(event: Any) -> bool:
         checker = getattr(event, "is_admin", None)
@@ -5203,9 +5273,71 @@ class StalzonePlugin(Star):
                         except Exception:
                             logger.exception("STALZONE automatic update failed")
                         last_check = now
+                        self._schedule_item_db_sync()
                 await asyncio.sleep(60)
         except asyncio.CancelledError:
             raise
+
+    def _load_item_db_sync_state(self) -> dict[str, Any]:
+        try:
+            payload = json.loads(
+                self._item_db_sync_path.read_text(encoding="utf-8")
+            )
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, ValueError, AttributeError):
+            return {}
+
+    def _save_item_db_sync_state(self) -> None:
+        try:
+            self._item_db_sync_path.parent.mkdir(parents=True, exist_ok=True)
+            temp = self._item_db_sync_path.with_suffix(".tmp")
+            temp.write_text(
+                json.dumps(
+                    self._item_db_sync_state,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            temp.replace(self._item_db_sync_path)
+        except OSError:
+            logger.debug("STALZONE item-db sync state could not be saved")
+
+    def _schedule_item_db_sync(self) -> None:
+        """Run one background official-index check per day after update checks."""
+        today = datetime.now(CST).strftime("%Y-%m-%d")
+        if str(self._item_db_sync_state.get("last_sync_date") or "") == today:
+            return
+        if (
+            self._item_db_sync_task is not None
+            and not self._item_db_sync_task.done()
+        ):
+            return
+        self._item_db_sync_task = asyncio.create_task(
+            self._auto_item_db_sync()
+        )
+
+    async def _auto_item_db_sync(self) -> None:
+        try:
+            await asyncio.sleep(120)
+            if not self._cfg_bool("auto_update", True):
+                return
+            if self._item_db_lock.locked() or self._update_lock.locked():
+                return
+            async with self._item_db_lock:
+                result = await self._run_item_db_update(None)
+            logger.info("STALZONE item-db daily sync: %s", result)
+            if "未完成" not in result and "失败" not in result:
+                self._item_db_sync_state["last_sync_date"] = datetime.now(
+                    CST
+                ).strftime("%Y-%m-%d")
+                self._save_item_db_sync_state()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("STALZONE item-db daily sync failed")
+        finally:
+            self._item_db_sync_task = None
 
     def _item_db_icon_dirs(self) -> list[Path]:
         return [
@@ -5304,13 +5436,17 @@ class StalzonePlugin(Star):
         return ""
 
     def _backup_item_db(
-        self, data_dir: Path, index_path: Path, overrides: Path
+        self,
+        data_dir: Path,
+        index_path: Path,
+        overrides: Path,
+        baseline: Path | None = None,
     ) -> Path:
         stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S-%f")
         backup = data_dir / "item_db_backups" / stamp
         backup.mkdir(parents=True, exist_ok=True)
-        for path in (index_path, overrides):
-            if path.is_file():
+        for path in (index_path, overrides, baseline):
+            if path is not None and path.is_file():
                 shutil.copy2(path, backup / path.name)
         root = data_dir / "item_db_backups"
         backups = sorted(
@@ -5345,6 +5481,11 @@ class StalzonePlugin(Star):
         index_path = Path(self.item_index.path)
         overrides_path = Path(self.item_index.overrides_path)
         aliases_path = Path(self.item_index.aliases_path)
+        baseline_path = (
+            Path(self.item_index.overrides_path).with_name(
+                "item_name_defaults.json"
+            )
+        )
         data_dir = self._cache_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
         await self._update_status(event, "开始检查物品库：先核对完整图标…")
@@ -5374,6 +5515,20 @@ class StalzonePlugin(Star):
         overlay_payload = _load_jsonc(overrides_path, {})
         if not isinstance(overlay_payload, dict):
             overlay_payload = {}
+        baseline_payload = load_json(baseline_path, {})
+        if isinstance(baseline_payload, dict) and isinstance(
+            baseline_payload.get("defaults"), dict
+        ):
+            baseline_defaults = {
+                str(key): str(value)
+                for key, value in baseline_payload["defaults"].items()
+            }
+        elif isinstance(baseline_payload, dict):
+            baseline_defaults = {
+                str(key): str(value) for key, value in baseline_payload.items()
+            }
+        else:
+            baseline_defaults = {}
         await self._update_status(event, "正在检查 EXBO 官方物品库版本…")
         official_commit = await self._fetch_official_commit()
         current_commit = (
@@ -5387,8 +5542,12 @@ class StalzonePlugin(Star):
                 if isinstance(existing_payload.get("items"), list)
                 else []
             )
-            overrides = build_translation_overrides(
-                existing_items, overlay_payload
+            overrides, baseline_values, merge_stats = (
+                merge_translation_overrides(
+                    existing_items,
+                    overlay_payload,
+                    baseline_defaults,
+                )
             )
             metadata = {
                 str(item.get("id") or ""): {
@@ -5402,6 +5561,17 @@ class StalzonePlugin(Star):
             await asyncio.to_thread(
                 write_overrides_jsonc, overrides_path, overrides, metadata
             )
+            await asyncio.to_thread(
+                write_json_atomic,
+                baseline_path,
+                {
+                    "generated_at": datetime.now(CST).isoformat(
+                        timespec="seconds"
+                    ),
+                    "official_commit": official_commit,
+                    "defaults": baseline_values,
+                },
+            )
             blank_count = sum(1 for value in overrides.values() if not value)
             coverage = icon_coverage(item_ids, self._item_db_icon_dirs())
             return chr(10).join(
@@ -5412,6 +5582,9 @@ class StalzonePlugin(Star):
                     f"完整图标来源：{full_note}",
                     f"汉化文件：{len(overrides)} 条，已有中文已导出，空白 {blank_count} 条"
                     f"；{overrides_path}",
+                    f"名称同步：作者修订 {merge_stats['updated']}｜"
+                    f"保留自定义 {merge_stats['preserved']}｜"
+                    f"新增物品 {merge_stats['new_items']}",
                     "编辑中文名后重载插件即可生效；英文本身即名称的物品可留空。",
                 ]
             )
@@ -5422,8 +5595,14 @@ class StalzonePlugin(Star):
         stamp = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
         official_archive = temp_dir / f"official-{stamp}.zip"
         try:
+            archive_url = (
+                f"https://github.com/{OFFICIAL_REPO}/archive/"
+                f"{official_commit}.zip"
+                if official_commit
+                else OFFICIAL_ARCHIVE_URL
+            )
             await self._download_update_asset(
-                OFFICIAL_ARCHIVE_URL, official_archive, timeout=600.0
+                archive_url, official_archive, timeout=600.0
             )
             official = await asyncio.to_thread(
                 extract_official_items,
@@ -5458,13 +5637,20 @@ class StalzonePlugin(Star):
             official_commit=official_commit,
         )
 
-        # Export every item into one editable translation table.  Current
-        # Chinese names are pre-filled; user edits and explicit blanks win.
-        overrides = build_translation_overrides(
-            merged.get("items", []), overlay_payload
+        # Export every item into one editable translation table.  Values
+        # equal to the previous author baseline may follow a new translation;
+        # differing non-empty values are user edits and are preserved.
+        overrides, baseline_values, merge_stats = (
+            merge_translation_overrides(
+                merged.get("items", []),
+                overlay_payload,
+                baseline_defaults,
+            )
         )
         blank_count = sum(1 for value in overrides.values() if not value)
-        backup = self._backup_item_db(data_dir, index_path, overrides_path)
+        backup = self._backup_item_db(
+            data_dir, index_path, overrides_path, baseline_path
+        )
         # Write the placeholder overlay first: if it fails, the old index is
         # still intact.  Blank entries are ignored by ItemIndex until filled.
         metadata = {
@@ -5478,6 +5664,17 @@ class StalzonePlugin(Star):
         }
         await asyncio.to_thread(
             write_overrides_jsonc, overrides_path, overrides, metadata
+        )
+        await asyncio.to_thread(
+            write_json_atomic,
+            baseline_path,
+            {
+                "generated_at": datetime.now(CST).isoformat(
+                    timespec="seconds"
+                ),
+                "official_commit": official_commit,
+                "defaults": baseline_values,
+            },
         )
         await asyncio.to_thread(write_json_atomic, index_path, merged)
 
@@ -5499,28 +5696,32 @@ class StalzonePlugin(Star):
             {str(item.get("id") or "") for item in merged["items"]},
             self._item_db_icon_dirs(),
         )
-        existing_official = 0
-        if isinstance(existing_payload, dict):
-            existing_official = sum(
-                1
-                for item in (
-                    existing_payload.get("items")
-                    if isinstance(existing_payload.get("items"), list)
-                    else []
-                )
-                if isinstance(item, dict)
-                and str(item.get("source") or "") == "official"
+        change_note = (
+            f"物品变化：新增 {int(stats.get('new_items') or 0)}｜"
+            f"字段更新 {int(stats.get('updated_items') or 0)}｜"
+            f"移除/转补充 {int(stats.get('removed_items') or 0)}"
+        )
+        if not any(
+            int(stats.get(key) or 0)
+            for key in ("new_items", "updated_items", "removed_items")
+        ):
+            change_note = (
+                "物品变化：本次提交未涉及物品条目（可能只是图标、文档或 CI 更新）"
             )
-        new_official = max(0, stats["official_count"] - existing_official)
         details = [
             "STALZONE · 物品库检查/补全完成",
             self._item_db_icon_status(coverage),
             f"完整图标来源：{full_note}",
+            f"官方 commit：{(current_commit or '初始')[:12]} → "
+            f"{official_commit[:12]}",
             f"官方物品：{stats['official_count']} 项"
             f"｜历史补充：{stats['supplemental_count']} 项",
-            f"新合并官方条目：约 {new_official} 项"
-            f"｜汉化条目：{len(overrides)} 条，空白 {blank_count} 条",
+            change_note,
+            f"汉化条目：{len(overrides)} 条，空白 {blank_count} 条",
             f"汉化文件：{overrides_path}",
+            f"名称同步：作者修订 {merge_stats['updated']}｜"
+            f"保留自定义 {merge_stats['preserved']}｜"
+            f"新增物品 {merge_stats['new_items']}",
             "已有中文已导出；编辑任意条目后重载插件即可生效，英文本身即名称的物品可留空。",
             f"索引：{index_path}",
             f"备份：{backup}",
@@ -5815,6 +6016,11 @@ class StalzonePlugin(Star):
             yield self._handle_emission_subscribe(event, arg)
             return
         privileged = self._event_is_admin(event)
+        if sub in {"alias_add", "item_rename", "alias_remove"} and not self._event_is_name_admin(event):
+            yield event.plain_result(
+                "该名称管理操作仅 AstrBot 管理员可用。"
+            )
+            return
         if sub in {"alert", "set_region", "auction_mode"}:
             if not privileged:
                 yield event.plain_result(
@@ -5866,6 +6072,10 @@ class StalzonePlugin(Star):
             "watch",
             "watch_list",
             "watch_cancel",
+            "alias_add",
+            "alias_list",
+            "alias_remove",
+            "item_rename",
         }:
             try:
                 cooldown = max(0.0, float(self._cfg("command_cooldown", 1.0) or 0))
@@ -5952,6 +6162,26 @@ class StalzonePlugin(Star):
                 yield await self._usage_reply(event, "item")
                 return
             coro = self._handle_item(arg, event=event)
+        elif sub == "alias_add":
+            if not arg:
+                yield await self._usage_reply(event, "alias_add")
+                return
+            coro = self._handle_alias_add(event, arg)
+        elif sub == "alias_remove":
+            if not arg:
+                yield await self._usage_reply(event, "alias_remove")
+                return
+            coro = self._handle_alias_remove(event, arg)
+        elif sub == "item_rename":
+            if not arg:
+                yield await self._usage_reply(event, "item_rename")
+                return
+            coro = self._handle_item_rename(event, arg)
+        elif sub == "alias_list":
+            if not arg:
+                yield await self._usage_reply(event, "alias_list")
+                return
+            coro = self._handle_alias_list(event, arg)
         elif sub == "balance":
             if not arg:
                 yield await self._usage_reply(event, "balance")
@@ -7238,8 +7468,14 @@ class StalzonePlugin(Star):
         )
         if item:
             details = self.item_index.get_details(item["id"])
+            decorated = self._decorate(item)
+            aliases = self.item_index.custom_aliases(str(item["id"]))
+            decorated["name_aliases"] = aliases
+            decorated["name_custom"] = self.item_index.has_custom_name(
+                str(item["id"])
+            )
             return PluginReply(
-                format_item(self._decorate(item), details),
+                format_item(decorated, details),
                 icon_url=item.get("icon"),
                 item_meta={
                     "en": display_english(item),
@@ -7277,6 +7513,205 @@ class StalzonePlugin(Star):
                 ),
             )
         return self._not_found("item", query, region="全服")
+
+    async def _ensure_item_name_table(self, event: Any) -> tuple[bool, str]:
+        """Ensure the editable display-name table exists before a rename."""
+        path = Path(self.item_index.overrides_path)
+        if path.is_file():
+            return True, ""
+        if self._update_lock.locked():
+            return False, "插件更新正在进行，请等更新完成后再改名。"
+        if self._item_db_lock.locked():
+            return False, "物品库检查/更新正在进行，请稍后再试。"
+        note = ""
+        async with self._item_db_lock:
+            try:
+                result = await self._run_item_db_update(event)
+                if not path.is_file():
+                    note = result
+            except Exception as exc:
+                logger.exception("STALZONE name table generation failed")
+                note = f"官方索引检查失败：{type(exc).__name__}: {exc}"
+        if path.is_file():
+            return True, note
+        try:
+            self.item_index.ensure_name_table()
+            return True, note or "官方索引暂不可用，已使用本地索引生成名称表。"
+        except Exception as exc:
+            logger.exception("STALZONE local name table generation failed")
+            return False, f"名称索引表生成失败：{type(exc).__name__}: {exc}"
+
+    async def _split_name_action(
+        self, argument: str
+    ) -> tuple[str, str, dict[str, Any] | None, list[dict[str, Any]]]:
+        text = str(argument or "").strip()
+        if not text:
+            return "", "", None, []
+        if "|" in text:
+            target, value = text.split("|", 1)
+            target = target.strip()
+            value = value.strip()
+            item, matches = await asyncio.to_thread(
+                self.item_index.resolve, target
+            )
+            return target, value, item, matches
+        parts = text.split()
+        if len(parts) < 2:
+            item, matches = await asyncio.to_thread(
+                self.item_index.resolve, text
+            )
+            return text, "", item, matches
+        for split_at in range(len(parts) - 1, 0, -1):
+            target = " ".join(parts[:split_at])
+            value = " ".join(parts[split_at:])
+            item, matches = await asyncio.to_thread(
+                self.item_index.resolve, target
+            )
+            if item is not None or matches:
+                return target, value, item, matches
+        return " ".join(parts[:-1]), parts[-1], None, []
+
+    def _name_action_candidates(
+        self,
+        event: Any,
+        kind: str,
+        target: str,
+        candidates: list[dict[str, Any]],
+        value: str,
+    ) -> str | PluginReply:
+        decorated = [self._decorate(candidate) for candidate in candidates]
+        self._remember_choice(
+            event, kind, target, decorated, value=value
+        )
+        text = format_item_candidates(target, decorated)
+        if len(decorated) <= 1:
+            return text
+        return PluginReply(
+            text,
+            candidate_view=build_item_candidate_view(target, decorated),
+            sub="candidates",
+        )
+
+    def _apply_alias_add(self, item_id: str, alias: str) -> str:
+        try:
+            value = self.item_index.add_alias(item_id, alias)
+        except ValueError as exc:
+            return f"起别名失败：{exc}"
+        item = self.item_index.get(item_id) or {"id": item_id}
+        aliases = self.item_index.custom_aliases(item_id)
+        suffix = f"\n当前自定义别名：{'、'.join(aliases)}" if aliases else ""
+        return (
+            f"已为「{display_name(item)}」添加别名「{value}」。{suffix}"
+        )
+
+    def _apply_alias_remove(self, item_id: str, alias: str) -> str:
+        try:
+            value = self.item_index.remove_alias(item_id, alias)
+        except ValueError as exc:
+            return f"删除别名失败：{exc}"
+        item = self.item_index.get(item_id) or {"id": item_id}
+        return f"已从「{display_name(item)}」删除别名「{value}」。"
+
+    def _apply_item_rename(
+        self, item_id: str, new_name: str, *, note: str = ""
+    ) -> str:
+        try:
+            old_name, preserved = self.item_index.rename(item_id, new_name)
+        except ValueError as exc:
+            return f"改名失败：{exc}"
+        item = self.item_index.get(item_id) or {"id": item_id}
+        renamed = old_name != str(item.get("zh") or "")
+        if not renamed:
+            return note or f"显示名称未变化：{display_name(item)}"
+        lines = [
+            f"显示名称已更新：「{old_name or item_id}」→「{display_name(item)}」",
+            f"物品 ID：{item_id}",
+        ]
+        if preserved:
+            lines.append("旧名称已自动保留为别名。")
+        if note:
+            lines.append(note)
+        return "\n".join(lines)
+
+    async def _handle_alias_add(self, event: Any, argument: str) -> str | PluginReply:
+        target, value, item, matches = await self._split_name_action(argument)
+        if not target or not value:
+            return USAGE["alias_add"]
+        if item is not None:
+            async with self._item_db_lock:
+                return self._apply_alias_add(str(item["id"]), value)
+        if matches:
+            return self._name_action_candidates(
+                event, "alias_add", target, matches, value
+            )
+        return f"没有找到物品「{target}」，未添加别名。"
+
+    async def _handle_alias_remove(
+        self, event: Any, argument: str
+    ) -> str | PluginReply:
+        target, value, item, matches = await self._split_name_action(argument)
+        if not target or not value:
+            return USAGE["alias_remove"]
+        if item is not None:
+            async with self._item_db_lock:
+                return self._apply_alias_remove(str(item["id"]), value)
+        if matches:
+            return self._name_action_candidates(
+                event, "alias_remove", target, matches, value
+            )
+        return f"没有找到物品「{target}」，未删除别名。"
+
+    async def _handle_item_rename(
+        self, event: Any, argument: str
+    ) -> str | PluginReply:
+        target, value, item, matches = await self._split_name_action(argument)
+        if not target or not value:
+            return USAGE["item_rename"]
+        if item is None and not matches:
+            return f"没有找到物品「{target}」，未改名。"
+        ok, note = await self._ensure_item_name_table(event)
+        if not ok:
+            return note
+        if item is not None:
+            async with self._item_db_lock:
+                return self._apply_item_rename(
+                    str(item["id"]), value, note=note
+                )
+        return self._name_action_candidates(
+            event, "item_rename", target, matches, value
+        )
+
+    async def _handle_alias_list(self, event: Any, argument: str) -> str | PluginReply:
+        target = str(argument or "").strip()
+        if not target:
+            return USAGE["alias_list"]
+        item, matches = await asyncio.to_thread(
+            self.item_index.resolve, target
+        )
+        if item is not None:
+            aliases = self.item_index.custom_aliases(str(item["id"]))
+            lines = [
+                "STALZONE · 名称索引",
+                f"显示名称：{display_name(item)}",
+                f"英文名：{display_english(item) or '—'}",
+                f"物品 ID：{item.get('id') or '—'}",
+                "自定义别名：" + ("、".join(aliases) if aliases else "无"),
+            ]
+            if self.item_index.has_custom_name(str(item["id"])):
+                lines.append("名称状态：自定义显示名称")
+            return "\n".join(lines)
+        if matches:
+            decorated = [self._decorate(candidate) for candidate in matches]
+            self._remember_choice(event, "item", target, decorated)
+            text = format_item_candidates(target, decorated)
+            if len(decorated) <= 1:
+                return text
+            return PluginReply(
+                text,
+                candidate_view=build_item_candidate_view(target, decorated),
+                sub="candidates",
+            )
+        return f"没有找到物品「{target}」。"
 
     async def _handle_pass(self, argument: str) -> str | PluginReply:
         try:
@@ -7651,6 +8086,16 @@ class StalzonePlugin(Star):
             except Exception:
                 logger.exception("STALZONE automatic emission task shutdown failed")
         self._save_auto_state()
+        item_db_sync_task = self._item_db_sync_task
+        self._item_db_sync_task = None
+        if item_db_sync_task is not None and not item_db_sync_task.done():
+            item_db_sync_task.cancel()
+            try:
+                await item_db_sync_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("STALZONE item-db sync task shutdown failed")
         update_task = self._update_auto_task
         self._update_auto_task = None
         if update_task is not None and not update_task.done():

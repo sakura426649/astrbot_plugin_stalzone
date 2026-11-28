@@ -131,6 +131,75 @@ def build_translation_overrides(
     return result
 
 
+def merge_translation_overrides(
+    items: list[Any],
+    existing: dict[str, str] | None = None,
+    baseline: dict[str, str] | None = None,
+) -> tuple[dict[str, str], dict[str, str], dict[str, int]]:
+    """Merge author defaults with local edits using a previous baseline.
+
+    ``baseline`` is the author/default name last written by this plugin.  A
+    local value equal to that baseline is untouched and may follow a newer
+    author translation; a different non-empty value is a user edit/rename and
+    must be preserved.  Without a baseline, differing local values are treated
+    as user edits, so the first migration never destroys custom names.
+    """
+    current = {
+        str(key): str(value)
+        for key, value in (existing or {}).items()
+        if isinstance(value, str)
+    }
+    old_defaults = {
+        str(key): str(value)
+        for key, value in (baseline or {}).items()
+        if isinstance(value, str)
+    }
+    values: dict[str, str] = {}
+    new_defaults: dict[str, str] = {}
+    stats = {"updated": 0, "preserved": 0, "new_items": 0}
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        seen.add(item_id)
+        new_default = (
+            str(item.get("zh") or "") if _is_translated_item(item) else ""
+        )
+        new_defaults[item_id] = new_default
+        local = current.get(item_id)
+        if local is None or not local.strip():
+            values[item_id] = new_default
+            if item_id not in current:
+                stats["new_items"] += 1
+            elif (
+                item_id in old_defaults
+                and old_defaults[item_id] != new_default
+            ):
+                stats["updated"] += 1
+        elif item_id in old_defaults:
+            if local == old_defaults[item_id]:
+                values[item_id] = new_default
+                if local != new_default:
+                    stats["updated"] += 1
+            else:
+                values[item_id] = local
+                stats["preserved"] += 1
+        else:
+            values[item_id] = local
+            if local != new_default:
+                stats["preserved"] += 1
+    for item_id, value in current.items():
+        if item_id not in seen:
+            values[item_id] = value
+    for item_id, value in old_defaults.items():
+        if item_id not in seen:
+            new_defaults[item_id] = value
+    return values, new_defaults, stats
+
+
 def write_overrides_jsonc(
     path: Path,
     values: dict[str, str],
@@ -495,6 +564,7 @@ def build_merged_index(
     )
 
     items: list[dict[str, Any]] = []
+    built_by_id: dict[str, dict[str, Any]] = {}
     untranslated: list[str] = []
     for item_id in ordered_ids:
         official = official_items[item_id]
@@ -510,6 +580,7 @@ def build_merged_index(
             overlay=overlay,
         )
         items.append(item)
+        built_by_id[item_id] = item
         if not translated:
             untranslated.append(item_id)
 
@@ -525,6 +596,16 @@ def build_merged_index(
         if not translated:
             untranslated.append(item_id)
 
+    new_item_ids = sorted(set(official_items) - set(existing_by_id))
+    removed_item_ids = sorted(set(existing_by_id) - set(official_items))
+    updated_item_ids: list[str] = []
+    compare_keys = ("en", "ru", "cat", "official_cat", "color", "key", "icon")
+    for item_id in set(official_items) & set(existing_by_id):
+        old = existing_by_id[item_id]
+        new = built_by_id.get(item_id, {})
+        if any(str(old.get(key) or "") != str(new.get(key) or "") for key in compare_keys):
+            updated_item_ids.append(item_id)
+    updated_item_ids.sort()
     result = {
         "generated_at": date.today().isoformat(),
         "source": (
@@ -543,4 +624,10 @@ def build_merged_index(
         "supplemental_count": result["supplemental_count"],
         "total_count": len(items),
         "untranslated": untranslated,
+        "new_items": len(new_item_ids),
+        "updated_items": len(updated_item_ids),
+        "removed_items": len(removed_item_ids),
+        "new_item_ids": new_item_ids,
+        "updated_item_ids": updated_item_ids,
+        "removed_item_ids": removed_item_ids,
     }

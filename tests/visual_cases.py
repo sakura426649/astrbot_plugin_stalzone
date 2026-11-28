@@ -402,6 +402,8 @@ def _item() -> Path | None:
         "en": "Atom",
         "cat": "artefact",
         "color": "RANK_MASTER",
+        "name_aliases": ["小原子", "玻尔原子", "原子核心"],
+        "name_custom": True,
     }
     text = format_item(item, {})
     return render_text_card(

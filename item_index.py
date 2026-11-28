@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -292,6 +293,7 @@ class ItemIndex:
         self.details: dict[str, Any] = {}
         self._alias_cache: dict[str, tuple[str, ...]] = {}
         self._alias_overrides: dict[str, list[str]] = {}
+        self._name_overrides: dict[str, str] = {}
         self.generated_at = ""
         self._load_details()
         self._load()
@@ -359,6 +361,7 @@ class ItemIndex:
         if not isinstance(raw_items, list):
             return
         overrides = self._load_overrides()
+        self._name_overrides = dict(overrides)
         self._alias_overrides = self._load_alias_overrides()
         for raw in raw_items:
             if not isinstance(raw, dict) or not raw.get("id"):
@@ -409,6 +412,223 @@ class ItemIndex:
     def _aliases_for(self, item: dict[str, Any]) -> tuple[str, ...]:
         cached = self._alias_cache.get(str(item.get("id") or ""))
         return cached if cached is not None else tuple(_aliases(item))
+
+    def custom_aliases(self, item_id: str) -> list[str]:
+        return list(self._alias_overrides.get(str(item_id), []))
+
+    def has_custom_name(self, item_id: str) -> bool:
+        return str(item_id) in self._name_overrides
+
+    def _refresh_aliases(self, item: dict[str, Any]) -> None:
+        item_id = str(item.get("id") or "")
+        if not item_id:
+            return
+        self._alias_cache[item_id] = self._merge_aliases(
+            item_id, _aliases(item)
+        )
+
+    @staticmethod
+    def _validate_name(text: str, label: str, *, max_length: int = 80) -> str:
+        value = " ".join(str(text or "").split())
+        if not value:
+            raise ValueError(f"{label}不能为空。")
+        if len(value) > max_length:
+            raise ValueError(f"{label}最多 {max_length} 个字符。")
+        if any(ord(char) < 32 for char in value):
+            raise ValueError(f"{label}不能包含控制字符。")
+        if not _normalize(value):
+            raise ValueError(f"{label}不能只包含标点符号。")
+        return value
+
+    def _alias_conflict(
+        self, normalized: str, *, exclude_id: str
+    ) -> dict[str, Any] | None:
+        for item in self.items:
+            item_id = str(item.get("id") or "")
+            if item_id == exclude_id:
+                continue
+            if normalized in self._aliases_for(item):
+                return item
+            if normalized == _normalize(item_id):
+                return item
+        return None
+
+    @staticmethod
+    def _backup_file(path: Path) -> None:
+        if not path.is_file():
+            return
+        try:
+            shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
+        except OSError:
+            pass
+
+    def _save_name_overrides(
+        self, override_id: str | None = None, override_value: str | None = None
+    ) -> None:
+        path = self.overrides_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._backup_file(path)
+        # Prefer an in-place line update so user comments survive a rename.
+        if path.is_file() and override_id is not None and override_value is not None:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                text = ""
+            if text:
+                changed = False
+                lines: list[str] = []
+                pattern = re.compile(
+                    r'^(\s*)"'
+                    + re.escape(str(override_id))
+                    + r'"(\s*:\s*)"(?:[^"\\]|\\.)*"(.*)$'
+                )
+                for line in text.splitlines(keepends=True):
+                    stripped = line.rstrip("\r\n")
+                    match = pattern.match(stripped)
+                    if match:
+                        ending = line[len(stripped) :]
+                        lines.append(
+                            match.group(1)
+                            + json.dumps(
+                                str(override_id), ensure_ascii=False
+                            )
+                            + match.group(2)
+                            + json.dumps(
+                                str(override_value), ensure_ascii=False
+                            )
+                            + match.group(3)
+                            + ending
+                        )
+                        changed = True
+                    else:
+                        lines.append(line)
+                if changed:
+                    temporary = path.with_suffix(path.suffix + ".tmp")
+                    temporary.write_text("".join(lines), encoding="utf-8")
+                    temporary.replace(path)
+                    return
+        # Missing/partial file: regenerate the full editable table.
+        items = sorted(self.items, key=lambda value: str(value.get("id") or ""))
+        rows = [
+            "{",
+            "  // 物品 ID -> 显示名称；留空表示暂不翻译",
+            "  // en: 官方英文名；key: 官方本地化键",
+        ]
+        for index, item in enumerate(items):
+            item_id = str(item.get("id") or "")
+            value = self._name_overrides.get(
+                item_id, str(item.get("zh") or "")
+            )
+            en = " ".join(str(item.get("en") or item.get("ru") or "—").split())
+            key = " ".join(str(item.get("key") or "—").split())
+            line = (
+                f"  {json.dumps(item_id, ensure_ascii=False)}: "
+                f"{json.dumps(value, ensure_ascii=False)}"
+            )
+            if index + 1 < len(items):
+                line += ","
+            line += f"  // en: {en} | key: {key}"
+            rows.append(line)
+        rows.append("}")
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        temporary.replace(path)
+
+    def _save_alias_overrides(self) -> None:
+        path = self.aliases_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._backup_file(path)
+        payload = {
+            item_id: aliases
+            for item_id, aliases in sorted(self._alias_overrides.items())
+            if aliases
+        }
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(path)
+
+    def ensure_name_table(self) -> None:
+        """Generate the editable display-name table from the current index."""
+        self._save_name_overrides()
+
+    def remove_alias(self, item_id: str, alias: str) -> str:
+        item = self.by_id.get(str(item_id or "").strip())
+        if item is None:
+            raise ValueError("物品不存在。")
+        normalized = _normalize(alias)
+        aliases = self._alias_overrides.get(str(item["id"]), [])
+        for index, existing in enumerate(aliases):
+            if _normalize(existing) == normalized:
+                aliases.pop(index)
+                if not aliases:
+                    self._alias_overrides.pop(str(item["id"]), None)
+                self._save_alias_overrides()
+                self._refresh_aliases(item)
+                return existing
+        raise ValueError("没有找到这条自定义别名。")
+
+    def add_alias(self, item_id: str, alias: str) -> str:
+        item = self.by_id.get(str(item_id or "").strip())
+        if item is None:
+            raise ValueError("物品不存在。")
+        value = self._validate_name(alias, "别名")
+        normalized = _normalize(value)
+        if normalized == _normalize(str(item["id"])):
+            raise ValueError("别名不能和物品 ID 相同。")
+        if normalized in self._aliases_for(item):
+            raise ValueError("这个别名已经能匹配该物品，无需重复添加。")
+        if len(self._alias_overrides.get(str(item["id"]), [])) >= 20:
+            raise ValueError("该物品的自定义别名已达 20 个上限。")
+        conflict = self._alias_conflict(normalized, exclude_id=str(item["id"]))
+        if conflict is not None:
+            raise ValueError(
+                "这个别名已被其他物品占用："
+                f"{display_name(conflict)}（{conflict.get('id')}）"
+            )
+        self._alias_overrides.setdefault(str(item["id"]), []).append(value)
+        self._save_alias_overrides()
+        self._refresh_aliases(item)
+        return value
+
+    def rename(self, item_id: str, new_name: str) -> tuple[str, bool]:
+        item = self.by_id.get(str(item_id or "").strip())
+        if item is None:
+            raise ValueError("物品不存在。")
+        value = self._validate_name(new_name, "新名称")
+        normalized = _normalize(value)
+        if normalized == _normalize(str(item.get("zh") or "")):
+            return value, False
+        conflict = self._alias_conflict(normalized, exclude_id=str(item["id"]))
+        if conflict is not None:
+            raise ValueError(
+                "新名称已被其他物品占用："
+                f"{display_name(conflict)}（{conflict.get('id')}）"
+            )
+        old_name = str(item.get("zh") or "").strip()
+        item["zh"] = value
+        self._name_overrides[str(item["id"])] = value
+        self._save_name_overrides(str(item["id"]), value)
+        self._refresh_aliases(item)
+        preserved = False
+        old_normalized = _normalize(old_name)
+        if (
+            old_name
+            and old_normalized
+            and old_normalized != normalized
+            and old_normalized not in self._aliases_for(item)
+            and self._alias_conflict(old_normalized, exclude_id=str(item["id"]))
+            is None
+        ):
+            self._alias_overrides.setdefault(str(item["id"]), []).append(
+                old_name
+            )
+            self._save_alias_overrides()
+            preserved = True
+        self._refresh_aliases(item)
+        return old_name, preserved
 
     def search(
         self,
