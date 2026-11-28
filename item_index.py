@@ -416,6 +416,27 @@ class ItemIndex:
     def custom_aliases(self, item_id: str) -> list[str]:
         return list(self._alias_overrides.get(str(item_id), []))
 
+    def builtin_aliases(self, item_id: str) -> list[str]:
+        """Community aliases compiled into the plugin (e.g. 钢刺球 → 钢刺猬)."""
+        item = self.by_id.get(str(item_id or "").strip())
+        if item is None:
+            return []
+        return list(_extra_aliases(item))
+
+    def effective_aliases(self, item_id: str) -> list[str]:
+        """Built-in and user-added aliases, first occurrence wins."""
+        values: list[str] = []
+        seen: set[str] = set()
+        for value in (
+            *self.builtin_aliases(item_id),
+            *self.custom_aliases(item_id),
+        ):
+            key = _normalize(value)
+            if key and key not in seen:
+                seen.add(key)
+                values.append(value)
+        return values
+
     def has_custom_name(self, item_id: str) -> bool:
         return str(item_id) in self._name_overrides
 

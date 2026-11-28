@@ -314,7 +314,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.15.0"
+PLUGIN_VERSION = "1.15.1"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -710,7 +710,7 @@ USAGE = {
     ),
     "alias_list": (
         "用法：/sz 别名列表 <物品名/ID>\n"
-        "说明：查看物品的显示名称、英文名和自定义别名\n"
+        "说明：查看物品的显示名称、英文名、内置别名和自定义别名\n"
         "示例：\n"
         "  /sz 别名列表 原子"
     ),
@@ -889,6 +889,7 @@ class StalzonePlugin(Star):
         self._prune_arsenal_cache()
         self._update_lock = asyncio.Lock()
         self._item_db_lock = asyncio.Lock()
+        self._item_db_task: asyncio.Task | None = None
         self._reload_task: asyncio.Task | None = None
         self._update_auto_task: asyncio.Task | None = None
         self._watch_path = data_dir / "price_watch.json"
@@ -5461,21 +5462,55 @@ class StalzonePlugin(Star):
     async def _handle_item_db_check(self, event: Any) -> str:
         if not self._event_is_admin(event):
             return "物品库检查/更新仅 AstrBot 管理员、QQ 群主或群管理员可用。"
+        if (
+            self._item_db_task is not None
+            and not self._item_db_task.done()
+        ):
+            return "已有物品库检查/更新正在进行，完成后会发送结果。"
         if self._item_db_lock.locked():
             return "已有物品库检查/更新正在进行，请稍后再试。"
         if self._update_lock.locked():
             return "插件更新正在进行，请等更新完成后再检查物品库。"
-        async with self._item_db_lock:
-            try:
-                return await self._run_item_db_update(event)
-            except Exception as exc:
-                logger.exception("STALZONE item-db update failed")
-                return (
-                    "物品库检查/更新失败："
-                    f"{type(exc).__name__}: {exc}"
-                    + chr(10)
-                    + "旧索引已保留；可查看日志或稍后重试。"
-                )
+        self._item_db_task = asyncio.create_task(
+            self._run_item_db_check_background(event)
+        )
+        return "已开始检查物品库，完成后会发送结果。"
+
+    async def _run_item_db_check_background(self, event: Any) -> None:
+        try:
+            # Let the immediate acknowledgement reach the chat before any
+            # progress message from the background check.
+            await asyncio.sleep(0.5)
+            async with self._item_db_lock:
+                result = await self._run_item_db_update(event)
+            await self._send_item_db_result(event, result)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("STALZONE item-db update failed")
+            await self._send_item_db_result(
+                event,
+                "物品库检查/更新失败："
+                f"{type(exc).__name__}: {exc}"
+                + chr(10)
+                + "旧索引已保留；可查看日志或稍后重试。",
+            )
+        finally:
+            self._item_db_task = None
+
+    async def _send_item_db_result(self, event: Any, result: str) -> None:
+        logger.info("STALZONE item-db result: %s", result)
+        if event is None or MessageChain is None:
+            return
+        sender = getattr(event, "send", None)
+        if not callable(sender):
+            return
+        try:
+            await sender(MessageChain().message(result))
+        except Exception:
+            logger.warning(
+                "STALZONE item-db result message failed", exc_info=True
+            )
 
     async def _run_item_db_update(self, event: Any) -> str:
         index_path = Path(self.item_index.path)
@@ -5488,7 +5523,6 @@ class StalzonePlugin(Star):
         )
         data_dir = self._cache_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
-        await self._update_status(event, "开始检查物品库：先核对完整图标…")
 
         item_ids = {
             str(item.get("id") or "").strip()
@@ -7469,7 +7503,7 @@ class StalzonePlugin(Star):
         if item:
             details = self.item_index.get_details(item["id"])
             decorated = self._decorate(item)
-            aliases = self.item_index.custom_aliases(str(item["id"]))
+            aliases = self.item_index.effective_aliases(str(item["id"]))
             decorated["name_aliases"] = aliases
             decorated["name_custom"] = self.item_index.has_custom_name(
                 str(item["id"])
@@ -7689,15 +7723,18 @@ class StalzonePlugin(Star):
             self.item_index.resolve, target
         )
         if item is not None:
-            aliases = self.item_index.custom_aliases(str(item["id"]))
+            item_id = str(item["id"])
+            builtin = self.item_index.builtin_aliases(item_id)
+            aliases = self.item_index.custom_aliases(item_id)
             lines = [
                 "STALZONE · 名称索引",
                 f"显示名称：{display_name(item)}",
                 f"英文名：{display_english(item) or '—'}",
                 f"物品 ID：{item.get('id') or '—'}",
+                "内置别名：" + ("、".join(builtin) if builtin else "无"),
                 "自定义别名：" + ("、".join(aliases) if aliases else "无"),
             ]
-            if self.item_index.has_custom_name(str(item["id"])):
+            if self.item_index.has_custom_name(item_id):
                 lines.append("名称状态：自定义显示名称")
             return "\n".join(lines)
         if matches:
@@ -8086,6 +8123,16 @@ class StalzonePlugin(Star):
             except Exception:
                 logger.exception("STALZONE automatic emission task shutdown failed")
         self._save_auto_state()
+        item_db_task = self._item_db_task
+        self._item_db_task = None
+        if item_db_task is not None and not item_db_task.done():
+            item_db_task.cancel()
+            try:
+                await item_db_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("STALZONE item-db task shutdown failed")
         item_db_sync_task = self._item_db_sync_task
         self._item_db_sync_task = None
         if item_db_sync_task is not None and not item_db_sync_task.done():

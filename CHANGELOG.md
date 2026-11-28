@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.15.1 - 2026-11-28
+
+### Fixed
+
+- `/sz 检查` no longer blocks the command while downloading and merging the official item database. It replies immediately that the check has started, runs the work in the background, and sends the final result separately. Concurrent checks are rejected with a message instead of starting a duplicate task, and the task is cancelled cleanly on plugin reload/shutdown.
+- `/sz 别名列表` and the item card's **名称索引** section now include built-in community aliases (for example 钢刺球 → 钢刺猬 / 钢铁刺猬, 岩浆 → 熔岩), not just aliases added locally. The command shows built-in and custom aliases on separate lines.
+
 ## 1.15.0 - 2026-11-28
 
 ### Added

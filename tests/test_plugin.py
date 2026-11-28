@@ -2593,6 +2593,13 @@ class ItemIndexTests(unittest.TestCase):
         skin, _ = self.index.resolve("岩浆战士")
         self.assertIsNotNone(skin)
         self.assertEqual(skin["id"], "rwk1l")
+        self.assertEqual(
+            self.index.builtin_aliases("5rd1"), ["钢刺猬", "钢铁刺猬"]
+        )
+        self.assertEqual(
+            self.index.effective_aliases("5rd1"), ["钢刺猬", "钢铁刺猬"]
+        )
+        self.assertEqual(self.index.builtin_aliases("jkq7"), ["岩浆"])
 
     def test_new_season_items_resolve_with_icons(self):
         self.assertGreaterEqual(len(self.index.items), 2636)

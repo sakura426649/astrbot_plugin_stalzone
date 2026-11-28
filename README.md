@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.15.0-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.15.1-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -137,7 +137,7 @@
 | `/sz item <中文名/英文名/ID> [品质] [类型]` | 物品属性、描述、类别和图标；含名称索引/别名 | `/sz 物品 准镜 红 瞄具` |
 | `/sz 起别名 <物品/ID> <别名>` | 添加可搜索别名；只增不替换（管理员） | `/sz 起别名 原子 小原子` |
 | `/sz 改名 <物品/ID> <新名称>` | 修改显示名称，旧名保留为别名（管理员） | `/sz 改名 原子 玻尔原子` |
-| `/sz 别名列表 <物品/ID>` | 查看显示名、英文名、ID 和别名 | `/sz 别名列表 原子` |
+| `/sz 别名列表 <物品/ID>` | 查看显示名、英文名、ID、内置别名和自定义别名 | `/sz 别名列表 原子` |
 | `/sz 删除别名 <物品/ID> <别名>` | 删除自定义别名（管理员） | `/sz 删除别名 原子 小原子` |
 | `/sz 候选 <序号>` / `/sz <序号>` | 使用最近一次候选继续原查询；`sz 1` 是简写 | `/sz 1` |
 | `/sz 调整 <装备>` | 官方平衡调整历史 | `/sz 调整 螺旋` |
@@ -240,6 +240,8 @@
 ## 物品库检查/更新
 
 `/sz 检查`、`/sz 物品库检查`、`/sz 物品库更新` 是同一个管理员指令：先按本地 `item_index.json` 检查 `item_icons/` 覆盖率，低于 90% 或缺失超过 24 个时下载项目最新 Release 的 `astrbot_plugin_stalzone_full.zip`，只提取其中的完整图标到插件数据目录；官方 commit 有变化时再下载 **该 commit 对应**的 EXBO `stalzone-database` 归档，避免代理/CDN 缓存的旧 `main.zip`；按官方 ID/英文/俄文/品质色/类别/图标补全索引；commit 未变化则只刷新未翻译占位。结果会分别显示新增、字段更新、移除/转补充的物品数量；commit 只改了图标、文档或 CI 时会明确提示“未涉及物品条目”。
+
+指令会先立即回复「已开始检查物品库」并转入后台执行，下载和合并完成后单独发送结果，不会让指令一直卡在“正在下载核对”；同一时间只允许一个检查/更新任务，重复发送会提示任务正在进行。
 
 - 现有 `item_index.json` 里的中文名和 `source: supplemental` 历史条目会保留；
 - 所有条目（包括已有中文）都会导出到 `data/plugin_data/astrbot_plugin_stalzone/item_name_overrides.json`；已有中文自动预填，官方新增未翻译条目留空；
@@ -371,7 +373,7 @@
 
 键是物品 ID（用 `/sz 物品 原子` 可看到），值是别名数组。别名不区分大小写，空格和连字符会归一化；保存后在 WebUI 重载插件即可生效。别名只在本机生效，不会修改或重写 `item_index.json`。可参考 [`docs/item_aliases.example.json`](docs/item_aliases.example.json)。
 
-也可以直接用管理员命令维护，不需要手改 JSON：`/sz 起别名 <物品/ID> <别名>` 追加别名，`/sz 别名列表 <物品/ID>` 查看，`/sz 删除别名 <物品/ID> <别名>` 删除；`/sz 改名 <物品/ID> <新名称>` 修改显示名并把旧名保留为别名。显示名写入 `item_name_overrides.json`，别名写入 `item_aliases.json`，两者都会在官方索引更新时保留。
+也可以直接用管理员命令维护，不需要手改 JSON：`/sz 起别名 <物品/ID> <别名>` 追加别名，`/sz 别名列表 <物品/ID>` 查看，`/sz 删除别名 <物品/ID> <别名>` 删除；`/sz 改名 <物品/ID> <新名称>` 修改显示名并把旧名保留为别名。`/sz 别名列表` 会同时列出插件内置的社区别名（如 钢刺球 → 钢刺猬/钢铁刺猬、岩浆 → 熔岩）和本地自定义别名。显示名写入 `item_name_overrides.json`，别名写入 `item_aliases.json`，两者都会在官方索引更新时保留。
 
 名称表还会在数据目录生成 `item_name_defaults.json` 作为同步基线：新版本里作者修正了某个默认译名时，未被用户改过的条目会自动跟进；用户改过/重命名过的条目、以及所有别名不会被覆盖。新物品加入后，更新插件即可显示新译名，运行 `/sz 检查` 会把它们补进名称表。首次建立基线的用户，旧表中与当前默认值不同的条目会被当作自定义保留。
 

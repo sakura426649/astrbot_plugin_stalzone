@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import json
 import re
@@ -795,6 +796,78 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
     async def test_item_db_command_requires_admin(self):
         text = await collect(self.make_plugin(), "/sz 物品库检查")
         self.assertIn("管理员", text)
+
+    async def test_item_db_check_acknowledges_and_sends_result(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+            async def send(self, chain):
+                sent.append(chain)
+
+        sent = []
+        plugin = self.make_plugin()
+
+        class FakeChain:
+            @staticmethod
+            def message(text):
+                return ("plain", text)
+
+        async def fake_update(event):
+            return "物品库检查完成：新增 1"
+
+        plugin._run_item_db_update = fake_update  # type: ignore[assignment]
+        with patch.object(main_module, "MessageChain", FakeChain):
+            text = await plugin._handle_item_db_check(AdminEvent("/sz 检查"))
+            self.assertIn("已开始", text)
+            task = plugin._item_db_task
+            self.assertIsNotNone(task)
+            await task
+        self.assertIsNone(plugin._item_db_task)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("新增 1", str(sent[0]))
+
+    async def test_item_db_check_rejects_concurrent_run(self):
+        class AdminEvent(FakeEvent):
+            role = "admin"
+
+            def is_admin(self):
+                return True
+
+            async def send(self, chain):
+                return None
+
+        plugin = self.make_plugin()
+        release = asyncio.Event()
+        started = asyncio.Event()
+
+        async def slow_update(event):
+            started.set()
+            await release.wait()
+            return "完成"
+
+        plugin._run_item_db_update = slow_update  # type: ignore[assignment]
+        event = AdminEvent("/sz 检查")
+        first = await plugin._handle_item_db_check(event)
+        self.assertIn("已开始", first)
+        await started.wait()
+        second = await plugin._handle_item_db_check(event)
+        self.assertIn("已有", second)
+        release.set()
+        await plugin._item_db_task
+        self.assertIsNone(plugin._item_db_task)
+
+    async def test_alias_list_and_item_card_include_builtin_aliases(self):
+        plugin = self.make_plugin()
+        listed = await plugin._handle_alias_list(
+            FakeEvent("/sz 别名列表 钢刺球"), "钢刺球"
+        )
+        self.assertIn("内置别名：钢刺猬、钢铁刺猬", listed)
+        self.assertIn("自定义别名：无", listed)
+        reply = await plugin._handle_item("钢刺球")
+        self.assertIn("钢刺猬", reply.text)
 
     async def test_version_check_does_not_update(self):
         plugin = self.make_plugin()
