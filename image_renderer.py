@@ -7,6 +7,7 @@ deployments safe on minimal Linux images.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import tempfile
@@ -93,6 +94,112 @@ BACKGROUND_OPTIONS = ["default"] + [
 ]
 _CARD_BACKGROUND = HELP_BACKGROUND
 _CARD_PANEL_ALPHA = int(round(0.90 * 255))
+# Representative card aspects used by the background crop preview.  Renderers
+# pick the nearest aspect, so dynamic-height cards share these presets.
+BACKGROUND_CROP_PROFILES = (
+    {"key": "tall", "label": "竖长卡", "width": 960, "height": 1120},
+    {"key": "square", "label": "方卡", "width": 960, "height": 900},
+    {"key": "standard", "label": "标准卡", "width": 960, "height": 720},
+    {"key": "help", "label": "帮助菜单", "width": 1600, "height": 1100},
+    {"key": "watch", "label": "关注/操作卡", "width": 960, "height": 610},
+    {"key": "wide", "label": "宽卡/风暴", "width": 1200, "height": 700},
+)
+_BACKGROUND_CROPS: dict[str, dict[str, float]] = {}
+_BACKGROUND_CROPS_VERSION = 0
+
+
+def background_crop_profiles() -> list[dict[str, Any]]:
+    return [dict(profile) for profile in BACKGROUND_CROP_PROFILES]
+
+
+def background_crops() -> dict[str, dict[str, float]]:
+    return {key: dict(value) for key, value in _BACKGROUND_CROPS.items()}
+
+
+def background_crop_signature() -> str:
+    return str(_BACKGROUND_CROPS_VERSION)
+
+
+def _nearest_background_profile(width: int, height: int) -> dict[str, Any]:
+    aspect = max(0.01, float(width) / max(1, height))
+    return min(
+        BACKGROUND_CROP_PROFILES,
+        key=lambda profile: abs(
+            math.log(aspect / (profile["width"] / profile["height"]))
+        ),
+    )
+
+
+def set_background_crops(crops: Any) -> dict[str, dict[str, float]]:
+    """Sanitize and install normalized crop rectangles per card profile."""
+    global _BACKGROUND_CROPS, _BACKGROUND_CROPS_VERSION
+    result: dict[str, dict[str, float]] = {}
+    if isinstance(crops, dict):
+        for profile in BACKGROUND_CROP_PROFILES:
+            key = str(profile["key"])
+            raw = crops.get(key)
+            if not isinstance(raw, dict):
+                continue
+            try:
+                x = float(raw.get("x", 0.0))
+                y = float(raw.get("y", 0.0))
+                w = float(raw.get("w", 1.0))
+                h = float(raw.get("h", 1.0))
+            except (TypeError, ValueError):
+                continue
+            if not all(math.isfinite(value) for value in (x, y, w, h)):
+                continue
+            w = min(1.0, max(0.02, w))
+            h = min(1.0, max(0.02, h))
+            x = min(1.0 - w, max(0.0, x))
+            y = min(1.0 - h, max(0.0, y))
+            result[key] = {
+                "x": round(x, 6),
+                "y": round(y, 6),
+                "w": round(w, 6),
+                "h": round(h, 6),
+            }
+    _BACKGROUND_CROPS = result
+    _BACKGROUND_CROPS_VERSION += 1
+    return background_crops()
+
+
+def _fit_background(base: Any, width: int, height: int) -> Any:
+    """Cover-fit the background, honoring the nearest saved crop rectangle."""
+    profile = _nearest_background_profile(width, height)
+    crop = _BACKGROUND_CROPS.get(str(profile["key"]))
+    if not crop:
+        return ImageOps.fit(base, (width, height), method=Image.LANCZOS)
+    source_w, source_h = base.size
+    left = crop["x"] * source_w
+    top = crop["y"] * source_h
+    box_w = max(1.0, crop["w"] * source_w)
+    box_h = max(1.0, crop["h"] * source_h)
+    target_aspect = float(width) / max(1, height)
+    if box_w / box_h > target_aspect:
+        box_w = box_h * target_aspect
+    else:
+        box_h = box_w / target_aspect
+    # Keep the adjusted rectangle centered on the user's chosen rectangle.
+    center_x = left + crop["w"] * source_w / 2
+    center_y = top + crop["h"] * source_h / 2
+    left = center_x - box_w / 2
+    top = center_y - box_h / 2
+    left = min(max(0.0, left), max(0.0, source_w - box_w))
+    top = min(max(0.0, top), max(0.0, source_h - box_h))
+    box = (
+        int(round(left)),
+        int(round(top)),
+        int(round(min(source_w, left + box_w))),
+        int(round(min(source_h, top + box_h))),
+    )
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return ImageOps.fit(base, (width, height), method=Image.LANCZOS)
+    return base.crop(box).resize((width, height), Image.LANCZOS)
+
+
+def card_background_path() -> Path:
+    return _CARD_BACKGROUND
 
 
 def set_card_background(
@@ -133,7 +240,10 @@ def card_background_stamp() -> str:
         stamp = str(_CARD_BACKGROUND.stat().st_mtime_ns)
     except OSError:
         stamp = "missing"
-    return f"{_CARD_BACKGROUND}|{stamp}|{_CARD_PANEL_ALPHA}"
+    return (
+        f"{_CARD_BACKGROUND}|{stamp}|{_CARD_PANEL_ALPHA}"
+        f"|crop{_BACKGROUND_CROPS_VERSION}"
+    )
 
 
 
@@ -654,17 +764,18 @@ def _draw_candidate_icon_frame(
 
 @lru_cache(maxsize=6)
 def _background_base(
-    path: str, stamp_ns: int, width: int, height: int
+    path: str, stamp_ns: int, width: int, height: int, crops_version: int = 0
 ) -> Any:
     """Resize/brighten/blur a wallpaper once per card size.
 
     Auction cards are rendered repeatedly at the same few heights; avoiding
     a fresh LANCZOS fit and Gaussian blur on every query removes the largest
     fixed cost in image output.  ``stamp_ns`` keeps the cache honest when the
-    user swaps a custom background file.
+    user swaps a custom background file, and ``crops_version`` does the same
+    when the crop preview saves new rectangles.
     """
     base = Image.open(path).convert("RGB")
-    base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
+    base = _fit_background(base, width, height)
     base = ImageEnhance.Brightness(base).enhance(0.48)
     return base.filter(ImageFilter.GaussianBlur(1.4))
 
@@ -689,6 +800,7 @@ def _card_canvas(width: int, height: int, *, alpha: int = 232) -> Any:
             background.stat().st_mtime_ns,
             width,
             height,
+            _BACKGROUND_CROPS_VERSION,
         )
         canvas = base.convert("RGBA")
     except Exception:
@@ -1846,7 +1958,7 @@ def _emission_canvas(width: int, height: int) -> Any:
         ):
             raise OSError("background unavailable")
         base = Image.open(background).convert("RGB")
-        base = ImageOps.fit(base, (width, height), method=Image.LANCZOS)
+        base = _fit_background(base, width, height)
         base = ImageEnhance.Brightness(base).enhance(0.20)
         base = base.filter(ImageFilter.GaussianBlur(2.1))
         canvas = base.convert("RGBA")
@@ -3892,7 +4004,7 @@ def render_help_card(
     background = Path(background_path) if background_path else _CARD_BACKGROUND
     try:
         canvas = Image.open(background).convert("RGB")
-        canvas = ImageOps.fit(canvas, (width, height), method=Image.LANCZOS)
+        canvas = _fit_background(canvas, width, height)
         canvas = ImageEnhance.Brightness(canvas).enhance(0.64)
         canvas = canvas.filter(ImageFilter.GaussianBlur(1.1))
         canvas = canvas.convert("RGBA")

@@ -12,6 +12,7 @@ import base64
 import copy
 import json
 import hashlib
+import mimetypes
 import os
 import platform
 import re
@@ -109,6 +110,9 @@ try:  # Package import (normal AstrBot plugin loading).
         parse_auction_time,
     )
     from .image_renderer import (
+        background_crop_profiles,
+        background_crops,
+        card_background_path,
         card_background_stamp,
         find_cjk_font,
         render_appraisal_card,
@@ -129,6 +133,7 @@ try:  # Package import (normal AstrBot plugin loading).
         render_watch_action_card,
         render_watch_created_card,
         render_watch_list_card,
+        set_background_crops,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -232,6 +237,9 @@ except ImportError:  # Direct execution / flat import fallback.
         parse_auction_time,
     )
     from image_renderer import (  # type: ignore[no-redef]
+        background_crop_profiles,
+        background_crops,
+        card_background_path,
         card_background_stamp,
         faction_icon_path,
         find_cjk_font,
@@ -252,6 +260,7 @@ except ImportError:  # Direct execution / flat import fallback.
         render_watch_action_card,
         render_watch_created_card,
         render_watch_list_card,
+        set_background_crops,
         set_card_background,
         set_creator_watermark_hidden,
     )
@@ -318,7 +327,7 @@ UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-PLUGIN_VERSION = "1.15.5"
+PLUGIN_VERSION = "1.16.0"
 ARSENAL_CACHE_VERSION = 7
 PLUGIN_NAME = "astrbot_plugin_stalzone"
 PLUGIN_REPO = "sakura426649/astrbot_plugin_stalzone"
@@ -905,9 +914,169 @@ class StalzonePlugin(Star):
         self._watch_lock = asyncio.Lock()
         self._watch_median_cache: dict[tuple[str, str, int], tuple[float, dict[int | None, int]]] = {}
         set_creator_watermark_hidden(self._hide_creator_watermark())
+        self._background_crops_path = data_dir / "background_crops.json"
+        self._background_preview_apis_registered = False
         self._migrate_background_custom_to_upload(data_dir)
         self._normalize_background_upload(data_dir)
+        self._load_background_crops()
         self._apply_card_background()
+
+    def _load_background_crops(self) -> None:
+        path = getattr(self, "_background_crops_path", None)
+        if path is None:
+            return
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            set_background_crops({})
+            return
+        except Exception:
+            logger.warning(
+                "STALZONE background crop file is invalid; using center crop",
+                exc_info=True,
+            )
+            set_background_crops({})
+            return
+        crops = payload.get("profiles") if isinstance(payload, dict) else payload
+        set_background_crops(crops)
+
+    def _save_background_crops(self, crops: Any) -> dict[str, dict[str, float]]:
+        sanitized = set_background_crops(crops)
+        payload = {
+            "version": 1,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "profiles": sanitized,
+        }
+        path = Path(self._background_crops_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(path)
+        return sanitized
+
+    def _background_preview_payload(self) -> dict[str, Any]:
+        path = card_background_path()
+        if not path.is_file():
+            raise FileNotFoundError(str(path))
+        if path.stat().st_size > 20 * 1024 * 1024:
+            raise ValueError("背景图片超过 20 MB，无法在预览页加载")
+        mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return {
+            "image": f"data:{mime};base64,{encoded}",
+            "filename": path.name,
+            "profiles": background_crop_profiles(),
+            "crops": background_crops(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _register_background_preview_apis(self) -> None:
+        if self._background_preview_apis_registered:
+            return
+        register = getattr(self.context, "register_web_api", None)
+        if not callable(register):
+            return
+        prefix = f"/{PLUGIN_NAME}/background-preview"
+        try:
+            register(
+                prefix + "/state",
+                self._bg_preview_state,
+                ["GET"],
+                "Background crop preview state",
+            )
+            register(
+                prefix + "/crops",
+                self._bg_preview_save_crops,
+                ["POST"],
+                "Save background crop rectangles",
+            )
+            register(
+                prefix + "/upload",
+                self._bg_preview_upload,
+                ["POST"],
+                "Upload a background image",
+            )
+            self._background_preview_apis_registered = True
+        except Exception:
+            logger.warning(
+                "STALZONE background preview API registration failed",
+                exc_info=True,
+            )
+
+    async def _bg_preview_state(self):
+        from astrbot.api.web import error_response, json_response
+
+        try:
+            return json_response(self._background_preview_payload())
+        except Exception as exc:
+            logger.warning(
+                "STALZONE background preview state failed", exc_info=True
+            )
+            return error_response(str(exc), status_code=400)
+
+    async def _bg_preview_save_crops(self):
+        from astrbot.api.web import error_response, json_response, request
+
+        try:
+            payload = await request.json(default={})
+            crops = (
+                payload.get("profiles") if isinstance(payload, dict) else payload
+            )
+            sanitized = self._save_background_crops(crops)
+            return json_response({"saved": True, "crops": sanitized})
+        except Exception as exc:
+            logger.warning(
+                "STALZONE background crop save failed", exc_info=True
+            )
+            return error_response(str(exc), status_code=400)
+
+    async def _bg_preview_upload(self):
+        from astrbot.api.web import (
+            PluginUploadFile,
+            error_response,
+            json_response,
+            request,
+        )
+
+        try:
+            files = await request.files()
+            upload = files.get("file") if isinstance(files, dict) else None
+            if not isinstance(upload, PluginUploadFile):
+                return error_response("缺少背景图片", status_code=400)
+            ext = Path(str(upload.filename or "")).suffix.lower()
+            if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+                return error_response(
+                    "仅支持 jpg/jpeg/png/webp", status_code=400
+                )
+            data_dir = self._cache_dir().resolve(strict=False)
+            upload_dir = (
+                data_dir / "files" / "display" / "card_background_upload"
+            ).resolve(strict=False)
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            target = upload_dir / f"background{ext}"
+            await upload.save(target, max_bytes=20 * 1024 * 1024)
+            if target.stat().st_size > 20 * 1024 * 1024:
+                target.unlink(missing_ok=True)
+                return error_response(
+                    "背景图片超过 20 MB", status_code=400
+                )
+            for path in upload_dir.iterdir():
+                if path.is_file() and path.resolve(strict=False) != target:
+                    path.unlink(missing_ok=True)
+            rel = target.relative_to(data_dir).as_posix()
+            self._set_cfg("card_background_upload", [rel])
+            self._set_cfg("card_background_custom", "")
+            self._persist_config()
+            self._apply_card_background()
+            return json_response({"saved": True})
+        except Exception as exc:
+            logger.warning(
+                "STALZONE background preview upload failed", exc_info=True
+            )
+            return error_response(str(exc), status_code=400)
 
     def _background_upload_values(self) -> list[str]:
         raw = self._cfg("card_background_upload", [])
@@ -2199,6 +2368,7 @@ class StalzonePlugin(Star):
                     pass
 
     async def initialize(self) -> None:
+        self._register_background_preview_apis()
         set_creator_watermark_hidden(self._hide_creator_watermark())
         self._apply_card_background()
         try:

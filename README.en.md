@@ -7,7 +7,7 @@
 Auction · Emissions · Players · Clans · Items · Candidates · Season Pass
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.15.5-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.16.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -130,6 +130,10 @@ The WebUI groups settings under **API & region / Display & images / Query behavi
 | `price_watch_group_restrict` | `false` | When on, only admins/group owners/managers can create watches in groups |
 | `price_watch_auction_alerts` | `true` | Also alert on auction/start price hits; off means buyout-only monitoring |
 | `price_watch_ttl_days` | `7` | Watch lifetime in days; expiry notifies once and removes it |
+
+### Background crop preview
+
+Open **Background crop preview** from the plugin page in the AstrBot WebUI. It shows six representative card ratios (tall, square, standard, help, watch/action, wide/storm); each tile can be panned by dragging and zoomed with the wheel, and the cropped result updates live. You can upload a new background from the page or use the current one. **Save crops** writes `background_crops.json` to the plugin data directory without modifying the source image; the renderer applies the nearest ratio on the next render.
 
 ### Network and background tasks
 

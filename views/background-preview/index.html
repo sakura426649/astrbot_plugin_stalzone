@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>背景裁剪预览</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">STALZONE / BACKGROUND</p>
+        <h1>背景裁剪预览</h1>
+        <p class="lede">
+          拖动平移，滚轮缩放。每个尺寸独立保存，插件出图时会按最接近的比例使用对应裁剪。
+        </p>
+      </div>
+      <div class="toolbar">
+        <label class="button primary" for="upload">上传背景</label>
+        <input id="upload" type="file" accept=".jpg,.jpeg,.png,.webp,image/*" hidden />
+        <button id="reset" class="button" type="button">重置全部</button>
+        <button id="save" class="button accent" type="button">保存裁剪</button>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status">正在加载背景…</p>
+    <main id="grid" class="grid" aria-live="polite"></main>
+
+    <footer class="foot">
+      提示：裁剪只影响卡片背景的取景，不会修改原图；保存后下一次出图生效。
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

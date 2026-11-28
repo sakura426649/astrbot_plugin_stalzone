@@ -7,7 +7,7 @@
 拍卖 · 风暴 · 玩家 · 战队 · 物品 · 候选卡 · 通行证计算
 
 ![AstrBot](https://img.shields.io/badge/AstrBot-plugin-5865F2?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.15.5-22c55e?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.16.0-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-QQ%20%2F%20OneBot-F97316?style=flat-square)
 ![API](https://img.shields.io/badge/data-Official%20STALZONE%20API-0EA5E9?style=flat-square)
@@ -173,6 +173,18 @@
 `auction_display_mode` 控制拍卖在售列表：默认 `aggregate` 保持聚合与 30 条限制；切到 `full` 后跳过数量聚合、品质分组和前后 15 条截断，按买断价从高到低渲染所有查到的在售条目（接口单次最多返回 200 条，图片可能很长）；最近成交仍按原有上限显示。该开关可随时在 WebUI 切换，下一次拍卖查询生效。
 
 图片卡片包括：帮助菜单、拍卖行、玩家档案、辐射风暴、物品详情、候选列表、战队资料和通行证预测。默认使用官方壁纸暗色背景，可在配置中切换 16 张内置官方壁纸、**上传**自定义背景图片，并调整卡片面板不透明度；所有卡片共享同一套背景设置。自定义背景一次只保留一张：再次上传会覆盖上一次的背景文件；保存后使用最新图，插件重载时会把上传目录整理为只剩一张。卡片使用品质色与语义色，署名位于右下角；可在配置中用 `hide_creator_watermark` 隐藏该署名。除帮助菜单外，左下角会附带一行与卡片风格一致的低调「更多功能：/sz help 获取菜单」提示。
+
+### 背景裁剪预览
+
+在 WebUI 的插件详情页打开 **背景裁剪预览**（AstrBot 插件页面功能）：
+
+- 会列出竖长卡、方卡、标准卡、帮助菜单、关注/操作卡、宽卡/风暴六种代表性比例；
+- 每个比例独立预览，可拖动平移、滚轮缩放，实时看到裁剪结果；
+- 页面上可以直接上传新背景，或使用配置页上传的当前背景；
+- 点「保存裁剪」后写入数据目录 `background_crops.json`，下一次出图生效；不会修改原图；
+- 渲染器会按卡片实际宽高选择最接近的比例套用裁剪，动态高度的卡片也能受益。
+
+页面使用 AstrBot 的独立插件视图能力；如果当前 AstrBot 版本没有插件页面入口，仍然可以用配置页上传背景和调整面板不透明度。
 
 候选列表为两列卡片，每行最多两个物品；行数按候选数量增长，最多展示最接近的前 20 个。基础包内置 828 个常用图标（武器/弹药/护甲/神器/容器/设备/背包），其余图标可安装完整扩展包；未安装时仍会尝试从 CDN 懒加载并缓存，源站没有图片的条目显示「暂无图标」而不是问号。
 

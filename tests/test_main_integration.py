@@ -1270,6 +1270,151 @@ class MainSmokeTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(plugin._cfg("card_background_custom", ""), "")
 
+    def test_background_preview_payload_contains_image_and_profiles(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as raw:
+            picture = Path(raw) / "background.png"
+            Image.new("RGB", (64, 48), (20, 30, 40)).save(picture)
+            plugin = self.make_plugin()
+            main_module.set_card_background("default", picture, 0.9)
+            try:
+                payload = plugin._background_preview_payload()
+                self.assertTrue(
+                    payload["image"].startswith("data:image/png;base64,")
+                )
+                self.assertEqual(payload["filename"], "background.png")
+                self.assertEqual(len(payload["profiles"]), 6)
+                self.assertIn("wide", {item["key"] for item in payload["profiles"]})
+            finally:
+                main_module.set_card_background("default", "", 0.9)
+
+    def test_background_preview_routes_register(self):
+        class PreviewContext(Context):
+            def __init__(self):
+                self.routes = []
+
+            def register_web_api(self, route, handler, methods, desc):
+                self.routes.append((route, tuple(methods), handler.__name__))
+
+        plugin = self.make_plugin()
+        context = PreviewContext()
+        plugin.context = context
+        plugin._register_background_preview_apis()
+        self.assertEqual(len(context.routes), 3)
+        self.assertTrue(plugin._background_preview_apis_registered)
+        self.assertEqual(
+            {route.rsplit("/", 1)[-1] for route, _methods, _handler in context.routes},
+            {"state", "crops", "upload"},
+        )
+
+    async def test_background_preview_save_endpoint(self):
+        import types
+
+        with tempfile.TemporaryDirectory() as raw:
+            plugin = self.make_plugin()
+            plugin._background_crops_path = Path(raw) / "background_crops.json"
+            web = types.ModuleType("astrbot.api.web")
+
+            class FakeRequest:
+                async def json(self, default=None):
+                    return {
+                        "profiles": {
+                            "wide": {"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.4}
+                        }
+                    }
+
+            web.request = FakeRequest()
+            web.json_response = lambda data: {"data": data}
+            web.error_response = lambda message, status_code=400: {
+                "error": message,
+                "status": status_code,
+            }
+            web.PluginUploadFile = object
+            old = sys.modules.get("astrbot.api.web")
+            sys.modules["astrbot.api.web"] = web
+            try:
+                response = await plugin._bg_preview_save_crops()
+            finally:
+                if old is None:
+                    sys.modules.pop("astrbot.api.web", None)
+                else:
+                    sys.modules["astrbot.api.web"] = old
+            self.assertTrue(response["data"]["saved"])
+            self.assertEqual(
+                response["data"]["crops"]["wide"]["x"], 0.1
+            )
+            main_module.set_background_crops({})
+
+    async def test_background_preview_upload_endpoint(self):
+        import types
+
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            plugin = self.make_plugin()
+            plugin._cache_dir = lambda: base  # type: ignore[assignment]
+
+            class FakeUpload:
+                filename = "new.png"
+
+                async def save(self, destination, *, max_bytes=None):
+                    Path(destination).write_bytes(b"background")
+                    return 10
+
+            class FakeRequest:
+                async def files(self):
+                    return {"file": FakeUpload()}
+
+            web = types.ModuleType("astrbot.api.web")
+            web.request = FakeRequest()
+            web.PluginUploadFile = FakeUpload
+            web.json_response = lambda data: {"data": data}
+            web.error_response = lambda message, status_code=400: {
+                "error": message,
+                "status": status_code,
+            }
+            old = sys.modules.get("astrbot.api.web")
+            sys.modules["astrbot.api.web"] = web
+            try:
+                response = await plugin._bg_preview_upload()
+            finally:
+                if old is None:
+                    sys.modules.pop("astrbot.api.web", None)
+                else:
+                    sys.modules["astrbot.api.web"] = old
+                main_module.set_card_background("default", "", 0.9)
+            self.assertTrue(response["data"]["saved"])
+            target = (
+                base
+                / "files"
+                / "display"
+                / "card_background_upload"
+                / "background.png"
+            )
+            self.assertEqual(target.read_bytes(), b"background")
+            self.assertEqual(
+                plugin._cfg("card_background_upload", []),
+                ["files/display/card_background_upload/background.png"],
+            )
+
+    def test_background_crop_file_round_trip(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            plugin = self.make_plugin()
+            plugin._cache_dir = lambda: base  # type: ignore[assignment]
+            plugin._background_crops_path = base / "background_crops.json"
+            saved = plugin._save_background_crops(
+                {"wide": {"x": 0.25, "y": 0.1, "w": 0.5, "h": 0.4}}
+            )
+            self.assertEqual(saved["wide"]["x"], 0.25)
+            self.assertTrue(
+                (base / "background_crops.json").is_file()
+            )
+            main_module.set_background_crops({})
+            plugin._load_background_crops()
+            self.assertEqual(main_module.background_crops()["wide"]["x"], 0.25)
+            main_module.set_background_crops({})
+
     def test_price_watch_interval_migrates_to_low_power_once(self):
         with tempfile.TemporaryDirectory() as raw:
             plugin = self.make_plugin()

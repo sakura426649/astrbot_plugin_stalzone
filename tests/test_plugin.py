@@ -101,10 +101,13 @@ from image_renderer import (  # noqa: E402
     _artifact_label_color,
     _auction_name_column_width,
     _fit_auction_name,
+    _fit_background,
     _stat_direction,
+    background_crops,
     faction_icon_path,
     item_color,
     rank_color,
+    set_background_crops,
     render_auction_card,
     render_candidate_card,
     render_emission_alert_card,
@@ -3235,6 +3238,28 @@ class ImageRendererTests(unittest.TestCase):
                 custom.unlink(missing_ok=True)
         finally:
             set_card_background("default", "", 0.9)
+
+    def test_background_crop_rectangle_applies_to_nearest_profile(self):
+        from PIL import Image, ImageDraw
+
+        picture = Image.new("RGB", (400, 200))
+        draw = ImageDraw.Draw(picture)
+        draw.rectangle((0, 0, 199, 199), fill=(255, 0, 0))
+        draw.rectangle((200, 0, 399, 199), fill=(0, 0, 255))
+        try:
+            set_background_crops(
+                {"wide": {"x": 0.5, "y": 0.0, "w": 0.5, "h": 1.0}}
+            )
+            self.assertEqual(
+                background_crops()["wide"],
+                {"x": 0.5, "y": 0.0, "w": 0.5, "h": 1.0},
+            )
+            cropped = _fit_background(picture, 1200, 700)
+            self.assertEqual(cropped.size, (1200, 700))
+            self.assertEqual(cropped.getpixel((600, 350)), (0, 0, 255))
+        finally:
+            set_background_crops({})
+        self.assertEqual(background_crops(), {})
 
     def test_rank_colors(self):
         self.assertEqual(rank_color("Newbie"), "#53C353")

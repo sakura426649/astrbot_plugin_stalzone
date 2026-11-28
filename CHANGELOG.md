@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## 1.16.0 - 2026-11-29
+
+### Added
+
+- New **背景裁剪预览** plugin page: six representative card ratios with live drag/zoom crop previews, direct background upload, and a save action that writes `background_crops.json`. The renderer applies the nearest saved ratio to every card, including dynamic-height cards.
+
 ## 1.15.5 - 2026-11-28
 
 ### Changed
